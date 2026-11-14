@@ -254,7 +254,8 @@ export function createGas({ storage, clock, log } = {}) {
     getUuid: uuid,
     computeDigest(alg, value) {
       if (alg !== 'SHA_256') throw new Error('Only SHA_256 is emulated');
-      return signed(sha256(utf8(value)));
+      const bytes = Array.isArray(value) ? Uint8Array.from(value, (b) => b & 255) : utf8(value);
+      return signed(sha256(bytes));
     },
     computeHmacSha256Signature(value, key) { return signed(hmacSha256(utf8(key), utf8(value))); },
     base64Encode(v) { return base64(typeof v === 'string' ? utf8(v) : Uint8Array.from(v, (b) => (b < 0 ? b + 256 : b))); },

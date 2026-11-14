@@ -4,5 +4,6 @@
 import { runAll } from './harness.mjs';
 import './core.test.mjs';
 import './phase1.test.mjs';
+import './device.test.mjs';
 
 await runAll();

@@ -2,11 +2,11 @@ import { eq, test, truthy } from './harness.mjs';
 import { withAdmin } from './core.test.mjs';
 
 // 2026-11-15 يوم أحد. 05:00Z = 08:00 بتوقيت الكويت
-const SUN = '2026-11-15';
-const at = (date, hm) => `${date}T${String(Number(hm.slice(0, 2)) - 3).padStart(2, '0')}:${hm.slice(3)}:00Z`;
+export const SUN = '2026-11-15';
+export const at = (date, hm) => `${date}T${String(Number(hm.slice(0, 2)) - 3).padStart(2, '0')}:${hm.slice(3)}:00Z`;
 
 /** شركة صغيرة: وردية، قسم، فرع، مديرة (سارة) وموظف تحتها (أحمد) وموظفة موارد بشرية (هدى) */
-function company(startAt = at(SUN, '07:00')) {
+export function company(startAt = at(SUN, '07:00')) {
   const s = withAdmin(startAt);
   const A = s.admin;
   const shift = s.ok('hr.shift.save', { name: 'صباحي', start: '08:00', end: '16:00', graceMin: 10, workDays: '0,1,2,3,4' }, A);

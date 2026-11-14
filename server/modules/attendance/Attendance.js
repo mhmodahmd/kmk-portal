@@ -7,7 +7,14 @@ var ATT_SCHEMA = {
   Attendance: [
     ['id', 'text'], ['employeeId', 'text'], ['date', 'date'], ['inTs', 'ts'], ['outTs', 'ts'],
     ['inLat', 'text'], ['inLng', 'text'], ['inAcc', 'num'], ['outLat', 'text'], ['outLng', 'text'], ['outAcc', 'num'],
-    ['source', 'text'], ['note', 'text'], ['editedBy', 'text'], ['createdAt', 'ts'], ['updatedAt', 'ts']
+    ['source', 'text'], ['note', 'text'], ['editedBy', 'text'], ['createdAt', 'ts'], ['updatedAt', 'ts'],
+    ['inVerify', 'text'], ['outVerify', 'text']
+  ],
+  // بصمة الجهاز: جهاز نشط واحد لكل موظف. نخزّن المفتاح العام فقط.
+  Devices: [
+    ['id', 'text'], ['employeeId', 'text'], ['userId', 'text'], ['credId', 'text'], ['rpId', 'text'], ['alg', 'num'],
+    ['publicKey', 'json'], ['signCount', 'num'], ['backup', 'bool'], ['label', 'text'], ['status', 'text'],
+    ['createdAt', 'ts'], ['lastUsedAt', 'ts'], ['revokedAt', 'ts'], ['revokedBy', 'text'], ['revokeReason', 'text']
   ],
   Corrections: [
     ['id', 'text'], ['employeeId', 'text'], ['date', 'date'], ['kind', 'text'], ['attendanceId', 'text'],
@@ -25,7 +32,7 @@ var DAY_STATUS = {
 
 var Attendance = {
   settings_: function () {
-    return Object.assign({ geoRequired: false, openMaxHours: 16, startDate: '' }, Settings.get_('attendance', {}));
+    return Object.assign({ geoRequired: false, deviceRequired: false, openMaxHours: 16, startDate: '' }, Settings.get_('attendance', {}));
   },
 
   /**
@@ -138,7 +145,88 @@ var Attendance = {
 
   sessionView_: function (r) {
     var mins = r.outTs ? Math.round((Attendance.ms_(r.outTs) - Attendance.ms_(r.inTs)) / 60000) : 0;
-    return { id: r.id, inTs: r.inTs, outTs: r.outTs, minutes: mins, source: r.source, note: r.note, edited: !!r.editedBy };
+    return {
+      id: r.id, inTs: r.inTs, outTs: r.outTs, minutes: mins, source: r.source, note: r.note, edited: !!r.editedBy,
+      inVerified: r.inVerify === 'device', outVerified: r.outVerify === 'device'
+    };
+  },
+
+  // ───────── بصمة الجهاز ─────────
+  deviceOf_: function (empId) {
+    return Db.view('attendance', 'Devices').filter(function (d) { return d.employeeId === empId && d.status === 'active'; })[0] || null;
+  },
+
+  deviceInfo_: function (d) {
+    return d ? { id: d.id, label: d.label, createdAt: d.createdAt, lastUsedAt: d.lastUsedAt, synced: !!d.backup } : null;
+  },
+
+  deviceChallenge: function (ctx) {
+    var emp = Staff.requireOfCtx_(ctx);
+    var d = Attendance.deviceOf_(emp.id);
+    return {
+      challenge: WebAuthn.challenge_(ctx.user.id),
+      rpName: Settings.company_().name || APP.NAME,
+      user: { id: WebAuthn.userHandle_(ctx.user.id), name: ctx.user.username, displayName: emp.fullName },
+      credentialIds: d ? [d.credId] : []
+    };
+  },
+
+  deviceRegister: function (ctx, p) {
+    var emp = Staff.requireOfCtx_(ctx);
+    p = p || {};
+    var existing = Attendance.deviceOf_(emp.id);
+    if (existing) {
+      throw appError('لديك جهاز مسجّل منذ ' + dmy_(localDate_(Attendance.ms_(existing.createdAt))) + '. لتسجيل جهاز آخر اطلب من الموارد البشرية إعادة ضبط جهازك.', 'DEVICE_EXISTS');
+    }
+    var key = WebAuthn.verifyRegistration_(ctx.user.id, p);
+    return withLock(function () {
+      if (Attendance.deviceOf_(emp.id)) throw appError('سُجّل جهاز لك للتو. حدّث الصفحة.', 'DEVICE_EXISTS');
+      var now = nowIso();
+      var saved = Db.insert('attendance', 'Devices', {
+        employeeId: emp.id, userId: ctx.user.id, credId: key.credId, rpId: key.rpId, alg: key.alg, publicKey: key.publicKey,
+        signCount: key.signCount, backup: key.backup, label: optionalText(p.label, 80) || 'جهاز', status: 'active', createdAt: now
+      });
+      Audit.log(ctx.user, 'attendance', 'device.register', 'Device', saved.id, { employee: emp.fullName, label: saved.label, synced: key.backup });
+      return Attendance.deviceInfo_(saved);
+    });
+  },
+
+  deviceList: function (ctx) {
+    var maps = Staff.maps_();
+    var active = {};
+    Db.view('attendance', 'Devices').forEach(function (d) { if (d.status === 'active') active[d.employeeId] = d; });
+    var rows = Staff.current_().map(function (e) {
+      return {
+        employeeId: e.id, name: e.fullName, jobTitle: e.jobTitle, departmentName: (maps.depts[e.departmentId] || {}).name || '',
+        hasAccount: !!e.userId, device: Attendance.deviceInfo_(active[e.id])
+      };
+    }).sort(function (a, b) { return a.name.localeCompare(b.name, 'ar'); });
+    return { rows: rows, registered: rows.filter(function (r) { return r.device; }).length, required: !!Attendance.settings_().deviceRequired };
+  },
+
+  deviceReset: function (ctx, p) {
+    var emp = Staff.getOrThrow_(p && p.employeeId);
+    var reason = requireText(p.reason, 'سبب إعادة الضبط', 300);
+    var d = Attendance.deviceOf_(emp.id);
+    if (!d) throw appError('لا يوجد جهاز مسجّل لهذا الموظف.');
+    Db.update('attendance', 'Devices', d.id, { status: 'revoked', revokedAt: nowIso(), revokedBy: ctx.user.fullName, revokeReason: reason });
+    Audit.log(ctx.user, 'attendance', 'device.reset', 'Device', d.id, { employee: emp.fullName, label: d.label, reason: reason });
+    return Attendance.deviceList(ctx);
+  },
+
+  /** يتحقق من بصمة الجهاز إن أُرسلت أو كانت مطلوبة. يعيد الجهاز المستخدم أو null */
+  checkDevice_: function (ctx, emp, p) {
+    var d = Attendance.deviceOf_(emp.id);
+    if (p.assertion) {
+      if (!d) throw appError('لا يوجد جهاز مسجّل لك. سجّل جهازك أولاً.', 'DEVICE_NOT_REGISTERED');
+      var res = WebAuthn.verifyAssertion_(ctx.user.id, { credId: d.credId, rpId: d.rpId, alg: Number(d.alg), publicKey: d.publicKey }, p.assertion);
+      return { device: d, signCount: res.signCount };
+    }
+    if (Attendance.settings_().deviceRequired) {
+      if (!d) throw appError('البصمة تتطلب تسجيل جهازك أولاً: اضغط «تفعيل بصمة الجهاز».', 'DEVICE_NOT_REGISTERED');
+      throw appError('البصمة تتطلب التحقق بوجهك أو بصمة إصبعك على جهازك المسجّل.', 'DEVICE_REQUIRED');
+    }
+    return null;
   },
 
   // ───────── البصمة ─────────
@@ -164,6 +252,7 @@ var Attendance = {
       sessions: todays.map(Attendance.sessionView_),
       shift: shift ? { name: shift.name, start: shift.start, end: shift.end, graceMin: shift.graceMin } : null,
       dayType: info.dayType, detail: info.detail, late: info.late,
+      device: (function (d) { return { required: !!cfg.deviceRequired, registered: !!d, label: d ? d.label : '', since: d ? d.createdAt : '' }; })(Attendance.deviceOf_(emp.id)),
       geo: { required: geo.length > 0, branches: geo.map(function (b) { return { name: b.name, lat: Number(b.lat), lng: Number(b.lng), radius: b.geoRadius }; }) },
       pendingCorrections: Db.view('attendance', 'Corrections').filter(function (c) { return c.employeeId === emp.id && c.status === 'pending'; }).length
     };
@@ -174,6 +263,8 @@ var Attendance = {
     var kind = p && p.kind;
     if (kind !== 'in' && kind !== 'out') throw appError('نوع البصمة غير صحيح.');
     Attendance.checkGeo_(emp, p || {});
+    var dev = Attendance.checkDevice_(ctx, emp, p || {});
+    var verify = dev ? 'device' : '';
     withLock(function () {
       var now = Date.now();
       var cfg = Attendance.settings_();
@@ -193,12 +284,13 @@ var Attendance = {
       if (kind === 'in') {
         if (open) throw appError('أنت مسجّل حضور منذ ' + localHm_(open.inTs) + '. سجّل الانصراف أولاً.', 'ALREADY_IN');
         Db.insert('attendance', 'Attendance', Object.assign({
-          employeeId: emp.id, date: localDate_(now), inTs: iso, source: 'app', createdAt: iso, updatedAt: iso
+          employeeId: emp.id, date: localDate_(now), inTs: iso, source: 'app', inVerify: verify, createdAt: iso, updatedAt: iso
         }, loc('in')));
       } else {
         if (!open) throw appError('لا يوجد حضور مفتوح لتسجيل الانصراف.', 'NOT_IN');
-        Db.update('attendance', 'Attendance', open.id, Object.assign({ outTs: iso, updatedAt: iso }, loc('out')));
+        Db.update('attendance', 'Attendance', open.id, Object.assign({ outTs: iso, outVerify: verify, updatedAt: iso }, loc('out')));
       }
+      if (dev) Db.update('attendance', 'Devices', dev.device.id, { signCount: dev.signCount, lastUsedAt: iso });
     });
     return Attendance.today(ctx);
   },
@@ -516,6 +608,7 @@ var Attendance = {
   settingsSave: function (ctx, p) {
     var next = {
       geoRequired: bool_(p.geoRequired),
+      deviceRequired: bool_(p.deviceRequired),
       openMaxHours: intIn_(p.openMaxHours || 16, 4, 24, 'مدة الحضور المفتوح بالساعات'),
       startDate: optionalDate_(p.startDate, 'بداية احتساب الحضور')
     };
@@ -595,7 +688,11 @@ var Attendance = {
       'att.correction.decide': { perm: any, fn: Attendance.correctionDecide },
       'att.settings.get': { perm: hr, fn: Attendance.settingsGet },
       'att.settings.save': { perm: hr, fn: Attendance.settingsSave },
-      'att.geo.save': { perm: hr, fn: Attendance.geoSave }
+      'att.geo.save': { perm: hr, fn: Attendance.geoSave },
+      'att.device.challenge': { perm: any, fn: Attendance.deviceChallenge },
+      'att.device.register': { perm: any, fn: Attendance.deviceRegister },
+      'att.device.list': { perm: hr, fn: Attendance.deviceList },
+      'att.device.reset': { perm: hr, fn: Attendance.deviceReset }
     };
   }
 };

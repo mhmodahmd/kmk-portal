@@ -27,6 +27,7 @@ var Router = {
       'settings.get': { fn: Settings.get },
       'settings.update': { perm: 'super', fn: Settings.update },
       'audit.list': { perm: 'super', fn: Audit.list },
+      'system.selftest': { perm: 'super', fn: function () { return { webauthn: WebAuthn.selfTest_() }; } },
       'users.list': { perm: 'super', fn: Users.list },
       'users.create': { perm: 'super', fn: Users.create },
       'users.update': { perm: 'super', fn: Users.update },

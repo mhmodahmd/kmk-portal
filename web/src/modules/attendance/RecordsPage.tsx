@@ -45,7 +45,7 @@ export default function RecordsPage() {
                   <td className="num">{r.outTs ? formatTime(r.outTs) : <Badge tone="warn">مفتوح</Badge>}</td>
                   <td className="num ltr text-right">{r.outTs ? hm(r.minutes) : '—'}</td>
                   <td>
-                    {r.source === 'app' && !r.edited ? <span className="text-muted">البصمة</span> :
+                    {r.source === 'app' && !r.edited ? <span className="inline-flex items-center gap-1 text-muted">{(r.inVerified || r.outVerified) && <Icon name="fingerprint" size={16} />}{r.inVerified || r.outVerified ? 'بصمة الجهاز' : 'البصمة'}</span> :
                       <span title={r.note} className="flex flex-col"><Badge tone="info">{r.source === 'correction' ? 'تصحيح' : r.source === 'manual' ? 'يدوي' : 'معدّل'}</Badge><span className="text-[12px] text-muted">{r.editedBy}</span></span>}
                   </td>
                   <td><MapLink loc={r.inLoc} /></td>

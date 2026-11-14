@@ -4,6 +4,7 @@
  * البيانات تُحفظ في متصفح المطوّر فقط. لا يدخل هذا الملف في نسخة الإنتاج.
  */
 import { createGas, loadServer, type Gas, type LoadedServer } from '../../../server/test/gas-emulator.js';
+import './mock-device';
 
 const files = import.meta.glob(['../../../server/core/*.js', '../../../server/modules/**/*.js'], {
   query: '?raw', import: 'default', eager: true

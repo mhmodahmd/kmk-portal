@@ -53,11 +53,13 @@
 
 | الجدول | الأعمدة الرئيسية |
 |---|---|
-| **Attendance** | employeeId, date, inTs, outTs, inLat, inLng, inAcc, outLat, outLng, outAcc, source (`app`/`manual`/`correction`), note, editedBy |
+| **Attendance** | employeeId, date, inTs, outTs, inLat, inLng, inAcc, outLat, outLng, outAcc, source (`app`/`manual`/`correction`), note, editedBy, inVerify, outVerify (`device` = بصمة الجهاز) |
+| **Devices** 🆕 | employeeId, userId, credId, rpId, alg (-7 أو -257), publicKey (المفتاح العام فقط), signCount, backup (مفتاح متزامن عبر iCloud/Google), label, status (`active`/`revoked`), createdAt, lastUsedAt, revokedAt, revokedBy, revokeReason |
 | **Corrections** 🆕 | employeeId, date, kind (`missingOut`/`missingIn`/`wrongTime`), attendanceId, inTime, outTime, reason, status, decidedBy, decidedAt, decisionNote |
 
 > الورديات والعطل والإجازات المعتمدة تُقرأ من الموارد البشرية عبر `Hr.calendar_()`.
-> الإعدادات (`Settings.attendance`): التحقق من الموقع، أقصى مدة للحضور المفتوح، وبداية احتساب الحضور (لا يُحتسب غياب قبلها؛ الافتراضي تاريخ أول بصمة).
+> بصمة الجهاز (WebAuthn): جهاز نشط واحد لكل موظف. الخادم يتحقق من التوقيع بنفسه (`core/WebAuthn.js`)، ولا تصله أي بيانات حيوية. تغيير الهاتف = إعادة ضبط من الإعدادات بسبب إلزامي.
+> الإعدادات (`Settings.attendance`): التحقق من الموقع، اشتراط بصمة الجهاز، أقصى مدة للحضور المفتوح، وبداية احتساب الحضور (لا يُحتسب غياب قبلها؛ الافتراضي تاريخ أول بصمة).
 
 ## 4. الموارد البشرية — `KMK-HR`
 

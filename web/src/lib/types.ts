@@ -136,15 +136,19 @@ export interface HrMe {
 export interface HrTeam { members: EmployeeView[]; leaves: LeaveView[]; overtime: OtView[] }
 
 // ───────── الحضور ─────────
-export interface Session { id: string; inTs: string; outTs: string; minutes: number; source: string; note: string; edited: boolean }
+export interface Session { id: string; inTs: string; outTs: string; minutes: number; source: string; note: string; edited: boolean; inVerified?: boolean; outVerified?: boolean }
 export interface AttToday {
   employee: { id: string; name: string; empNo: string }; date: string; dayName: string; serverNow: string;
   isIn: boolean; openSince: string; closedMinutes: number; sessions: Session[];
   shift: { name: string; start: string; end: string; graceMin: number } | null;
   dayType: string; detail: string; late: number;
   geo: { required: boolean; branches: { name: string; lat: number; lng: number; radius: number }[] };
+  device: { required: boolean; registered: boolean; label: string; since: string };
   pendingCorrections: number;
 }
+export interface DeviceInfo { id: string; label: string; createdAt: string; lastUsedAt: string; synced: boolean }
+export interface DeviceRow { employeeId: string; name: string; jobTitle: string; departmentName: string; hasAccount: boolean; device: DeviceInfo | null }
+export interface DeviceList { rows: DeviceRow[]; registered: number; required: boolean }
 export type DayStatus = 'in' | 'present' | 'missing' | 'holiday' | 'leave' | 'weekend' | 'absent' | 'none' | 'future';
 export interface MonthDay {
   date: string; dayName: string; firstIn: string; lastOut: string; sessions: number; minutes: number; status: DayStatus; statusLabel: string;

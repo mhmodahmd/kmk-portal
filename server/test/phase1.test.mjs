@@ -95,7 +95,12 @@ test('punch in late, double punch, punch out, month summary', () => {
 test('absence, weekend and holidays in month report', () => {
   const c = company(at('2026-11-20', '10:00')); // الجمعة
   c.ok('hr.holiday.save', { name: 'عطلة تجريبية', date: '2026-11-17' }, c.A);
+  // قبل أول بصمة في النظام لا يُحتسب غياب
+  const before = c.ok('att.myMonth', { month: '2026-11' }, c.T.ahmad);
+  eq(before.summary.absentDays, 0, 'no absence before the system started');
+  c.ok('att.settings.save', { startDate: '2026-11-15' }, c.T.huda);
   const m = c.ok('att.myMonth', { month: '2026-11' }, c.T.ahmad);
+  eq(m.days.find((d) => d.date === '2026-11-12').status, 'none', 'before start date');
   const by = Object.fromEntries(m.days.map((d) => [d.date, d.status]));
   eq(by['2026-11-16'], 'absent');
   eq(by['2026-11-17'], 'holiday');

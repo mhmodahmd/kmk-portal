@@ -1,0 +1,131 @@
+import { useEffect, useState } from 'react';
+import type { Balance, HrMe, LeaveStatus, LeaveView, OtStatus, OtView } from '../../lib/types';
+import { daysWord, dmy, duration, kwDate } from '../../lib/format';
+import { useAction, useApi } from '../../lib/useApi';
+import { useAuth } from '../../app/auth';
+import { Badge, Card } from '../../ui/Display';
+import { Button } from '../../ui/Button';
+import { Select, TextInput, Textarea } from '../../ui/Field';
+import { Dialog } from '../../ui/Overlay';
+
+type Tone = 'ok' | 'warn' | 'bad' | 'info' | 'neutral';
+export const LEAVE_TONE: Record<LeaveStatus, Tone> = { pending_manager: 'warn', pending_hr: 'warn', approved: 'ok', rejected: 'bad', cancelled: 'neutral' };
+export const OT_TONE: Record<OtStatus, Tone> = { pending: 'warn', approved: 'ok', rejected: 'bad', cancelled: 'neutral' };
+
+export function useHrMe() {
+  return useApi<HrMe>('hr.me', {}, { staleTime: 30_000 });
+}
+
+export function useHrRole() {
+  const { user, roles } = useAuth();
+  return { isHr: !!user?.isSuperAdmin || roles.hr === 'hr', isSuper: !!user?.isSuperAdmin };
+}
+
+export function BalanceCards({ balances }: { balances: Balance[] }) {
+  if (!balances.length) return null;
+  return (
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {balances.map((b) => {
+        const pct = b.unlimited || !b.entitled ? 0 : Math.min(100, Math.round(((b.used + b.pending) / (b.entitled + b.adjustment || 1)) * 100));
+        return (
+          <Card key={b.typeId} className="flex flex-col gap-2 !p-4">
+            <span className="font-medium text-muted">{b.name}</span>
+            <span className="text-[24px] font-bold leading-none num">{b.unlimited ? '∞' : b.available}<span className="ms-1 text-[13px] font-normal text-muted">{b.unlimited ? 'بلا سقف' : 'يوم متاح'}</span></span>
+            {!b.unlimited && <div className="h-1.5 overflow-hidden rounded-full bg-chip"><div className="h-full rounded-full bg-accent" style={{ width: pct + '%' }} /></div>}
+            <span className="text-[12px] text-muted">مستخدم {b.used}{b.pending ? ` · معلّق ${b.pending}` : ''}{b.adjustment ? ` · تسوية ${b.adjustment > 0 ? '+' : ''}${b.adjustment}` : ''}</span>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+export function LeaveRow({ l, showName, actions }: { l: LeaveView; showName?: boolean; actions?: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center gap-3 border-t border-line px-5 py-3.5">
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="font-semibold">{showName ? `${l.name} · ` : ''}{l.typeName} <span className="font-normal text-muted">· {daysWord(l.days)}</span></span>
+        <span className="text-[13px] text-muted num">{dmy(l.from)}{l.to !== l.from ? ` ← ${dmy(l.to)}` : ''}{l.reason ? ` · ${l.reason}` : ''}</span>
+        {(l.managerNote || l.decisionNote) && <span className="text-[13px]">{l.decisionNote ? `${l.decidedBy}: ${l.decisionNote}` : `${l.managerName}: ${l.managerNote}`}</span>}
+      </span>
+      <Badge tone={LEAVE_TONE[l.status]}>{l.statusLabel}</Badge>
+      {actions}
+    </div>
+  );
+}
+
+export function OtRow({ o, showName, actions }: { o: OtView; showName?: boolean; actions?: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center gap-3 border-t border-line px-5 py-3.5">
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="font-semibold">{showName ? `${o.name} · ` : ''}{duration(o.minutes)} <span className="font-normal text-muted">· {dmy(o.date)}</span></span>
+        <span className="text-[13px] text-muted">{o.reason || '—'}{o.createdByName && o.createdByName !== o.name ? ` · سجّله ${o.createdByName}` : ''}</span>
+        {o.decisionNote && <span className="text-[13px]">{o.decidedBy}: {o.decisionNote}</span>}
+      </span>
+      <Badge tone={OT_TONE[o.status]}>{o.statusLabel}</Badge>
+      {actions}
+    </div>
+  );
+}
+
+/** طلب إجازة (للموظف) أو تسجيلها نيابة عن موظف (للموارد البشرية) */
+export function LeaveDialog({ open, onClose, types, employees }: {
+  open: boolean; onClose: () => void; types: { id: string; name: string }[]; employees?: { id: string; fullName: string }[];
+}) {
+  const onBehalf = !!employees;
+  const [f, setF] = useState({ employeeId: '', typeId: '', from: '', to: '', reason: '' });
+  const [error, setError] = useState('');
+  useEffect(() => { if (open) { setF({ employeeId: '', typeId: types[0]?.id || '', from: kwDate(), to: kwDate(), reason: '' }); setError(''); } }, [open, types]);
+  const act = useAction(onBehalf ? 'hr.leave.create' : 'hr.leave.request', {
+    invalidate: ['hr.me', 'hr.leave.list', 'hr.team', 'att.myMonth'], success: onBehalf ? 'سُجّلت الإجازة' : 'أُرسل طلب الإجازة', silentError: true, onSuccess: onClose
+  });
+  return (
+    <Dialog open={open} onClose={onClose} title={onBehalf ? 'تسجيل إجازة لموظف' : 'طلب إجازة'}
+      footer={<><Button variant="primary" className="flex-1" loading={act.isPending} onClick={() => { setError(''); act.mutate(f, { onError: (e) => setError(e.message) }); }}>{onBehalf ? 'تسجيل' : 'إرسال الطلب'}</Button><Button variant="ghost" onClick={onClose}>إلغاء</Button></>}>
+      <div className="flex flex-col gap-3">
+        {onBehalf && <Select label="الموظف" value={f.employeeId} onChange={(e) => setF({ ...f, employeeId: e.target.value })} options={[{ value: '', label: 'اختر الموظف' }, ...employees!.map((x) => ({ value: x.id, label: x.fullName }))]} />}
+        <Select label="نوع الإجازة" value={f.typeId} onChange={(e) => setF({ ...f, typeId: e.target.value })} options={types.map((t) => ({ value: t.id, label: t.name }))} />
+        <div className="grid grid-cols-2 gap-3">
+          <TextInput label="من" type="date" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value, to: f.to < e.target.value ? e.target.value : f.to })} />
+          <TextInput label="إلى" type="date" value={f.to} min={f.from} onChange={(e) => setF({ ...f, to: e.target.value })} />
+        </div>
+        <p className="m-0 text-[13px] text-muted">تُحتسب أيام العمل فقط، وتُستثنى العطل الأسبوعية والرسمية.</p>
+        <Textarea label="السبب (اختياري)" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} maxLength={500} />
+        {onBehalf && <p className="m-0 text-[13px] text-muted">الإجازة المسجلة من الموارد البشرية تُعتمد مباشرة.</p>}
+        {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
+      </div>
+    </Dialog>
+  );
+}
+
+/** طلب عمل إضافي (للموظف) أو تسجيله مباشرة لعضو في الفريق */
+export function OtDialog({ open, onClose, employees }: { open: boolean; onClose: () => void; employees?: { id: string; fullName: string }[] }) {
+  const direct = !!employees;
+  const [f, setF] = useState({ employeeId: '', date: '', hours: '1', mins: '0', reason: '' });
+  const [error, setError] = useState('');
+  useEffect(() => { if (open) { setF({ employeeId: '', date: kwDate(), hours: '1', mins: '0', reason: '' }); setError(''); } }, [open]);
+  const act = useAction(direct ? 'hr.ot.add' : 'hr.ot.request', {
+    invalidate: ['hr.me', 'hr.ot.list', 'hr.team', 'att.myMonth'], success: direct ? 'سُجّل الإضافي' : 'أُرسل طلب الإضافي', silentError: true, onSuccess: onClose
+  });
+  const submit = () => {
+    setError('');
+    const minutes = (Number(f.hours) || 0) * 60 + (Number(f.mins) || 0);
+    act.mutate({ employeeId: f.employeeId, date: f.date, minutes, reason: f.reason }, { onError: (e) => setError(e.message) });
+  };
+  return (
+    <Dialog open={open} onClose={onClose} title={direct ? 'تسجيل عمل إضافي' : 'طلب عمل إضافي'}
+      footer={<><Button variant="primary" className="flex-1" loading={act.isPending} onClick={submit}>{direct ? 'تسجيل' : 'إرسال الطلب'}</Button><Button variant="ghost" onClick={onClose}>إلغاء</Button></>}>
+      <div className="flex flex-col gap-3">
+        {direct && <Select label="الموظف" value={f.employeeId} onChange={(e) => setF({ ...f, employeeId: e.target.value })} options={[{ value: '', label: 'اختر الموظف' }, ...employees!.map((x) => ({ value: x.id, label: x.fullName }))]} />}
+        <TextInput label="اليوم" type="date" max={kwDate()} value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} />
+        <div className="grid grid-cols-2 gap-3">
+          <TextInput label="ساعات" type="number" min={0} max={12} value={f.hours} onChange={(e) => setF({ ...f, hours: e.target.value })} />
+          <TextInput label="دقائق" type="number" min={0} max={59} step={5} value={f.mins} onChange={(e) => setF({ ...f, mins: e.target.value })} />
+        </div>
+        <Textarea label="العمل المنجز" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} maxLength={300} />
+        {!direct && <p className="m-0 text-[13px] text-muted">يجب أن يكون لك تسجيل حضور في هذا اليوم، ويُعتمد من مديرك المباشر.</p>}
+        {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
+      </div>
+    </Dialog>
+  );
+}

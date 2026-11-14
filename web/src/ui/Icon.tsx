@@ -30,7 +30,19 @@ const PATHS = {
   copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
   edit: 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4',
   chevron: 'M15 6l-6 6 6 6',
-  refresh: 'M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7'
+  refresh: 'M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7',
+  calendar: 'M4 6h16v15H4zM4 10h16M8 3v4M16 3v4',
+  pin: 'M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21zM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
+  download: 'M12 4v11M7 10l5 5 5-5M5 20h14',
+  printer: 'M7 9V4h10v5M7 17H5v-6h14v6h-2M8 14h8v6H8z',
+  trash: 'M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13',
+  briefcase: 'M4 8h16v11H4zM9 8V5h6v3M4 13h16',
+  login: 'M14 4h5v16h-5M4 12h11M11 8l4 4-4 4',
+  logoutArrow: 'M10 4H5v16h5M20 12H9M13 8l-4 4 4 4',
+  chevronDown: 'M6 9l6 6 6-6',
+  file: 'M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6',
+  filter: 'M4 6h16M7 12h10M10 18h4',
+  sliders: 'M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4'
 } as const;
 
 export type IconName = keyof typeof PATHS;

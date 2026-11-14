@@ -43,7 +43,7 @@ function MobileBrand() {
 }
 
 export default function LoginPage() {
-  const status = useQuery({ queryKey: ['system.status'], queryFn: () => api<SystemStatus>('system.status'), staleTime: 60_000 });
+  const status = useQuery({ queryKey: ['system.status'], queryFn: () => api<SystemStatus>('system.status'), staleTime: 0 });
   return (
     <div className="flex min-h-screen flex-col lg:flex-row bg-bg">
       <MobileBrand />

@@ -14,8 +14,26 @@ const CompanyPage = lazy(() => import('../modules/settings/CompanyPage'));
 const AuditPage = lazy(() => import('../modules/settings/AuditPage'));
 const ProfilePage = lazy(() => import('../modules/profile/ProfilePage'));
 
+const AttendanceLayout = lazy(() => import('../modules/attendance/AttendanceLayout'));
+const PunchPage = lazy(() => import('../modules/attendance/PunchPage'));
+const MyMonthPage = lazy(() => import('../modules/attendance/MyMonthPage'));
+const BoardPage = lazy(() => import('../modules/attendance/BoardPage'));
+const RecordsPage = lazy(() => import('../modules/attendance/RecordsPage'));
+const ReportPage = lazy(() => import('../modules/attendance/ReportPage'));
+const EmployeeReportPage = lazy(() => import('../modules/attendance/ReportPage').then((m) => ({ default: m.EmployeeReportPage })));
+const CorrectionsPage = lazy(() => import('../modules/attendance/CorrectionsPage'));
+const AttSettingsPage = lazy(() => import('../modules/attendance/SettingsPage'));
+
+const HrLayout = lazy(() => import('../modules/hr/HrLayout'));
+const MyProfilePage = lazy(() => import('../modules/hr/MyHrPages').then((m) => ({ default: m.MyProfilePage })));
+const MyLeavePage = lazy(() => import('../modules/hr/MyHrPages').then((m) => ({ default: m.MyLeavePage })));
+const MyOvertimePage = lazy(() => import('../modules/hr/MyHrPages').then((m) => ({ default: m.MyOvertimePage })));
+const TeamPage = lazy(() => import('../modules/hr/TeamPage'));
+const EmployeesPage = lazy(() => import('../modules/hr/EmployeesPage'));
+const RequestsPage = lazy(() => import('../modules/hr/RequestsPage'));
+const StructurePage = lazy(() => import('../modules/hr/StructurePage'));
+
 const SOON: Record<string, { label: string; phase: number }> = {
-  attendance: { label: 'الحضور والانصراف', phase: 1 }, hr: { label: 'الموارد البشرية', phase: 1 },
   custody: { label: 'العهد والنثريات', phase: 2 }, tasks: { label: 'المهام', phase: 3 },
   crm: { label: 'العملاء', phase: 4 }, finance: { label: 'المالية', phase: 5 }
 };
@@ -34,11 +52,15 @@ function UpdateBanner() {
 }
 
 export default function App() {
-  const { status, user, updateRequired } = useAuth();
+  const { status, user, roles, updateRequired } = useAuth();
   if (status === 'loading') return <div className="min-h-screen bg-bg"><Loader label="جارٍ فتح البوابة" /></div>;
   if (status === 'out') return <LoginPage />;
   if (user?.mustChangePassword) return <ForcedChangePassword />;
   const admin = !!user?.isSuperAdmin;
+  const att = admin || !!roles.attendance;
+  const hr = admin || !!roles.hr;
+  const hrStaff = admin || roles.hr === 'hr';
+  const attHr = admin || roles.attendance === 'hr';
   return (
     <HashRouter>
       {updateRequired && <UpdateBanner />}
@@ -48,6 +70,29 @@ export default function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/inbox" element={<InboxPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            {att && (
+              <Route path="/attendance" element={<AttendanceLayout />}>
+                <Route index element={<PunchPage />} />
+                <Route path="me" element={<MyMonthPage />} />
+                <Route path="today" element={<BoardPage />} />
+                <Route path="records" element={<RecordsPage />} />
+                <Route path="report" element={<ReportPage />} />
+                <Route path="report/:id" element={<EmployeeReportPage />} />
+                <Route path="corrections" element={<CorrectionsPage />} />
+                {attHr && <Route path="settings" element={<AttSettingsPage />} />}
+              </Route>
+            )}
+            {hr && (
+              <Route path="/hr" element={<HrLayout />}>
+                <Route index element={<MyProfilePage />} />
+                <Route path="leave" element={<MyLeavePage />} />
+                <Route path="overtime" element={<MyOvertimePage />} />
+                <Route path="team" element={<TeamPage />} />
+                {hrStaff && <Route path="employees" element={<EmployeesPage />} />}
+                {hrStaff && <Route path="requests" element={<RequestsPage />} />}
+                {hrStaff && <Route path="structure" element={<StructurePage />} />}
+              </Route>
+            )}
             {admin && <Route path="/settings/users" element={<UsersPage />} />}
             {admin && <Route path="/settings/company" element={<CompanyPage />} />}
             {admin && <Route path="/settings/audit" element={<AuditPage />} />}

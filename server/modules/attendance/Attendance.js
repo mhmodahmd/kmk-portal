@@ -25,7 +25,26 @@ var DAY_STATUS = {
 
 var Attendance = {
   settings_: function () {
-    return Object.assign({ geoRequired: false, openMaxHours: 16 }, Settings.get_('attendance', {}));
+    return Object.assign({ geoRequired: false, openMaxHours: 16, startDate: '' }, Settings.get_('attendance', {}));
+  },
+
+  /**
+   * بداية احتساب الغياب: المحددة في الإعدادات، وإلا تاريخ أول بصمة في النظام.
+   * حتى لا تُحتسب أيام ما قبل تشغيل البوابة غياباً.
+   */
+  startDate_: function () {
+    var s = Attendance.settings_().startDate;
+    if (s) return s;
+    var first = '';
+    Db.view('attendance', 'Attendance').forEach(function (r) { if (!first || r.date < first) first = r.date; });
+    return first || localDate_();
+  },
+
+  /** تقويم الموارد البشرية مع بداية احتساب الحضور */
+  cal_: function () {
+    var cal = Hr.calendar_();
+    cal.attStart = Attendance.startDate_();
+    return cal;
   },
 
   isHr_: function (ctx) { return Permissions.has(ctx, 'attendance', ['hr']); },
@@ -110,7 +129,7 @@ var Attendance = {
           if (lastOut < en) out.early = en - lastOut;
         }
       }
-    } else if (shift && !hol && !lv && wd && ds < today && (!emp.hireDate || ds >= emp.hireDate)) {
+    } else if (shift && !hol && !lv && wd && ds < today && (!emp.hireDate || ds >= emp.hireDate) && ds >= (cal.attStart || '')) {
       out.absent = true;
     }
     out.overtime = Hr.approvedOtMinutes_(cal, emp.id, ds);
@@ -131,7 +150,7 @@ var Attendance = {
     var open = Attendance.findOpen_(recs, now, cfg.openMaxHours);
     var todays = recs.filter(function (r) { return r.date === today || (open && r.id === open.id); })
       .sort(function (a, b) { return a.inTs < b.inTs ? -1 : 1; });
-    var cal = Hr.calendar_();
+    var cal = Attendance.cal_();
     var shift = Hr.shiftOf_(cal, emp);
     var info = Attendance.classify_(cal, emp, today, todays, today);
     var closed = todays.filter(function (r) { return r.outTs; })
@@ -189,7 +208,7 @@ var Attendance = {
     var now = Date.now(), today = localDate_(now);
     var maxH = Attendance.settings_().openMaxHours;
     var att = (all || Db.view('attendance', 'Attendance')).filter(function (r) { return r.employeeId === emp.id && r.date.slice(0, 7) === month; });
-    cal = cal || Hr.calendar_();
+    cal = cal || Attendance.cal_();
     var shift = Hr.shiftOf_(cal, emp);
     var byDate = {};
     att.forEach(function (r) { (byDate[r.date] = byDate[r.date] || []).push(r); });
@@ -240,7 +259,7 @@ var Attendance = {
   report: function (ctx, p) {
     var scope = Attendance.requireScope_(ctx);
     var month = requireMonth_(p && p.month);
-    var cal = Hr.calendar_(), all = Db.view('attendance', 'Attendance');
+    var cal = Attendance.cal_(), all = Db.view('attendance', 'Attendance');
     if (p && p.employeeId) {
       if (!Staff.inScope_(scope, p.employeeId)) throw appError('هذا الموظف خارج نطاقك.', 'FORBIDDEN');
       return { single: true, report: Attendance.monthOf_(Staff.getOrThrow_(p.employeeId), month, all, cal) };
@@ -264,7 +283,7 @@ var Attendance = {
     var now = Date.now(), today = localDate_(now);
     var date = p && p.date ? requireDate_(p.date, 'التاريخ') : today;
     var cfg = Attendance.settings_();
-    var cal = Hr.calendar_();
+    var cal = Attendance.cal_();
     var maps = Staff.maps_();
     var att = Db.view('attendance', 'Attendance').filter(function (r) { return r.date === date; });
     var counts = { total: 0, in: 0, out: 0, late: 0, absent: 0, leave: 0, off: 0, none: 0 };
@@ -282,7 +301,7 @@ var Attendance = {
       else if (recs.length) status = 'out';
       else if (info.dayType === 'leave') status = 'leave';
       else if (info.dayType) status = 'off';
-      else if (date < today || (shift && minutesFrom_(date, now) > hm2min_(shift.start) + shift.graceMin)) status = 'absent';
+      else if (shift && date >= cal.attStart && (date < today || minutesFrom_(date, now) > hm2min_(shift.start) + shift.graceMin)) status = 'absent';
       else status = 'none';
       counts.total++; counts[status]++;
       if (info.late) counts.late++;
@@ -497,7 +516,8 @@ var Attendance = {
   settingsSave: function (ctx, p) {
     var next = {
       geoRequired: bool_(p.geoRequired),
-      openMaxHours: intIn_(p.openMaxHours || 16, 4, 24, 'مدة الحضور المفتوح بالساعات')
+      openMaxHours: intIn_(p.openMaxHours || 16, 4, 24, 'مدة الحضور المفتوح بالساعات'),
+      startDate: optionalDate_(p.startDate, 'بداية احتساب الحضور')
     };
     if (next.geoRequired && !Staff.branches_().some(function (b) { return b.active !== false && b.lat && b.lng && b.geoRadius > 0; })) {
       throw appError('حدّد موقع فرع واحد على الأقل قبل تفعيل التحقق من الموقع.');
@@ -527,7 +547,7 @@ var Attendance = {
       return c.status === 'pending' && (!me || c.employeeId !== me.id || ctx.user.isSuperAdmin) && (isHr || team.indexOf(c.employeeId) >= 0);
     }).map(function (c) {
       var v = Attendance.correctionView_(c, maps);
-      var facts = [{ k: 'اليوم', v: v.dayName + ' ' + c.date }];
+      var facts = [{ k: 'اليوم', v: v.dayName + ' ' + dmy_(c.date) }];
       if (c.inTime) facts.push({ k: 'الحضور', v: c.inTime });
       if (c.outTime) facts.push({ k: 'الانصراف', v: c.outTime });
       return {

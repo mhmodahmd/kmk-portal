@@ -6,14 +6,14 @@ import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persist
 import App from './app/App';
 import { AuthProvider } from './app/auth';
 import { ToastProvider } from './ui/Overlay';
-import { ApiError } from './lib/api';
+import { ApiError, CLIENT_VERSION } from './lib/api';
 import './index.css';
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       gcTime: 1000 * 60 * 60 * 24, // نحتفظ بآخر بيانات يوماً لعرضها فوراً عند الفتح
-      retry: (count, err) => count < 2 && !(err instanceof ApiError && ['FORBIDDEN', 'SESSION_EXPIRED', 'BAD_REQUEST'].includes(err.code)),
+      retry: (count, err) => count < 2 && !(err instanceof ApiError && ['FORBIDDEN', 'SESSION_EXPIRED', 'BAD_REQUEST', 'NO_EMPLOYEE', 'NOT_FOUND'].includes(err.code)),
       refetchOnWindowFocus: true
     }
   }
@@ -25,7 +25,7 @@ const persister = createSyncStoragePersister({ storage, key: 'kmk.cache' });
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <PersistQueryClientProvider client={queryClient} persistOptions={{ persister, maxAge: 1000 * 60 * 60 * 24, buster: '0.1.0' }}>
+    <PersistQueryClientProvider client={queryClient} persistOptions={{ persister, maxAge: 1000 * 60 * 60 * 24, buster: CLIENT_VERSION }}>
       <ToastProvider>
         <AuthProvider>
           <App />

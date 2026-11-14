@@ -4,7 +4,7 @@ import type { SessionResult } from './types';
  * الاتصال بالخادم. كل الشاشات تمر من هنا، لا fetch مباشر.
  * Content-Type: text/plain يتجنب طلب CORS المسبق الذي لا يدعمه Apps Script.
  */
-export const CLIENT_VERSION = '0.1.0';
+export const CLIENT_VERSION = '0.2.0';
 const API_URL: string = import.meta.env.VITE_API_URL || 'mock';
 export const IS_MOCK = API_URL === 'mock';
 

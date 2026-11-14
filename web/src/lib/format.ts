@@ -53,3 +53,53 @@ export function relativeTime(iso: string) {
 export function initial(name: string) {
   return (name || '؟').trim().charAt(0);
 }
+
+/** دقائق ← "7:05" */
+export function hm(minutes: number) {
+  const m = Math.max(0, Math.round(minutes || 0));
+  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
+}
+
+/** مدة مختصرة: "7 س 5 د" */
+export function duration(minutes: number) {
+  const m = Math.max(0, Math.round(minutes || 0));
+  const h = Math.floor(m / 60), r = m % 60;
+  if (!h) return `${r} د`;
+  return r ? `${h} س ${r} د` : `${h} س`;
+}
+
+const MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+export function monthLabel(month: string) {
+  const [y, m] = month.split('-');
+  return `${MONTHS[Number(m) - 1]} ${y}`;
+}
+
+/** yyyy-mm-dd بتوقيت الكويت */
+export function kwDate(d: Date = new Date()) {
+  const p = parts(d);
+  return `${p.y}-${p.m}-${p.d}`;
+}
+export const kwMonth = () => kwDate().slice(0, 7);
+
+export function shiftMonth(month: string, delta: number) {
+  const [y, m] = month.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1 + delta, 1)).toISOString().slice(0, 7);
+}
+
+/** "15/11/2026" من "2026-11-15" */
+export function dmy(ds: string) {
+  if (!ds) return '';
+  const [y, m, d] = ds.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+export function daysWord(n: number) {
+  if (n === 1) return 'يوم واحد';
+  if (n === 2) return 'يومان';
+  return n >= 3 && n <= 10 ? `${n} أيام` : `${n} يوماً`;
+}
+
+export function weekdayName(ds: string) {
+  const [y, m, d] = ds.split('-').map(Number);
+  return DAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+}

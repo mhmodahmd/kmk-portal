@@ -9,6 +9,7 @@ import { Icon, type IconName } from '../ui/Icon';
 import { Avatar } from '../ui/Display';
 import { IconButton } from '../ui/Button';
 import { cx } from '../ui/cx';
+import { ErrorBoundary } from '../ui/ErrorBoundary';
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -16,7 +17,7 @@ interface NavItem { to: string; label: string; icon: IconName; module?: string; 
 
 const GROUPS: { label: string; items: NavItem[] }[] = [
   { label: 'عام', items: [{ to: '/', label: 'الرئيسية', icon: 'home' }, { to: '/inbox', label: 'الموافقات', icon: 'inbox' }] },
-  { label: 'الموظفون', items: [{ to: '/attendance', label: 'الحضور والانصراف', icon: 'clock', module: 'attendance', soon: true }, { to: '/hr', label: 'الموارد البشرية', icon: 'users', module: 'hr', soon: true }] },
+  { label: 'الموظفون', items: [{ to: '/attendance', label: 'الحضور والانصراف', icon: 'clock', module: 'attendance' }, { to: '/hr', label: 'الموارد البشرية', icon: 'users', module: 'hr' }] },
   { label: 'العمل', items: [{ to: '/tasks', label: 'المهام', icon: 'tasks', module: 'tasks', soon: true }, { to: '/crm', label: 'العملاء', icon: 'crm', module: 'crm', soon: true }] },
   { label: 'المالية', items: [{ to: '/custody', label: 'العهد والنثريات', icon: 'wallet', module: 'custody', soon: true }, { to: '/finance', label: 'المالية', icon: 'finance', module: 'finance', soon: true }] },
   { label: 'النظام', items: [{ to: '/settings/users', label: 'المستخدمون والأدوار', icon: 'shield', superOnly: true }, { to: '/settings/company', label: 'بيانات الشركة', icon: 'building', superOnly: true }, { to: '/settings/audit', label: 'سجل العمليات', icon: 'history', superOnly: true }] }
@@ -74,17 +75,23 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-const MOBILE_TABS: { to: string; label: string; icon: IconName }[] = [
-  { to: '/', label: 'الرئيسية', icon: 'home' },
-  { to: '/inbox', label: 'الموافقات', icon: 'inbox' },
-  { to: '/profile', label: 'ملفي', icon: 'user' }
-];
+function useMobileTabs(): { to: string; label: string; icon: IconName; end?: boolean }[] {
+  const { user, roles } = useAuth();
+  const all = !!user?.isSuperAdmin;
+  return [
+    { to: '/', label: 'الرئيسية', icon: 'home', end: true },
+    ...(all || roles.attendance ? [{ to: '/attendance', label: 'البصمة', icon: 'clock' as IconName, end: true }] : []),
+    { to: '/inbox', label: 'الموافقات', icon: 'inbox' },
+    all || roles.hr ? { to: '/hr', label: 'ملفي', icon: 'user', end: true } : { to: '/profile', label: 'ملفي', icon: 'user' }
+  ];
+}
 
 export default function Shell({ children }: { children: ReactNode }) {
   const [drawer, setDrawer] = useState(false);
   const { toggle, isDark } = useTheme();
   const loc = useLocation();
   const summary = useSummary();
+  const tabs = useMobileTabs();
   useEffect(() => { setDrawer(false); }, [loc.pathname]);
 
   return (
@@ -112,13 +119,17 @@ export default function Shell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[1240px] flex-1 px-4 pb-28 pt-5 sm:px-7 sm:pt-7 lg:pb-10">{children}</main>
+        <main className="mx-auto w-full max-w-[1240px] flex-1 px-4 pb-28 pt-5 sm:px-7 sm:pt-7 lg:pb-10">
+          <ErrorBoundary resetKey={loc.pathname}>{children}</ErrorBoundary>
+        </main>
 
-        <nav aria-label="التنقل السفلي" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-line bg-surface px-1.5 pb-[max(env(safe-area-inset-bottom),10px)] pt-1.5 lg:hidden">
-          {MOBILE_TABS.map((t) => (
-            <NavLink key={t.to} to={t.to} end={t.to === '/'}
-              className={({ isActive }) => cx('flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] no-underline', isActive ? 'font-bold text-brand' : 'font-medium text-muted')}>
+        <nav aria-label="التنقل السفلي" style={{ gridTemplateColumns: `repeat(${tabs.length + 1}, minmax(0, 1fr))` }}
+          className="no-print fixed inset-x-0 bottom-0 z-30 grid border-t border-line bg-surface px-1.5 pb-[max(env(safe-area-inset-bottom),10px)] pt-1.5 lg:hidden">
+          {tabs.map((t) => (
+            <NavLink key={t.to} to={t.to} end={t.end}
+              className={({ isActive }) => cx('relative flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] no-underline', isActive ? 'font-bold text-brand' : 'font-medium text-muted')}>
               <Icon name={t.icon} size={23} />{t.label}
+              {t.to === '/inbox' && (summary.data?.inboxCount || 0) > 0 && <span className="absolute top-1.5 left-1/2 ml-2 h-2 w-2 rounded-full bg-brand" />}
             </NavLink>
           ))}
           <button type="button" onClick={() => setDrawer(true)} className="flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] font-medium text-muted cursor-pointer">

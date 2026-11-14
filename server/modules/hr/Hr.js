@@ -646,7 +646,7 @@ var Hr = {
         id: 'hr.leave:' + r.id, kind: 'hr.leave', refId: r.id, module: 'hr', moduleLabel: 'الإجازات',
         title: v.typeName + ' · ' + v.days + (v.days > 2 && v.days < 11 ? ' أيام' : ' يوم'), who: v.name, createdAt: r.createdAt,
         status: v.statusLabel,
-        facts: [{ k: 'من', v: r.from }, { k: 'إلى', v: r.to }, { k: 'أيام العمل', v: String(r.days) }]
+        facts: [{ k: 'من', v: dmy_(r.from) }, { k: 'إلى', v: dmy_(r.to) }, { k: 'أيام العمل', v: String(r.days) }]
           .concat(r.managerNote ? [{ k: 'ملاحظة المدير', v: r.managerNote }] : []),
         note: r.reason, needsNoteOnReject: true
       });
@@ -658,7 +658,7 @@ var Hr = {
         id: 'hr.ot:' + o.id, kind: 'hr.ot', refId: o.id, module: 'hr', moduleLabel: 'العمل الإضافي',
         title: 'عمل إضافي · ' + Math.floor(o.minutes / 60) + ':' + ('0' + (o.minutes % 60)).slice(-2) + ' ساعة',
         who: Staff.name_(maps, o.employeeId), createdAt: o.createdAt, status: OT_STATUS.pending,
-        facts: [{ k: 'اليوم', v: o.date }, { k: 'المدة', v: o.minutes + ' دقيقة' }], note: o.reason, needsNoteOnReject: true
+        facts: [{ k: 'اليوم', v: dmy_(o.date) }, { k: 'المدة', v: o.minutes + ' دقيقة' }], note: o.reason, needsNoteOnReject: true
       });
     });
     return items;

@@ -157,6 +157,9 @@ function requireMonth_(s) {
   return v;
 }
 
+/** dd/mm/yyyy للعرض */
+function dmy_(ds) { return ds ? ds.split('-').reverse().join('/') : ''; }
+
 var DAYS_AR = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 
 function indexBy_(rows, key) {

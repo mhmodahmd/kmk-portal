@@ -1,4 +1,4 @@
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, loadEnv, type Plugin, type UserConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
@@ -27,11 +27,20 @@ function cspPlugin(): Plugin {
 }
 
 // GitHub Pages يخدم المشروع تحت /kmk-portal/
-export default defineConfig({
+export default defineConfig(({ command, mode }) => {
+  // نسخة الإنتاج بلا عنوان خادم ستعمل بالخادم الوهمي: نوقف البناء بدل نشرها بالخطأ
+  const env = loadEnv(mode, process.cwd(), 'VITE_');
+  if (command === 'build' && mode === 'production' && (!env.VITE_API_URL || env.VITE_API_URL === 'mock')) {
+    throw new Error('VITE_API_URL is missing: set the API_URL repository variable before building for production.');
+  }
+  return config;
+});
+
+const config = {
   base: '/kmk-portal/',
   plugins: [react(), tailwindcss(), cspPlugin()],
   build: {
     target: 'es2020',
     chunkSizeWarningLimit: 600
   }
-});
+} satisfies UserConfig;

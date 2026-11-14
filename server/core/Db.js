@@ -130,6 +130,12 @@ var Db = {
       if (type === 'json') return null;
       return '';
     }
+    // احتياط: إن حوّل Sheets خلية إلى تاريخ رغم التنسيق النصي
+    if (Object.prototype.toString.call(v) === '[object Date]') {
+      if (type === 'date') return localDate_(v.getTime());
+      if (type === 'ts') return v.toISOString();
+      if (type === 'text') return localHm_(v.getTime());
+    }
     switch (type) {
       case 'bool': return v === true || String(v).toUpperCase() === 'TRUE' || String(v) === '1';
       case 'num': return Number(v) || 0;

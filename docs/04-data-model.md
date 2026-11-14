@@ -36,7 +36,7 @@
 |---|---|
 | **Users** | username, fullName, passwordHash, salt, active, mustChangePassword, failedAttempts, lockedUntil, lastLogin, employeeId, isSuperAdmin |
 | **UserRoles** | userId, module (`attendance`/`hr`/`custody`/`tasks`/`crm`/`finance`), role |
-| **Employees** | empNo, fullName, userId, departmentId, branchId, managerId (ref:Employees), jobTitle, hireDate, status (`active`/`leave`/`terminated`), phone, email, nationality, birthDate, civilId, civilIdExpiry, residencyNo, residencyExpiry, passportNo, passportExpiry, contractType, contractEnd, address, emergencyName, emergencyPhone, notes |
+| **Employees** | empNo, fullName, userId, departmentId, branchId, managerId (ref:Employees), shiftId (ref:Shifts، الوردية الحالية؛ سجل الورديات EmployeeShifts مؤجل)، jobTitle, hireDate, status (`active`/`leave`/`terminated`), phone, email, nationality, birthDate, civilId, civilIdExpiry, residencyNo, residencyExpiry, passportNo, passportExpiry, contractType, contractEnd, address, emergencyName, emergencyPhone, notes |
 | **Departments** | name, managerId, active |
 | **Branches** | name, address, lat, lng, geoRadius, active |
 | **Projects** | code, name, type (`project`/`debt`/`internal`), customerId, active, sortOrder |
@@ -53,10 +53,11 @@
 
 | الجدول | الأعمدة الرئيسية |
 |---|---|
-| **Attendance** | employeeId, date, inTs, outTs, inLat, inLng, outLat, outLng, source (`app`/`manual`), note, editedBy |
-| **Corrections** 🆕 | employeeId, date, kind (`missingOut`/`missingIn`/`wrongTime`), requestedTime, reason, status, decidedBy, decidedAt |
+| **Attendance** | employeeId, date, inTs, outTs, inLat, inLng, inAcc, outLat, outLng, outAcc, source (`app`/`manual`/`correction`), note, editedBy |
+| **Corrections** 🆕 | employeeId, date, kind (`missingOut`/`missingIn`/`wrongTime`), attendanceId, inTime, outTime, reason, status, decidedBy, decidedAt, decisionNote |
 
-> الورديات والعطل تُقرأ من الموارد البشرية عبر واجهتها.
+> الورديات والعطل والإجازات المعتمدة تُقرأ من الموارد البشرية عبر `Hr.calendar_()`.
+> الإعدادات (`Settings.attendance`): التحقق من الموقع، أقصى مدة للحضور المفتوح، وبداية احتساب الحضور (لا يُحتسب غياب قبلها؛ الافتراضي تاريخ أول بصمة).
 
 ## 4. الموارد البشرية — `KMK-HR`
 

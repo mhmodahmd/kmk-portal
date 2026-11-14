@@ -1,3 +1,4 @@
+import { tr } from '../../lib/i18n';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api, ApiError } from '../../lib/api';
@@ -25,14 +26,14 @@ export default function InboxPage() {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-1">
-        <h1 className="m-0 text-[22px] font-bold sm:text-[24px]">صندوق الموافقات</h1>
-        <span className="text-muted">كل ما ينتظر قرارك من كل الوحدات في مكان واحد</span>
+        <h1 className="m-0 text-[22px] font-bold sm:text-[24px]">{tr("صندوق الموافقات")}</h1>
+        <span className="text-muted">{tr("كل ما ينتظر قرارك من كل الوحدات في مكان واحد")}</span>
       </div>
       {q.isError && <ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} />}
 
       {items.length > 0 && modules.length > 1 && (
-        <div role="tablist" aria-label="تصفية حسب النوع" className="flex flex-wrap gap-2">
-          {[['all', { label: 'الكل', count: items.length }] as const, ...modules].map(([key, m]) => (
+        <div role="tablist" aria-label={tr("تصفية حسب النوع")} className="flex flex-wrap gap-2">
+          {[['all', { label: tr("الكل"), count: items.length }] as const, ...modules].map(([key, m]) => (
             <button key={key} type="button" role="tab" aria-selected={filter === key} onClick={() => setFilter(key)}
               className={cx('inline-flex h-9 items-center gap-2 rounded-full px-3.5 font-medium cursor-pointer', filter === key ? 'bg-fg text-bg' : 'border border-line bg-surface')}>
               {m.label}<span className={cx('rounded-full px-1.5 text-[12px] font-semibold', filter === key ? 'bg-bg text-fg' : 'bg-chip text-muted')}>{m.count}</span>
@@ -44,7 +45,7 @@ export default function InboxPage() {
       {q.isPending ? (
         <Card className="flex flex-col gap-4">{[0, 1, 2].map((i) => <div key={i} className="flex items-center gap-3"><Skeleton className="h-9 w-9 rounded-full" /><Skeleton className="h-4 flex-1" /></div>)}</Card>
       ) : items.length === 0 ? (
-        <Card><EmptyState title="لا شيء ينتظر قرارك" body="طلبات الإجازات والعمل الإضافي وتصحيح البصمة تصل هنا، ومع الوحدات القادمة: إغلاق العهد ومراجعة المهام." /></Card>
+        <Card><EmptyState title={tr("لا شيء ينتظر قرارك")} body={tr("طلبات الإجازات والعمل الإضافي وتصحيح البصمة تصل هنا، ومع الوحدات القادمة: إغلاق العهد ومراجعة المهام.")} /></Card>
       ) : (
         <div className="flex flex-wrap items-start gap-4">
           <Card padded={false} className="min-w-0 flex-[3_1_420px] overflow-hidden">
@@ -74,14 +75,14 @@ function Detail({ item, onDone }: { item: InboxItem; onDone: () => void }) {
   useEffect(() => { setNote(''); setError(''); }, [item.id]);
   const decide = useAction('inbox.decide', {
     invalidate: ['hr.me', 'hr.team', 'hr.leave.list', 'hr.ot.list', 'att.correction.list', 'att.records', 'att.board'],
-    silentError: true, success: (r) => (r ? 'تم حفظ القرار' : '')
+    silentError: true, success: (r) => (r ? tr("تم حفظ القرار") : '')
   });
   const go = (approve: boolean) => {
-    if (!approve && item.needsNoteOnReject && !note.trim()) { setError('اكتب سبب الرفض ليصل إلى صاحب الطلب.'); return; }
+    if (!approve && item.needsNoteOnReject && !note.trim()) { setError(tr("اكتب سبب الرفض ليصل إلى صاحب الطلب.")); return; }
     setError(''); setBusy(approve ? 'a' : 'r');
     decide.mutate({ kind: item.kind, id: item.refId, approve, note: note.trim() }, {
       onSuccess: onDone,
-      onError: (e) => setError(e instanceof ApiError ? e.message : 'تعذّر حفظ القرار.'),
+      onError: (e) => setError(e instanceof ApiError ? e.message : tr("تعذّر حفظ القرار.")),
       onSettled: () => setBusy(null)
     });
   };
@@ -98,11 +99,11 @@ function Detail({ item, onDone }: { item: InboxItem; onDone: () => void }) {
         </dl>
       )}
       {item.note && <div className="rounded-lg bg-bg p-3 text-[13px] leading-relaxed text-muted">{item.note}</div>}
-      <Textarea label="ملاحظة (مطلوبة عند الرفض)" value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} className="[&_textarea]:min-h-[64px]" />
+      <Textarea label={tr("ملاحظة (مطلوبة عند الرفض)")} value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} className="[&_textarea]:min-h-[64px]" />
       {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
       <div className="flex gap-2">
-        <Button variant="primary" icon="check" className="flex-1" loading={busy === 'a'} disabled={!!busy} onClick={() => go(true)}>موافقة</Button>
-        <Button variant="danger-outline" icon="x" className="flex-1" loading={busy === 'r'} disabled={!!busy} onClick={() => go(false)}>رفض</Button>
+        <Button variant="primary" icon="check" className="flex-1" loading={busy === 'a'} disabled={!!busy} onClick={() => go(true)}>{tr("موافقة")}</Button>
+        <Button variant="danger-outline" icon="x" className="flex-1" loading={busy === 'r'} disabled={!!busy} onClick={() => go(false)}>{tr("رفض")}</Button>
       </div>
     </Card>
   );

@@ -1,7 +1,11 @@
 /** التنسيقات المحلية (docs/02 §10): أرقام إنجليزية، تاريخ dd/mm/yyyy، وقت 12 ساعة، توقيت الكويت. */
+import { IS_EN } from './i18n';
+
 const TZ = 'Asia/Kuwait';
 
-const DAYS = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+const DAYS = IS_EN ? ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+  : ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+const AM = IS_EN ? 'AM' : 'ص', PM = IS_EN ? 'PM' : 'م';
 
 function parts(d: Date) {
   const f = new Intl.DateTimeFormat('en-GB', {
@@ -22,7 +26,7 @@ export function formatTime(iso: string | Date) {
   if (!iso) return '';
   const p = parts(new Date(iso));
   const h12 = p.h % 12 || 12;
-  return `${String(h12).padStart(2, '0')}:${p.min} ${p.h < 12 ? 'ص' : 'م'}`;
+  return `${String(h12).padStart(2, '0')}:${p.min} ${p.h < 12 ? AM : PM}`;
 }
 
 export function formatDateTime(iso: string) {
@@ -36,12 +40,20 @@ export function todayLabel() {
 
 export function greeting() {
   const h = parts(new Date()).h;
+  if (IS_EN) return h < 12 ? 'Good morning' : 'Good evening';
   return h < 12 ? 'صباح الخير' : 'مساء الخير';
 }
 
 export function relativeTime(iso: string) {
   if (!iso) return '';
   const diff = (Date.now() - new Date(iso).getTime()) / 60000;
+  if (IS_EN) {
+    if (diff < 1) return 'just now';
+    if (diff < 60) return `${Math.round(diff)} min ago`;
+    if (diff < 1440) return `${Math.round(diff / 60)} h ago`;
+    if (diff < 2880) return 'yesterday';
+    return formatDate(iso);
+  }
   if (diff < 1) return 'الآن';
   if (diff < 60) return `قبل ${Math.round(diff)} دقيقة`;
   if (diff < 1440) return `قبل ${Math.round(diff / 60)} ساعة`;
@@ -64,11 +76,12 @@ export function hm(minutes: number) {
 export function duration(minutes: number) {
   const m = Math.max(0, Math.round(minutes || 0));
   const h = Math.floor(m / 60), r = m % 60;
-  if (!h) return `${r} د`;
-  return r ? `${h} س ${r} د` : `${h} س`;
+  const H = IS_EN ? 'h' : 'س', M = IS_EN ? 'm' : 'د';
+  if (!h) return `${r} ${M}`;
+  return r ? `${h} ${H} ${r} ${M}` : `${h} ${H}`;
 }
 
-const MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+const MONTHS = IS_EN ? ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'] : ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
 export function monthLabel(month: string) {
   const [y, m] = month.split('-');
   return `${MONTHS[Number(m) - 1]} ${y}`;
@@ -94,6 +107,7 @@ export function dmy(ds: string) {
 }
 
 export function daysWord(n: number) {
+  if (IS_EN) return n === 1 ? '1 day' : `${n} days`;
   if (n === 1) return 'يوم واحد';
   if (n === 2) return 'يومان';
   return n >= 3 && n <= 10 ? `${n} أيام` : `${n} يوماً`;

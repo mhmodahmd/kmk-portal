@@ -1,3 +1,4 @@
+import { tr } from '../../lib/i18n';
 import { useState } from 'react';
 import { ApiError } from '../../lib/api';
 import type { MonthReport } from '../../lib/types';
@@ -16,13 +17,13 @@ export default function MyMonthPage() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <MonthPicker value={month} onChange={setMonth} max={kwMonth()} />
-        {q.data?.shiftName && <span className="text-muted">الوردية: <b className="text-fg">{q.data.shiftName}</b></span>}
+        {q.data?.shiftName && <span className="text-muted">{tr("الوردية:")} <b className="text-fg">{q.data.shiftName}</b></span>}
       </div>
       {q.isError && <ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} />}
       {!q.data ? <Loader /> : (
         <>
           <SummaryTiles s={q.data.summary} />
-          {!q.data.hasShift && <p className="m-0 text-[13px] text-muted">لا توجد وردية محددة لك، لذلك لا يُحتسب التأخير والغياب. تواصل مع الموارد البشرية لتحديدها.</p>}
+          {!q.data.hasShift && <p className="m-0 text-[13px] text-muted">{tr("لا توجد وردية محددة لك، لذلك لا يُحتسب التأخير والغياب. تواصل مع الموارد البشرية لتحديدها.")}</p>}
           <MonthDays report={q.data} onCorrect={setCorrect} />
         </>
       )}

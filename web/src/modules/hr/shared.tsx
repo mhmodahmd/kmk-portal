@@ -1,3 +1,4 @@
+import { tr } from '../../lib/i18n';
 import { useEffect, useState } from 'react';
 import type { Balance, HrMe, LeaveStatus, LeaveView, OtStatus, OtView } from '../../lib/types';
 import { daysWord, dmy, duration, kwDate } from '../../lib/format';
@@ -30,9 +31,9 @@ export function BalanceCards({ balances }: { balances: Balance[] }) {
         return (
           <Card key={b.typeId} className="flex flex-col gap-2 !p-4">
             <span className="font-medium text-muted">{b.name}</span>
-            <span className="text-[24px] font-bold leading-none num">{b.unlimited ? '∞' : b.available}<span className="ms-1 text-[13px] font-normal text-muted">{b.unlimited ? 'بلا سقف' : 'يوم متاح'}</span></span>
+            <span className="text-[24px] font-bold leading-none num">{b.unlimited ? '∞' : b.available}<span className="ms-1 text-[13px] font-normal text-muted">{b.unlimited ? tr("بلا سقف") : tr("يوم متاح")}</span></span>
             {!b.unlimited && <div className="h-1.5 overflow-hidden rounded-full bg-chip"><div className="h-full rounded-full bg-accent" style={{ width: pct + '%' }} /></div>}
-            <span className="text-[12px] text-muted">مستخدم {b.used}{b.pending ? ` · معلّق ${b.pending}` : ''}{b.adjustment ? ` · تسوية ${b.adjustment > 0 ? '+' : ''}${b.adjustment}` : ''}</span>
+            <span className="text-[12px] text-muted">{tr("مستخدم")} {b.used}{b.pending ? tr(" · معلّق {0}", b.pending) : ''}{b.adjustment ? tr(" · تسوية {0}{1}", b.adjustment > 0 ? '+' : '', b.adjustment) : ''}</span>
           </Card>
         );
       })}
@@ -59,7 +60,7 @@ export function OtRow({ o, showName, actions }: { o: OtView; showName?: boolean;
     <div className="flex flex-wrap items-center gap-3 border-t border-line px-5 py-3.5">
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="font-semibold">{showName ? `${o.name} · ` : ''}{duration(o.minutes)} <span className="font-normal text-muted">· {dmy(o.date)}</span></span>
-        <span className="text-[13px] text-muted">{o.reason || '—'}{o.createdByName && o.createdByName !== o.name ? ` · سجّله ${o.createdByName}` : ''}</span>
+        <span className="text-[13px] text-muted">{o.reason || '—'}{o.createdByName && o.createdByName !== o.name ? tr(" · سجّله {0}", o.createdByName) : ''}</span>
         {o.decisionNote && <span className="text-[13px]">{o.decidedBy}: {o.decisionNote}</span>}
       </span>
       <Badge tone={OT_TONE[o.status]}>{o.statusLabel}</Badge>
@@ -77,21 +78,21 @@ export function LeaveDialog({ open, onClose, types, employees }: {
   const [error, setError] = useState('');
   useEffect(() => { if (open) { setF({ employeeId: '', typeId: types[0]?.id || '', from: kwDate(), to: kwDate(), reason: '' }); setError(''); } }, [open, types]);
   const act = useAction(onBehalf ? 'hr.leave.create' : 'hr.leave.request', {
-    invalidate: ['hr.me', 'hr.leave.list', 'hr.team', 'att.myMonth'], success: onBehalf ? 'سُجّلت الإجازة' : 'أُرسل طلب الإجازة', silentError: true, onSuccess: onClose
+    invalidate: ['hr.me', 'hr.leave.list', 'hr.team', 'att.myMonth'], success: onBehalf ? tr("سُجّلت الإجازة") : tr("أُرسل طلب الإجازة"), silentError: true, onSuccess: onClose
   });
   return (
-    <Dialog open={open} onClose={onClose} title={onBehalf ? 'تسجيل إجازة لموظف' : 'طلب إجازة'}
-      footer={<><Button variant="primary" className="flex-1" loading={act.isPending} onClick={() => { setError(''); act.mutate(f, { onError: (e) => setError(e.message) }); }}>{onBehalf ? 'تسجيل' : 'إرسال الطلب'}</Button><Button variant="ghost" onClick={onClose}>إلغاء</Button></>}>
+    <Dialog open={open} onClose={onClose} title={onBehalf ? tr("تسجيل إجازة لموظف") : tr("طلب إجازة")}
+      footer={<><Button variant="primary" className="flex-1" loading={act.isPending} onClick={() => { setError(''); act.mutate(f, { onError: (e) => setError(e.message) }); }}>{onBehalf ? tr("تسجيل") : tr("إرسال الطلب")}</Button><Button variant="ghost" onClick={onClose}>{tr("إلغاء")}</Button></>}>
       <div className="flex flex-col gap-3">
-        {onBehalf && <Select label="الموظف" value={f.employeeId} onChange={(e) => setF({ ...f, employeeId: e.target.value })} options={[{ value: '', label: 'اختر الموظف' }, ...employees!.map((x) => ({ value: x.id, label: x.fullName }))]} />}
-        <Select label="نوع الإجازة" value={f.typeId} onChange={(e) => setF({ ...f, typeId: e.target.value })} options={types.map((t) => ({ value: t.id, label: t.name }))} />
+        {onBehalf && <Select label={tr("الموظف")} value={f.employeeId} onChange={(e) => setF({ ...f, employeeId: e.target.value })} options={[{ value: '', label: tr("اختر الموظف") }, ...employees!.map((x) => ({ value: x.id, label: x.fullName }))]} />}
+        <Select label={tr("نوع الإجازة")} value={f.typeId} onChange={(e) => setF({ ...f, typeId: e.target.value })} options={types.map((t) => ({ value: t.id, label: t.name }))} />
         <div className="grid grid-cols-2 gap-3">
-          <TextInput label="من" type="date" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value, to: f.to < e.target.value ? e.target.value : f.to })} />
-          <TextInput label="إلى" type="date" value={f.to} min={f.from} onChange={(e) => setF({ ...f, to: e.target.value })} />
+          <TextInput label={tr("من")} type="date" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value, to: f.to < e.target.value ? e.target.value : f.to })} />
+          <TextInput label={tr("إلى")} type="date" value={f.to} min={f.from} onChange={(e) => setF({ ...f, to: e.target.value })} />
         </div>
-        <p className="m-0 text-[13px] text-muted">تُحتسب أيام العمل فقط، وتُستثنى العطل الأسبوعية والرسمية.</p>
-        <Textarea label="السبب (اختياري)" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} maxLength={500} />
-        {onBehalf && <p className="m-0 text-[13px] text-muted">الإجازة المسجلة من الموارد البشرية تُعتمد مباشرة.</p>}
+        <p className="m-0 text-[13px] text-muted">{tr("تُحتسب أيام العمل فقط، وتُستثنى العطل الأسبوعية والرسمية.")}</p>
+        <Textarea label={tr("السبب (اختياري)")} value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} maxLength={500} />
+        {onBehalf && <p className="m-0 text-[13px] text-muted">{tr("الإجازة المسجلة من الموارد البشرية تُعتمد مباشرة.")}</p>}
         {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
       </div>
     </Dialog>
@@ -105,7 +106,7 @@ export function OtDialog({ open, onClose, employees }: { open: boolean; onClose:
   const [error, setError] = useState('');
   useEffect(() => { if (open) { setF({ employeeId: '', date: kwDate(), hours: '1', mins: '0', reason: '' }); setError(''); } }, [open]);
   const act = useAction(direct ? 'hr.ot.add' : 'hr.ot.request', {
-    invalidate: ['hr.me', 'hr.ot.list', 'hr.team', 'att.myMonth'], success: direct ? 'سُجّل الإضافي' : 'أُرسل طلب الإضافي', silentError: true, onSuccess: onClose
+    invalidate: ['hr.me', 'hr.ot.list', 'hr.team', 'att.myMonth'], success: direct ? tr("سُجّل الإضافي") : tr("أُرسل طلب الإضافي"), silentError: true, onSuccess: onClose
   });
   const submit = () => {
     setError('');
@@ -113,17 +114,17 @@ export function OtDialog({ open, onClose, employees }: { open: boolean; onClose:
     act.mutate({ employeeId: f.employeeId, date: f.date, minutes, reason: f.reason }, { onError: (e) => setError(e.message) });
   };
   return (
-    <Dialog open={open} onClose={onClose} title={direct ? 'تسجيل عمل إضافي' : 'طلب عمل إضافي'}
-      footer={<><Button variant="primary" className="flex-1" loading={act.isPending} onClick={submit}>{direct ? 'تسجيل' : 'إرسال الطلب'}</Button><Button variant="ghost" onClick={onClose}>إلغاء</Button></>}>
+    <Dialog open={open} onClose={onClose} title={direct ? tr("تسجيل عمل إضافي") : tr("طلب عمل إضافي")}
+      footer={<><Button variant="primary" className="flex-1" loading={act.isPending} onClick={submit}>{direct ? tr("تسجيل") : tr("إرسال الطلب")}</Button><Button variant="ghost" onClick={onClose}>{tr("إلغاء")}</Button></>}>
       <div className="flex flex-col gap-3">
-        {direct && <Select label="الموظف" value={f.employeeId} onChange={(e) => setF({ ...f, employeeId: e.target.value })} options={[{ value: '', label: 'اختر الموظف' }, ...employees!.map((x) => ({ value: x.id, label: x.fullName }))]} />}
-        <TextInput label="اليوم" type="date" max={kwDate()} value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} />
+        {direct && <Select label={tr("الموظف")} value={f.employeeId} onChange={(e) => setF({ ...f, employeeId: e.target.value })} options={[{ value: '', label: tr("اختر الموظف") }, ...employees!.map((x) => ({ value: x.id, label: x.fullName }))]} />}
+        <TextInput label={tr("اليوم")} type="date" max={kwDate()} value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} />
         <div className="grid grid-cols-2 gap-3">
-          <TextInput label="ساعات" type="number" min={0} max={12} value={f.hours} onChange={(e) => setF({ ...f, hours: e.target.value })} />
-          <TextInput label="دقائق" type="number" min={0} max={59} step={5} value={f.mins} onChange={(e) => setF({ ...f, mins: e.target.value })} />
+          <TextInput label={tr("ساعات")} type="number" min={0} max={12} value={f.hours} onChange={(e) => setF({ ...f, hours: e.target.value })} />
+          <TextInput label={tr("دقائق")} type="number" min={0} max={59} step={5} value={f.mins} onChange={(e) => setF({ ...f, mins: e.target.value })} />
         </div>
-        <Textarea label="العمل المنجز" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} maxLength={300} />
-        {!direct && <p className="m-0 text-[13px] text-muted">يجب أن يكون لك تسجيل حضور في هذا اليوم، ويُعتمد من مديرك المباشر.</p>}
+        <Textarea label={tr("العمل المنجز")} value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} maxLength={300} />
+        {!direct && <p className="m-0 text-[13px] text-muted">{tr("يجب أن يكون لك تسجيل حضور في هذا اليوم، ويُعتمد من مديرك المباشر.")}</p>}
         {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
       </div>
     </Dialog>

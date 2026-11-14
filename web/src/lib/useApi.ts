@@ -1,3 +1,4 @@
+import { tr } from './i18n';
 import { useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
 import { api, ApiError } from './api';
 import { useToast } from '../ui/Overlay';
@@ -22,8 +23,8 @@ export function useAction<P = Record<string, unknown>, R = unknown>(action: stri
       if (msg) toast(msg);
       opts.onSuccess?.(r);
     },
-    onError: (e) => { if (!opts.silentError) toast(e instanceof ApiError ? e.message : 'تعذّر تنفيذ الإجراء.', 'bad'); }
+    onError: (e) => { if (!opts.silentError) toast(e instanceof ApiError ? e.message : tr("تعذّر تنفيذ الإجراء."), 'bad'); }
   });
 }
 
-export const errorText = (e: unknown) => (e instanceof ApiError ? e.message : e ? 'تعذّر الاتصال بالخادم.' : '');
+export const errorText = (e: unknown) => (e instanceof ApiError ? e.message : e ? tr("تعذّر الاتصال بالخادم.") : '');

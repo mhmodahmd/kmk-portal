@@ -1,3 +1,4 @@
+import { tr } from '../lib/i18n';
 import type { ReactNode } from 'react';
 import { cx } from './cx';
 import { Icon, type IconName } from './Icon';
@@ -87,7 +88,7 @@ export function EmptyState({ title, body, action }: { title: string; body?: stri
   );
 }
 
-export function Loader({ label = 'جارٍ التحميل' }: { label?: string }) {
+export function Loader({ label = tr("جارٍ التحميل") }: { label?: string }) {
   return (
     <div role="status" className="flex items-center justify-center gap-2 py-16 text-muted">
       <span className="kmk-blink text-[22px] font-bold text-brand ltr" aria-hidden="true">&gt;_</span>
@@ -101,7 +102,7 @@ export function ErrorBox({ message, onRetry }: { message: string; onRetry?: () =
     <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-bad-bg px-4 py-3 text-bad">
       <Icon name="alert" />
       <span className="flex-1">{message}</span>
-      {onRetry && <button type="button" onClick={onRetry} className="font-semibold underline cursor-pointer">إعادة المحاولة</button>}
+      {onRetry && <button type="button" onClick={onRetry} className="font-semibold underline cursor-pointer">{tr("إعادة المحاولة")}</button>}
     </div>
   );
 }

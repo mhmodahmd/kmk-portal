@@ -1,3 +1,4 @@
+import { IS_EN, tr } from '../lib/i18n';
 import { forwardRef, useId, useState, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { Icon } from './Icon';
 import { cx } from './cx';
@@ -38,9 +39,9 @@ export function PasswordInput({ label, hint, error, className, ...rest }: Omit<I
       {(id, d) => (
         <div className="relative">
           <input id={id} type={show ? 'text' : 'password'} aria-describedby={d} aria-invalid={!!error || undefined}
-            className={cx(control, 'ltr text-right pl-12', error ? 'border-bad' : 'border-line')} {...rest} />
-          <button type="button" onClick={() => setShow(!show)} aria-label={show ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
-            className="absolute left-1 top-1/2 -translate-y-1/2 h-9 w-9 inline-flex items-center justify-center rounded-md text-muted hover:text-fg cursor-pointer">
+            className={cx(control, 'ltr text-right', IS_EN ? 'pr-12' : 'pl-12', error ? 'border-bad' : 'border-line')} {...rest} />
+          <button type="button" onClick={() => setShow(!show)} aria-label={show ? tr("إخفاء كلمة المرور") : tr("إظهار كلمة المرور")}
+            className="absolute end-1 top-1/2 -translate-y-1/2 h-9 w-9 inline-flex items-center justify-center rounded-md text-muted hover:text-fg cursor-pointer">
             <Icon name="eye" size={19} />
           </button>
         </div>
@@ -55,7 +56,7 @@ export function Select({ label, hint, error, options, className, ...rest }: Sele
   return (
     <Field label={label} hint={hint} error={error} className={className}>
       {(id, d) => (
-        <select id={id} aria-describedby={d} className={cx(control, 'border-line pl-8')} {...rest}>
+        <select id={id} aria-describedby={d} className={cx(control, 'border-line pe-8')} {...rest}>
           {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       )}

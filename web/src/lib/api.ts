@@ -1,10 +1,11 @@
+import { tr, trData, trServer } from './i18n';
 import type { SessionResult } from './types';
 
 /**
  * الاتصال بالخادم. كل الشاشات تمر من هنا، لا fetch مباشر.
  * Content-Type: text/plain يتجنب طلب CORS المسبق الذي لا يدعمه Apps Script.
  */
-export const CLIENT_VERSION = '0.4.0';
+export const CLIENT_VERSION = '0.5.0';
 const API_URL: string = import.meta.env.VITE_API_URL || 'mock';
 export const IS_MOCK = API_URL === 'mock';
 
@@ -63,16 +64,16 @@ async function send<T>(action: string, payload: unknown, token: string): Promise
         redirect: 'follow'
       });
     } catch {
-      throw new ApiError('NETWORK', 'تعذّر الاتصال بالخادم. تحقق من الإنترنت وحاول مرة أخرى.');
+      throw new ApiError('NETWORK', tr("تعذّر الاتصال بالخادم. تحقق من الإنترنت وحاول مرة أخرى."));
     }
     try {
       env = await res.json();
     } catch {
-      throw new ApiError('BAD_RESPONSE', 'الخادم لا يستجيب كما ينبغي الآن. حاول بعد قليل.');
+      throw new ApiError('BAD_RESPONSE', tr("الخادم لا يستجيب كما ينبغي الآن. حاول بعد قليل."));
     }
   }
-  if (!env.ok) throw new ApiError(env.error?.code || 'ERROR', env.error?.message || 'حدث خطأ غير متوقع.');
-  return env.data as T;
+  if (!env.ok) throw new ApiError(env.error?.code || 'ERROR', env.error?.message ? trServer(env.error.message) : tr("حدث خطأ غير متوقع."));
+  return trData(env.data as T);
 }
 
 let resuming: Promise<boolean> | null = null;

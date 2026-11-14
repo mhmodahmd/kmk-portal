@@ -1,3 +1,4 @@
+import { tr } from '../lib/i18n';
 import { lazy, Suspense } from 'react';
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth';
@@ -34,26 +35,26 @@ const RequestsPage = lazy(() => import('../modules/hr/RequestsPage'));
 const StructurePage = lazy(() => import('../modules/hr/StructurePage'));
 
 const SOON: Record<string, { label: string; phase: number }> = {
-  custody: { label: 'العهد والنثريات', phase: 2 }, tasks: { label: 'المهام', phase: 3 },
-  crm: { label: 'العملاء', phase: 4 }, finance: { label: 'المالية', phase: 5 }
+  custody: { label: tr("العهد والنثريات"), phase: 2 }, tasks: { label: tr("المهام"), phase: 3 },
+  crm: { label: tr("العملاء"), phase: 4 }, finance: { label: tr("المالية"), phase: 5 }
 };
 
 function Soon({ k }: { k: string }) {
-  return <Card><EmptyState title={`${SOON[k].label} قريباً`} body={`تُبنى هذه الوحدة في المرحلة ${SOON[k].phase}. حتى ذلك الحين يستمر العمل على النظام الحالي.`} /></Card>;
+  return <Card><EmptyState title={tr("{0} قريباً", SOON[k].label)} body={tr("تُبنى هذه الوحدة في المرحلة {0}. حتى ذلك الحين يستمر العمل على النظام الحالي.", SOON[k].phase)} /></Card>;
 }
 
 function UpdateBanner() {
   return (
     <div role="alert" className="fixed inset-x-0 top-0 z-[70] flex items-center justify-center gap-3 bg-accent px-4 py-2.5 text-on-accent">
-      <span>يوجد إصدار أحدث من البوابة.</span>
-      <button type="button" onClick={() => location.reload()} className="font-bold underline cursor-pointer">تحديث الآن</button>
+      <span>{tr("يوجد إصدار أحدث من البوابة.")}</span>
+      <button type="button" onClick={() => location.reload()} className="font-bold underline cursor-pointer">{tr("تحديث الآن")}</button>
     </div>
   );
 }
 
 export default function App() {
   const { status, user, roles, updateRequired } = useAuth();
-  if (status === 'loading') return <div className="min-h-screen bg-bg"><Loader label="جارٍ فتح البوابة" /></div>;
+  if (status === 'loading') return <div className="min-h-screen bg-bg"><Loader label={tr("جارٍ فتح البوابة")} /></div>;
   if (status === 'out') return <LoginPage />;
   if (user?.mustChangePassword) return <ForcedChangePassword />;
   const admin = !!user?.isSuperAdmin;

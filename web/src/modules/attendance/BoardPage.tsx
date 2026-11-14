@@ -1,3 +1,4 @@
+import { tr } from '../../lib/i18n';
 import { useMemo, useState } from 'react';
 import type { Board, BoardStatus } from '../../lib/types';
 import { formatTime, hm, kwDate } from '../../lib/format';
@@ -19,28 +20,28 @@ export default function BoardPage() {
     (filter === 'all' || (filter === 'late' ? r.late > 0 : r.status === filter)) && (!search || r.name.includes(search))), [b, filter, search]);
   const c = b?.counts;
   const options = c ? ([
-    { value: 'all', label: 'الكل', count: c.total }, { value: 'in', label: 'داخل الدوام', count: c.in }, { value: 'late', label: 'متأخرون', count: c.late },
-    { value: 'out', label: 'انصرفوا', count: c.out }, { value: 'absent', label: 'غائبون', count: c.absent }, { value: 'none', label: 'لم يسجّلوا بعد', count: c.none },
-    { value: 'leave', label: 'إجازة', count: c.leave }, { value: 'off', label: 'عطلة', count: c.off }
+    { value: 'all', label: tr("الكل"), count: c.total }, { value: 'in', label: tr("داخل الدوام"), count: c.in }, { value: 'late', label: tr("متأخرون"), count: c.late },
+    { value: 'out', label: tr("انصرفوا"), count: c.out }, { value: 'absent', label: tr("غائبون"), count: c.absent }, { value: 'none', label: tr("لم يسجّلوا بعد"), count: c.none },
+    { value: 'leave', label: tr("إجازة"), count: c.leave }, { value: 'off', label: tr("عطلة"), count: c.off }
   ] as { value: Filter; label: string; count: number }[]).filter((o) => o.value === 'all' || o.count > 0) : [];
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end gap-3">
-        <TextInput label="اليوم" type="date" value={date} max={kwDate()} onChange={(e) => e.target.value && setDate(e.target.value)} className="w-[180px]" />
+        <TextInput label={tr("اليوم")} type="date" value={date} max={kwDate()} onChange={(e) => e.target.value && setDate(e.target.value)} className="w-[180px]" />
         <div className="flex flex-1 flex-col gap-0.5 pb-1">
-          {b && <span className="font-semibold">{b.dayName}{b.isToday ? ' · الآن' : ''}</span>}
-          {b && <span className="text-[13px] text-muted">{b.scope === 'team' ? 'فريقك فقط' : 'كل الموظفين'}</span>}
+          {b && <span className="font-semibold">{b.dayName}{b.isToday ? tr(" · الآن") : ''}</span>}
+          {b && <span className="text-[13px] text-muted">{b.scope === 'team' ? tr("فريقك فقط") : tr("كل الموظفين")}</span>}
         </div>
-        <SearchBox id="board-search" value={search} onChange={setSearch} placeholder="ابحث بالاسم" />
+        <SearchBox id="board-search" value={search} onChange={setSearch} placeholder={tr("ابحث بالاسم")} />
       </div>
       {q.isError && <ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} />}
       {!b ? <Loader /> : (
         <>
-          <Segmented label="تصفية حسب الحالة" value={filter} onChange={setFilter} options={options} />
+          <Segmented label={tr("تصفية حسب الحالة")} value={filter} onChange={setFilter} options={options} />
           <Card padded={false} className="overflow-hidden">
-            {rows.length === 0 ? <EmptyState title="لا أحد في هذه الحالة" /> : (
-              <DataTable head={['الموظف', 'الحالة', 'أول حضور', 'آخر انصراف', 'الساعات', 'الموقع']} minWidth={760}>
+            {rows.length === 0 ? <EmptyState title={tr("لا أحد في هذه الحالة")} /> : (
+              <DataTable head={[tr("الموظف"), tr("الحالة"), tr("أول حضور"), tr("آخر انصراف"), tr("الساعات"), tr("الموقع")]} minWidth={760}>
                 {rows.map((r) => (
                   <tr key={r.employeeId}>
                     <td>
@@ -49,7 +50,7 @@ export default function BoardPage() {
                         <span className="flex flex-col"><span className="font-semibold">{r.name}</span><span className="text-[12px] text-muted">{r.jobTitle || r.departmentName}</span></span>
                       </span>
                     </td>
-                    <td><span className="flex flex-wrap gap-1"><Badge tone={BOARD_TONE[r.status]}>{BOARD_LABEL[r.status]}</Badge>{r.late > 0 && <Badge tone="warn">تأخير {r.late} د</Badge>}{r.detail && <span className="text-[12px] text-muted">{r.detail}</span>}</span></td>
+                    <td><span className="flex flex-wrap gap-1"><Badge tone={BOARD_TONE[r.status]}>{BOARD_LABEL[r.status]}</Badge>{r.late > 0 && <Badge tone="warn">{tr("تأخير")} {r.late} {tr("د")}</Badge>}{r.detail && <span className="text-[12px] text-muted">{r.detail}</span>}</span></td>
                     <td className="num whitespace-nowrap">{r.firstIn ? formatTime(r.firstIn) : '—'}</td>
                     <td className="num whitespace-nowrap">{r.lastOut ? formatTime(r.lastOut) : '—'}</td>
                     <td className="num ltr text-right">{r.sessions ? hm(r.minutes) : '—'}</td>

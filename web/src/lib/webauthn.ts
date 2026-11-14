@@ -1,3 +1,4 @@
+import { tr } from './i18n';
 /**
  * بصمة الجهاز (مفاتيح المرور / WebAuthn) في المتصفح.
  * الجهاز يتحقق من الوجه أو الإصبع محلياً ويوقّع تحدي الخادم. لا يصلنا شيء من البيانات الحيوية.
@@ -48,7 +49,7 @@ export function useDeviceChallenge(enabled: boolean, action = 'att.device.challe
   const take = async () => {
     const fresh = q.data && Date.now() - q.dataUpdatedAt < 8 * 60_000;
     const ch = fresh ? q.data! : (await q.refetch()).data;
-    if (!ch) throw new Error('تعذّر تجهيز البصمة. تحقق من الاتصال وحاول مرة أخرى.');
+    if (!ch) throw new Error(tr("تعذّر تجهيز البصمة. تحقق من الاتصال وحاول مرة أخرى."));
     return ch;
   };
   /** كل تحدٍّ يُستخدم مرة: نجلب غيره بعد كل محاولة */
@@ -60,7 +61,7 @@ export function useDeviceChallenge(enabled: boolean, action = 'att.device.challe
 export function deviceLabel() {
   const ua = navigator.userAgent;
   const os = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android'
-    : /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'Mac' : 'جهاز';
+    : /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'Mac' : tr("جهاز");
   const br = /Edg\//.test(ua) ? 'Edge' : /SamsungBrowser/.test(ua) ? 'Samsung Internet' : /CriOS|Chrome\//.test(ua) ? 'Chrome'
     : /FxiOS|Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : '';
   return br ? os + ' · ' + br : os;
@@ -121,10 +122,10 @@ export function hasPasskeyHere() { try { return localStorage.getItem(HERE) === '
 export function deviceErrorText(e: unknown, registering = false) {
   const name = e instanceof DOMException ? e.name : '';
   if (name === 'NotAllowedError') return registering
-    ? 'لم يكتمل التسجيل: أُلغي التحقق أو انتهت مهلته. حاول مرة أخرى وأكمل التحقق بوجهك أو بصمتك.'
-    : 'لم يكتمل التحقق: أُلغي أو انتهت مهلته، أو أن هذا ليس الجهاز المسجّل لك.';
-  if (name === 'InvalidStateError') return 'هذا الجهاز مسجّل مسبقاً.';
-  if (name === 'SecurityError') return 'هذا الموقع غير مؤهل لبصمة الجهاز. افتح البوابة من رابطها الرسمي.';
-  if (name === 'NotSupportedError') return 'جهازك أو متصفحك لا يدعم بصمة الجهاز.';
-  return e instanceof Error && e.message && !name ? e.message : 'تعذّر التحقق ببصمة الجهاز.';
+    ? tr("لم يكتمل التسجيل: أُلغي التحقق أو انتهت مهلته. حاول مرة أخرى وأكمل التحقق بوجهك أو بصمتك.")
+    : tr("لم يكتمل التحقق: أُلغي أو انتهت مهلته، أو أن هذا ليس الجهاز المسجّل لك.");
+  if (name === 'InvalidStateError') return tr("هذا الجهاز مسجّل مسبقاً.");
+  if (name === 'SecurityError') return tr("هذا الموقع غير مؤهل لبصمة الجهاز. افتح البوابة من رابطها الرسمي.");
+  if (name === 'NotSupportedError') return tr("جهازك أو متصفحك لا يدعم بصمة الجهاز.");
+  return e instanceof Error && e.message && !name ? e.message : tr("تعذّر التحقق ببصمة الجهاز.");
 }

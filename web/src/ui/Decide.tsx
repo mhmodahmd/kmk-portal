@@ -1,3 +1,4 @@
+import { tr } from '../lib/i18n';
 import { useEffect, useState, type ReactNode } from 'react';
 import { ApiError } from '../lib/api';
 import { Button } from './Button';
@@ -8,7 +9,7 @@ import { Dialog } from './Overlay';
  * نافذة قرار (اعتماد أو رفض) مع ملاحظة. الرفض يتطلب سبباً.
  * onDecide يعيد Promise، والخطأ يظهر داخل النافذة.
  */
-export function DecideDialog({ open, onClose, title, children, onDecide, approveLabel = 'اعتماد', rejectLabel = 'رفض', initial = 'approve' }: {
+export function DecideDialog({ open, onClose, title, children, onDecide, approveLabel = tr("اعتماد"), rejectLabel = tr("رفض"), initial = 'approve' }: {
   open: boolean; onClose: () => void; title: string; children?: ReactNode;
   onDecide: (approve: boolean, note: string) => Promise<unknown>;
   approveLabel?: string; rejectLabel?: string; initial?: 'approve' | 'reject';
@@ -19,10 +20,10 @@ export function DecideDialog({ open, onClose, title, children, onDecide, approve
   useEffect(() => { if (open) { setNote(''); setError(''); setBusy(null); } }, [open]);
 
   const go = async (approve: boolean) => {
-    if (!approve && !note.trim()) { setError('اكتب سبب الرفض ليصل إلى صاحب الطلب.'); return; }
+    if (!approve && !note.trim()) { setError(tr("اكتب سبب الرفض ليصل إلى صاحب الطلب.")); return; }
     setError(''); setBusy(approve ? 'approve' : 'reject');
     try { await onDecide(approve, note.trim()); onClose(); }
-    catch (e) { setError(e instanceof ApiError ? e.message : 'تعذّر حفظ القرار.'); }
+    catch (e) { setError(e instanceof ApiError ? e.message : tr("تعذّر حفظ القرار.")); }
     finally { setBusy(null); }
   };
 
@@ -34,7 +35,7 @@ export function DecideDialog({ open, onClose, title, children, onDecide, approve
       </>}>
       <div className="flex flex-col gap-4">
         {children}
-        <Textarea label={initial === 'reject' ? 'سبب الرفض' : 'ملاحظة (مطلوبة عند الرفض)'} value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} />
+        <Textarea label={initial === 'reject' ? tr("سبب الرفض") : tr("ملاحظة (مطلوبة عند الرفض)")} value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} />
         {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
       </div>
     </Dialog>
@@ -51,17 +52,17 @@ export function ReasonDialog({ open, onClose, title, label, confirmLabel, danger
   const [busy, setBusy] = useState(false);
   useEffect(() => { if (open) { setReason(''); setError(''); setBusy(false); } }, [open]);
   const go = async () => {
-    if (!reason.trim()) { setError('اكتب السبب.'); return; }
+    if (!reason.trim()) { setError(tr("اكتب السبب.")); return; }
     setBusy(true); setError('');
     try { await onConfirm(reason.trim()); onClose(); }
-    catch (e) { setError(e instanceof ApiError ? e.message : 'تعذّر تنفيذ الإجراء.'); }
+    catch (e) { setError(e instanceof ApiError ? e.message : tr("تعذّر تنفيذ الإجراء.")); }
     finally { setBusy(false); }
   };
   return (
     <Dialog open={open} onClose={onClose} title={title}
       footer={<>
         <Button variant={danger ? 'danger' : 'primary'} className="flex-1" loading={busy} onClick={go}>{confirmLabel}</Button>
-        <Button variant="ghost" onClick={onClose}>تراجع</Button>
+        <Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button>
       </>}>
       <div className="flex flex-col gap-4">
         {children}

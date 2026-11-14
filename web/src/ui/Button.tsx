@@ -44,7 +44,7 @@ export function IconButton({ icon, label, className, onClick, badge }: { icon: I
     <button type="button" aria-label={label} title={label} onClick={onClick}
       className={cx('relative inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted hover:bg-chip hover:text-fg cursor-pointer', className)}>
       <Icon name={icon} />
-      {badge && <span className="absolute top-2 left-2 h-2 w-2 rounded-full bg-brand ring-2 ring-surface" />}
+      {badge && <span className="absolute top-2 end-2 h-2 w-2 rounded-full bg-brand ring-2 ring-surface" />}
     </button>
   );
 }

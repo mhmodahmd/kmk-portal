@@ -1,3 +1,4 @@
+import { tr } from '../lib/i18n';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './Icon';
@@ -25,7 +26,7 @@ export function Dialog({ open, onClose, title, children, footer, wide }: { open:
         className={cx('kmk-in flex max-h-[92vh] w-full flex-col rounded-t-2xl sm:rounded-2xl bg-surface-2 border border-line shadow-xl', wide ? 'sm:max-w-2xl' : 'sm:max-w-md')}>
         <div className="flex items-center gap-3 px-5 pt-5 pb-3">
           <h2 className="m-0 flex-1 text-[18px] font-bold">{title}</h2>
-          <button type="button" onClick={onClose} aria-label="إغلاق" className="h-9 w-9 inline-flex items-center justify-center rounded-lg text-muted hover:bg-chip cursor-pointer"><Icon name="x" /></button>
+          <button type="button" onClick={onClose} aria-label={tr("إغلاق")} className="h-9 w-9 inline-flex items-center justify-center rounded-lg text-muted hover:bg-chip cursor-pointer"><Icon name="x" /></button>
         </div>
         <div className="overflow-y-auto px-5 pb-5">{children}</div>
         {footer && <div className="flex flex-wrap gap-2 border-t border-line px-5 py-4">{footer}</div>}

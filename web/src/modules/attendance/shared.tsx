@@ -1,3 +1,4 @@
+import { tr } from '../../lib/i18n';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { BoardStatus, Correction, DayStatus, MonthReport } from '../../lib/types';
@@ -17,7 +18,7 @@ type Tone = 'ok' | 'warn' | 'bad' | 'info' | 'neutral';
 export const DAY_TONE: Record<DayStatus, Tone> = {
   in: 'info', present: 'ok', missing: 'warn', holiday: 'neutral', leave: 'info', weekend: 'neutral', absent: 'bad', none: 'neutral', future: 'neutral'
 };
-export const BOARD_LABEL: Record<BoardStatus, string> = { in: 'داخل الدوام', out: 'انصرف', absent: 'غائب', none: 'لم يسجّل بعد', leave: 'إجازة', off: 'عطلة' };
+export const BOARD_LABEL: Record<BoardStatus, string> = { in: tr("داخل الدوام"), out: tr("انصرف"), absent: tr("غائب"), none: tr("لم يسجّل بعد"), leave: tr("إجازة"), off: tr("عطلة") };
 export const BOARD_TONE: Record<BoardStatus, Tone> = { in: 'ok', out: 'neutral', absent: 'bad', none: 'warn', leave: 'info', off: 'neutral' };
 export const CORR_TONE: Record<Correction['status'], Tone> = { pending: 'warn', approved: 'ok', rejected: 'bad', cancelled: 'neutral' };
 
@@ -36,11 +37,11 @@ export function useAttendanceScope() {
 export function SummaryTiles({ s }: { s: MonthReport['summary'] }) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-      <StatTile label="أيام الحضور" value={s.daysPresent} icon="calendar" foot={s.incomplete ? `${s.incomplete} بلا انصراف` : 'كلها مكتملة'} />
-      <StatTile label="ساعات العمل" value={<span className="ltr">{hm(s.totalMinutes)}</span>} icon="clock" foot={s.daysPresent ? `متوسط ${hm(s.totalMinutes / s.daysPresent)} يومياً` : '—'} />
-      <StatTile label="التأخير" value={s.lateDays} icon="alert" foot={s.lateMin ? `مجموعه ${duration(s.lateMin)}` : 'لا تأخير'} />
-      <StatTile label="الغياب" value={s.absentDays} icon="x" foot={s.leaveDays ? `${s.leaveDays} أيام إجازة` : 'بلا إجازات'} />
-      <StatTile label="الإضافي المعتمد" value={<span className="ltr">{hm(s.overtimeMin)}</span>} icon="plus" foot={s.earlyMin ? `خروج مبكر ${duration(s.earlyMin)}` : 'لا خروج مبكر'} />
+      <StatTile label={tr("أيام الحضور")} value={s.daysPresent} icon="calendar" foot={s.incomplete ? tr("{0} بلا انصراف", s.incomplete) : tr("كلها مكتملة")} />
+      <StatTile label={tr("ساعات العمل")} value={<span className="ltr">{hm(s.totalMinutes)}</span>} icon="clock" foot={s.daysPresent ? tr("متوسط {0} يومياً", hm(s.totalMinutes / s.daysPresent)) : '—'} />
+      <StatTile label={tr("التأخير")} value={s.lateDays} icon="alert" foot={s.lateMin ? tr("مجموعه {0}", duration(s.lateMin)) : tr("لا تأخير")} />
+      <StatTile label={tr("الغياب")} value={s.absentDays} icon="x" foot={s.leaveDays ? tr("{0} أيام إجازة", s.leaveDays) : tr("بلا إجازات")} />
+      <StatTile label={tr("الإضافي المعتمد")} value={<span className="ltr">{hm(s.overtimeMin)}</span>} icon="plus" foot={s.earlyMin ? tr("خروج مبكر {0}", duration(s.earlyMin)) : tr("لا خروج مبكر")} />
     </div>
   );
 }
@@ -54,16 +55,16 @@ export function MonthDays({ report, onCorrect }: { report: MonthReport; onCorrec
     <span className="flex flex-wrap items-center gap-1">
       {d.statusLabel && <Badge tone={DAY_TONE[d.status]}>{d.statusLabel}</Badge>}
       {d.detail && <span className="text-[12px] text-muted">{d.detail}</span>}
-      {d.late > 0 && <Badge tone="warn">تأخير {d.late} د</Badge>}
-      {d.early > 0 && <Badge tone="warn">خروج مبكر {d.early} د</Badge>}
-      {d.overtime > 0 && <Badge tone="info">إضافي {hm(d.overtime)}</Badge>}
-      {d.edited && <span title="عُدّل يدوياً أو بتصحيح" className="text-[12px] text-muted">· معدّل</span>}
+      {d.late > 0 && <Badge tone="warn">{tr("تأخير")} {d.late} {tr("د")}</Badge>}
+      {d.early > 0 && <Badge tone="warn">{tr("خروج مبكر")} {d.early} {tr("د")}</Badge>}
+      {d.overtime > 0 && <Badge tone="info">{tr("إضافي")} {hm(d.overtime)}</Badge>}
+      {d.edited && <span title={tr("عُدّل يدوياً أو بتصحيح")} className="text-[12px] text-muted">{tr("· معدّل")}</span>}
     </span>
   );
   return (
     <>
       <Card padded={false} className="hidden overflow-hidden md:block">
-        <DataTable head={['اليوم', 'الحالة', 'الحضور', 'الانصراف', 'المدة', '']} minWidth={720}>
+        <DataTable head={[tr("اليوم"), tr("الحالة"), tr("الحضور"), tr("الانصراف"), tr("المدة"), '']} minWidth={720}>
           {days.map((d) => (
             <tr key={d.date} className={d.date === today ? 'bg-accent-soft/60' : d.status === 'weekend' || d.status === 'holiday' ? 'bg-chip/40' : ''}>
               <td className="whitespace-nowrap"><span className="font-medium">{d.dayName}</span> <span className="text-muted num">{dmy(d.date)}</span></td>
@@ -72,7 +73,7 @@ export function MonthDays({ report, onCorrect }: { report: MonthReport; onCorrec
               <td className="num whitespace-nowrap">{d.lastOut ? formatTime(d.lastOut) : d.sessions ? <span className="text-warn">—</span> : '—'}</td>
               <td className="num ltr text-right">{d.sessions ? hm(d.minutes) : ''}</td>
               <td className="text-left">{canCorrect(d.date) && ['missing', 'absent', 'present'].includes(d.status) && (
-                <button type="button" onClick={() => onCorrect!(d.date)} className="text-[13px] text-accent-fg hover:underline cursor-pointer no-print">طلب تصحيح</button>
+                <button type="button" onClick={() => onCorrect!(d.date)} className="text-[13px] text-accent-fg hover:underline cursor-pointer no-print">{tr("طلب تصحيح")}</button>
               )}</td>
             </tr>
           ))}
@@ -88,12 +89,12 @@ export function MonthDays({ report, onCorrect }: { report: MonthReport; onCorrec
             {status(d)}
             {d.sessions > 0 && (
               <div className="flex gap-4 text-[13px] text-muted">
-                <span>حضور <b className="text-fg num">{formatTime(d.firstIn)}</b></span>
-                <span>انصراف <b className="text-fg num">{d.lastOut ? formatTime(d.lastOut) : '—'}</b></span>
+                <span>{tr("حضور")} <b className="text-fg num">{formatTime(d.firstIn)}</b></span>
+                <span>{tr("انصراف")} <b className="text-fg num">{d.lastOut ? formatTime(d.lastOut) : '—'}</b></span>
               </div>
             )}
             {canCorrect(d.date) && ['missing', 'absent'].includes(d.status) && (
-              <Button size="sm" variant="secondary" icon="edit" className="self-start" onClick={() => onCorrect!(d.date)}>طلب تصحيح</Button>
+              <Button size="sm" variant="secondary" icon="edit" className="self-start" onClick={() => onCorrect!(d.date)}>{tr("طلب تصحيح")}</Button>
             )}
           </Card>
         ))}
@@ -107,22 +108,22 @@ export function CorrectionDialog({ open, onClose, date: initialDate }: { open: b
   const [f, setF] = useState({ date: '', kind: 'missingOut', inTime: '', outTime: '', reason: '' });
   const [error, setError] = useState('');
   useEffect(() => { if (open) { setF({ date: initialDate || kwDate(), kind: 'missingOut', inTime: '', outTime: '', reason: '' }); setError(''); } }, [open, initialDate]);
-  const req = useAction('att.correction.request', { invalidate: ['att.correction.mine', 'att.myMonth', 'att.today'], success: 'أُرسل طلب التصحيح', silentError: true, onSuccess: onClose });
+  const req = useAction('att.correction.request', { invalidate: ['att.correction.mine', 'att.myMonth', 'att.today'], success: tr("أُرسل طلب التصحيح"), silentError: true, onSuccess: onClose });
   const submit = () => { setError(''); req.mutate(f, { onError: (e) => setError(e.message) }); };
   const needIn = f.kind !== 'missingOut';
   return (
-    <Dialog open={open} onClose={onClose} title="طلب تصحيح بصمة"
-      footer={<><Button variant="primary" className="flex-1" loading={req.isPending} onClick={submit}>إرسال الطلب</Button><Button variant="ghost" onClick={onClose}>إلغاء</Button></>}>
+    <Dialog open={open} onClose={onClose} title={tr("طلب تصحيح بصمة")}
+      footer={<><Button variant="primary" className="flex-1" loading={req.isPending} onClick={submit}>{tr("إرسال الطلب")}</Button><Button variant="ghost" onClick={onClose}>{tr("إلغاء")}</Button></>}>
       <div className="flex flex-col gap-3">
-        <p className="m-0 text-[13px] leading-relaxed text-muted">يصل الطلب إلى مديرك المباشر أو الموارد البشرية، ويُعدَّل سجلك تلقائياً بعد الموافقة.</p>
-        <Select label="ما المشكلة؟" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })}
-          options={[{ value: 'missingOut', label: 'نسيت تسجيل الانصراف' }, { value: 'missingIn', label: 'نسيت تسجيل الحضور' }, { value: 'wrongTime', label: 'الوقت المسجّل خطأ' }]} />
-        <TextInput label="اليوم" type="date" value={f.date} max={kwDate()} onChange={(e) => setF({ ...f, date: e.target.value })} />
+        <p className="m-0 text-[13px] leading-relaxed text-muted">{tr("يصل الطلب إلى مديرك المباشر أو الموارد البشرية، ويُعدَّل سجلك تلقائياً بعد الموافقة.")}</p>
+        <Select label={tr("ما المشكلة؟")} value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })}
+          options={[{ value: 'missingOut', label: tr("نسيت تسجيل الانصراف") }, { value: 'missingIn', label: tr("نسيت تسجيل الحضور") }, { value: 'wrongTime', label: tr("الوقت المسجّل خطأ") }]} />
+        <TextInput label={tr("اليوم")} type="date" value={f.date} max={kwDate()} onChange={(e) => setF({ ...f, date: e.target.value })} />
         <div className="grid grid-cols-2 gap-3">
-          {needIn && <TextInput label="وقت الحضور الصحيح" type="time" value={f.inTime} onChange={(e) => setF({ ...f, inTime: e.target.value })} hint={f.kind === 'wrongTime' ? 'اتركه فارغاً إن كان صحيحاً' : undefined} />}
-          {<TextInput label={f.kind === 'missingIn' ? 'وقت الانصراف (إن وُجد)' : 'وقت الانصراف الصحيح'} type="time" value={f.outTime} onChange={(e) => setF({ ...f, outTime: e.target.value })} />}
+          {needIn && <TextInput label={tr("وقت الحضور الصحيح")} type="time" value={f.inTime} onChange={(e) => setF({ ...f, inTime: e.target.value })} hint={f.kind === 'wrongTime' ? tr("اتركه فارغاً إن كان صحيحاً") : undefined} />}
+          {<TextInput label={f.kind === 'missingIn' ? tr("وقت الانصراف (إن وُجد)") : tr("وقت الانصراف الصحيح")} type="time" value={f.outTime} onChange={(e) => setF({ ...f, outTime: e.target.value })} />}
         </div>
-        <Textarea label="السبب" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} maxLength={300} placeholder="مثال: نفدت بطارية الجوال قبل الانصراف" />
+        <Textarea label={tr("السبب")} value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} maxLength={300} placeholder={tr("مثال: نفدت بطارية الجوال قبل الانصراف")} />
         {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
       </div>
     </Dialog>
@@ -133,7 +134,7 @@ export function MapLink({ loc }: { loc: string }) {
   if (!loc) return <span className="text-muted">—</span>;
   return (
     <a href={`https://maps.google.com/?q=${loc}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-accent-fg no-underline hover:underline">
-      <Icon name="pin" size={15} />الخريطة
+      <Icon name="pin" size={15} />{tr("الخريطة")}
     </a>
   );
 }
@@ -142,9 +143,9 @@ export function NoEmployee() {
   return (
     <Card className="flex flex-col items-center gap-3 py-10 text-center">
       <Icon name="user" size={32} className="text-muted" />
-      <span className="text-[16px] font-bold">حسابك غير مرتبط بملف موظف</span>
-      <span className="max-w-sm text-muted">البصمة وسجل الحضور تعمل بعد ربط حسابك بملفك الوظيفي. تواصل مع الموارد البشرية أو مدير النظام.</span>
-      <Link to="/" className="text-accent-fg no-underline">العودة إلى الرئيسية</Link>
+      <span className="text-[16px] font-bold">{tr("حسابك غير مرتبط بملف موظف")}</span>
+      <span className="max-w-sm text-muted">{tr("البصمة وسجل الحضور تعمل بعد ربط حسابك بملفك الوظيفي. تواصل مع الموارد البشرية أو مدير النظام.")}</span>
+      <Link to="/" className="text-accent-fg no-underline">{tr("العودة إلى الرئيسية")}</Link>
     </Card>
   );
 }

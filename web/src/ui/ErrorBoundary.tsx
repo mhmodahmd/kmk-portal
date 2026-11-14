@@ -1,3 +1,4 @@
+import { tr } from '../lib/i18n';
 import { Component, type ReactNode } from 'react';
 import { Card, EmptyState } from './Display';
 import { Button } from './Button';
@@ -14,8 +15,8 @@ export class ErrorBoundary extends Component<{ children: ReactNode; resetKey?: s
     if (!this.state.error) return this.props.children;
     return (
       <Card>
-        <EmptyState title="حدث خطأ في عرض هذه الشاشة" body="جرّب إعادة التحميل. إن تكرر الخطأ أبلغ مدير النظام بما كنت تفعله."
-          action={<Button variant="primary" icon="refresh" onClick={() => location.reload()}>إعادة التحميل</Button>} />
+        <EmptyState title={tr("حدث خطأ في عرض هذه الشاشة")} body={tr("جرّب إعادة التحميل. إن تكرر الخطأ أبلغ مدير النظام بما كنت تفعله.")}
+          action={<Button variant="primary" icon="refresh" onClick={() => location.reload()}>{tr("إعادة التحميل")}</Button>} />
       </Card>
     );
   }

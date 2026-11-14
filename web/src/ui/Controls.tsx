@@ -1,3 +1,4 @@
+import { tr } from '../lib/i18n';
 import { NavLink } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { Icon } from './Icon';
@@ -45,13 +46,13 @@ export function MonthPicker({ value, onChange, max }: { value: string; onChange:
   const btn = 'inline-flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-surface hover:border-line-strong cursor-pointer disabled:opacity-40 disabled:cursor-default';
   return (
     <div className="flex items-center gap-1.5">
-      <button type="button" className={btn} aria-label="الشهر السابق" onClick={() => onChange(shiftMonth(value, -1))}><Icon name="chevron" className="rotate-180" /></button>
+      <button type="button" className={btn} aria-label={tr("الشهر السابق")} onClick={() => onChange(shiftMonth(value, -1))}><Icon name="chevron" className="rotate-180" /></button>
       <label className="relative inline-flex h-10 min-w-[140px] items-center justify-center rounded-lg border border-line bg-surface px-3 font-semibold">
         {monthLabel(value)}
         <input type="month" value={value} max={max} onChange={(e) => e.target.value && onChange(e.target.value)}
-          aria-label="اختر الشهر" className="absolute inset-0 cursor-pointer opacity-0" />
+          aria-label={tr("اختر الشهر")} className="absolute inset-0 cursor-pointer opacity-0" />
       </label>
-      <button type="button" className={btn} aria-label="الشهر التالي" disabled={!canNext} onClick={() => onChange(next)}><Icon name="chevron" /></button>
+      <button type="button" className={btn} aria-label={tr("الشهر التالي")} disabled={!canNext} onClick={() => onChange(next)}><Icon name="chevron" /></button>
     </div>
   );
 }

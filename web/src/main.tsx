@@ -8,6 +8,9 @@ import { AuthProvider } from './app/auth';
 import { ToastProvider } from './ui/Overlay';
 import { ApiError, CLIENT_VERSION } from './lib/api';
 import './index.css';
+import { applyLang, LANG } from './lib/i18n';
+
+applyLang();
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,7 +28,7 @@ const persister = createSyncStoragePersister({ storage, key: 'kmk.cache' });
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <PersistQueryClientProvider client={queryClient} persistOptions={{ persister, maxAge: 1000 * 60 * 60 * 24, buster: CLIENT_VERSION }}>
+    <PersistQueryClientProvider client={queryClient} persistOptions={{ persister, maxAge: 1000 * 60 * 60 * 24, buster: CLIENT_VERSION + '-' + LANG }}>
       <ToastProvider>
         <AuthProvider>
           <App />

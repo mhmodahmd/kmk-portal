@@ -48,10 +48,14 @@ var Auth = {
   /** يعيد المستخدم من رمز الجلسة أو null. */
   userFromToken_: function (token) {
     if (!token) return null;
-    var id = CacheService.getScriptCache().get('s_' + sha256Hex_(token));
+    var cache = CacheService.getScriptCache();
+    var key = 's_' + sha256Hex_(token);
+    var id = cache.get(key);
     if (!id) return null;
     var u = Db.get('core', 'Users', id);
-    return u && u.active ? u : null;
+    if (!u || !u.active) return null;
+    cache.put(key, id, APP.SESSION_SECONDS); // جلسة منزلقة: تمتد مع كل استخدام
+    return u;
   },
 
   // ───────── تذكّر الجهاز (رمز موقّع لا يُخزَّن في الخادم) ─────────

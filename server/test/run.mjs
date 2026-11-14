@@ -1,0 +1,8 @@
+/**
+ * تشغيل اختبارات الخادم: node server/test/run.mjs
+ */
+import { runAll } from './harness.mjs';
+import './core.test.mjs';
+import './phase1.test.mjs';
+
+await runAll();

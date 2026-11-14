@@ -4,7 +4,7 @@
  */
 var APP = {
   NAME: 'بوابة KMK',
-  VERSION: '0.1.0',
+  VERSION: '0.2.0',
   // أقدم إصدار واجهة مسموح به. الواجهة الأقدم تُطلب منها إعادة التحميل.
   MIN_CLIENT: '0.1.0',
   TZ: 'Asia/Kuwait',
@@ -20,9 +20,9 @@ var APP = {
  * لكن يمكن إسناد أدوارها مسبقاً.
  */
 var MODULES = [
-  { key: 'attendance', label: 'الحضور والانصراف', enabled: false,
+  { key: 'attendance', label: 'الحضور والانصراف', enabled: true,
     roles: { employee: 'موظف', viewer: 'مشاهد', hr: 'الموارد البشرية' } },
-  { key: 'hr', label: 'الموارد البشرية', enabled: false,
+  { key: 'hr', label: 'الموارد البشرية', enabled: true,
     roles: { employee: 'موظف', hr: 'الموارد البشرية' } },
   { key: 'custody', label: 'العهد والنثريات', enabled: false,
     roles: { holder: 'صاحب عهدة', accountant: 'محاسب' } },

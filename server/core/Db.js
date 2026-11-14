@@ -26,9 +26,31 @@ var SCHEMAS = {
       ['id', 'text'], ['ts', 'ts'], ['userId', 'text'], ['userName', 'text'], ['module', 'text'],
       ['action', 'text'], ['entity', 'text'], ['entityId', 'text'], ['details', 'json']
     ],
-    Serials: [['key', 'text'], ['last', 'num']]
+    Serials: [['key', 'text'], ['last', 'num']],
+    // الموظف الموحد: كل الوحدات تشير إليه بـ employeeId
+    Employees: [
+      ['id', 'text'], ['empNo', 'text'], ['fullName', 'text'], ['userId', 'text'], ['departmentId', 'text'],
+      ['branchId', 'text'], ['managerId', 'text'], ['shiftId', 'text'], ['jobTitle', 'text'], ['hireDate', 'date'],
+      ['status', 'text'], ['phone', 'text'], ['email', 'text'], ['nationality', 'text'], ['birthDate', 'date'],
+      ['civilId', 'text'], ['civilIdExpiry', 'date'], ['residencyNo', 'text'], ['residencyExpiry', 'date'],
+      ['passportNo', 'text'], ['passportExpiry', 'date'], ['contractType', 'text'], ['contractEnd', 'date'],
+      ['address', 'text'], ['emergencyName', 'text'], ['emergencyPhone', 'text'], ['notes', 'text'],
+      ['createdAt', 'ts'], ['createdBy', 'text'], ['updatedAt', 'ts']
+    ],
+    Departments: [['id', 'text'], ['name', 'text'], ['managerId', 'text'], ['active', 'bool'], ['createdAt', 'ts']],
+    Branches: [
+      ['id', 'text'], ['name', 'text'], ['address', 'text'], ['lat', 'text'], ['lng', 'text'],
+      ['geoRadius', 'num'], ['active', 'bool'], ['createdAt', 'ts']
+    ]
   }
 };
+
+/** مخطط ملف بيانات: النواة هنا، والوحدات تعلن مخططاتها في ModuleSchemas_ (Router.js). */
+function schemaOf_(dbKey) {
+  if (SCHEMAS[dbKey]) return SCHEMAS[dbKey];
+  var extra = ModuleSchemas_();
+  return extra[dbKey] || null;
+}
 
 var DB_MEMO_ = { ss: {}, rows: {} };
 
@@ -36,7 +58,7 @@ var Db = {
   /** الملف الخاص بوحدة، ويُنشأ مع جداوله عند أول استخدام. */
   spreadsheet_: function (dbKey) {
     if (DB_MEMO_.ss[dbKey]) return DB_MEMO_.ss[dbKey];
-    var schema = SCHEMAS[dbKey];
+    var schema = schemaOf_(dbKey);
     if (!schema) throw new Error('Unknown db: ' + dbKey);
     var props = PropertiesService.getScriptProperties();
     var propKey = 'DB_' + dbKey.toUpperCase();
@@ -97,7 +119,7 @@ var Db = {
 
   types_: function (dbKey, table) {
     var map = {};
-    SCHEMAS[dbKey][table].forEach(function (c) { map[c[0]] = c[1]; });
+    schemaOf_(dbKey)[table].forEach(function (c) { map[c[0]] = c[1]; });
     return map;
   },
 
@@ -139,17 +161,31 @@ var Db = {
     delete DB_MEMO_.rows[dbKey + '.' + table];
   },
 
-  /** كل صفوف الجدول ككائنات (مع تخزين مؤقت). */
+  /** كل صفوف الجدول ككائنات (نسخ يمكن تعديلها). */
   all: function (dbKey, table) {
+    return Db.view(dbKey, table).map(function (r) { return Object.assign({}, r); });
+  },
+
+  /**
+   * كل صفوف الجدول للقراءة فقط (بلا نسخ، أسرع للجداول الكبيرة). لا تعدّل الكائنات المعادة.
+   * تُخزَّن مؤقتاً في CacheService مقسّمة على عدة مفاتيح، وتُبطل عند أي كتابة.
+   */
+  view: function (dbKey, table) {
     var memoKey = dbKey + '.' + table;
-    if (DB_MEMO_.rows[memoKey]) return DB_MEMO_.rows[memoKey].map(function (r) { return Object.assign({}, r); });
+    if (DB_MEMO_.rows[memoKey]) return DB_MEMO_.rows[memoKey];
     var cache = CacheService.getScriptCache();
     var ck = Db.cacheKey_(dbKey, table);
-    var hit = cache.get(ck);
-    var rows;
-    if (hit) {
-      rows = JSON.parse(hit);
-    } else {
+    var rows = null;
+    var n = Number(cache.get(ck + '_n'));
+    if (n) {
+      var keys = [];
+      for (var i = 0; i < n; i++) keys.push(ck + '_' + i);
+      var parts = cache.getAll(keys);
+      var joined = '';
+      for (var j = 0; j < n && joined !== null; j++) joined = parts[keys[j]] == null ? null : joined + parts[keys[j]];
+      if (joined !== null) { try { rows = JSON.parse(joined); } catch (e) { rows = null; } }
+    }
+    if (!rows) {
       var sh = Db.sheet_(dbKey, table);
       var values = sh.getDataRange().getValues();
       var headers = values.shift().map(String);
@@ -159,11 +195,19 @@ var Db = {
         headers.forEach(function (h, i) { if (h && types[h]) o[h] = Db.fromCell_(r[i], types[h]); });
         return o;
       });
-      var json = JSON.stringify(rows);
-      if (json.length < 90000) cache.put(ck, json, 21600);
+      Db.cachePut_(cache, ck, JSON.stringify(rows));
     }
     DB_MEMO_.rows[memoKey] = rows;
-    return rows.map(function (r) { return Object.assign({}, r); });
+    return rows;
+  },
+
+  /** يقسّم النص على مفاتيح ≤ 30 ألف حرف (حد القيمة 100KB بعد الترميز). */
+  cachePut_: function (cache, ck, json) {
+    var size = 30000, chunks = {}, n = Math.ceil(json.length / size) || 1;
+    if (n > 60) return; // جدول ضخم: لا تخزين مؤقت
+    for (var i = 0; i < n; i++) chunks[ck + '_' + i] = json.slice(i * size, (i + 1) * size);
+    chunks[ck + '_n'] = String(n);
+    try { cache.putAll(chunks, 21600); } catch (e) { /* التخزين المؤقت اختياري */ }
   },
 
   find: function (dbKey, table, pred) { return Db.all(dbKey, table).filter(pred); },
@@ -194,6 +238,22 @@ var Db = {
       sh.appendRow(Db.rowValues_(sh, dbKey, table, row));
       Db.bump_(dbKey, table);
       return row;
+    });
+  },
+
+  /** إدراج عدة صفوف بكتابة واحدة (أسرع بكثير من insert المتكرر). */
+  insertMany: function (dbKey, table, list) {
+    if (!list.length) return [];
+    return withLock(function () {
+      var hasId = !!Db.types_(dbKey, table).id;
+      var rows = list.map(function (o) { var r = Object.assign({}, o); if (!r.id && hasId) r.id = newId(); return r; });
+      var sh = Db.sheet_(dbKey, table);
+      var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+      var types = Db.types_(dbKey, table);
+      var values = rows.map(function (r) { return headers.map(function (h) { return types[h] ? Db.toCell_(r[h], types[h]) : ''; }); });
+      sh.getRange(sh.getLastRow() + 1, 1, values.length, values[0].length).setValues(values);
+      Db.bump_(dbKey, table);
+      return rows;
     });
   },
 

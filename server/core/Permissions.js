@@ -25,6 +25,13 @@ var Permissions = {
     }
   },
 
+  /** هل يملك المستخدم أحد الأدوار في الوحدة (أو أي دور إن لم تُحدد)؟ مدير النظام دائماً نعم. */
+  has: function (ctx, module, roles) {
+    if (ctx.user.isSuperAdmin) return true;
+    var r = ctx.roles[module];
+    return !!r && (!roles || roles.indexOf(r) >= 0);
+  },
+
   /** الوحدات التي يراها المستخدم في القائمة. */
   visibleModules: function (ctx) {
     return MODULES.map(function (m) {

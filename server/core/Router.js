@@ -23,6 +23,7 @@ var Router = {
       'auth.changePassword': { allowMustChange: true, fn: Auth.changePassword },
       'home.summary': { fn: Home.summary },
       'inbox.list': { fn: Home.inbox },
+      'inbox.decide': { fn: Home.decide },
       'settings.get': { fn: Settings.get },
       'settings.update': { perm: 'super', fn: Settings.update },
       'audit.list': { perm: 'super', fn: Audit.list },
@@ -87,9 +88,22 @@ var Router = {
   }
 };
 
-/** الوحدات تضيف مساراتها هنا عند بنائها (المرحلة 1 وما بعدها). */
+/** مسارات الوحدات. كل وحدة تعلن مساراتها في routes_() */
 function ModuleRoutes_() {
-  return {};
+  return Object.assign({}, Hr.routes_(), Attendance.routes_());
+}
+
+/** مخططات ملفات بيانات الوحدات (النواة في Db.js) */
+function ModuleSchemas_() {
+  return { hr: HR_SCHEMA, attendance: ATT_SCHEMA };
+}
+
+/** الوحدات التي تقدّم بطاقات للرئيسية وعناصر لصندوق الموافقات. prefix: بادئة أنواع طلباتها */
+function ModuleProviders_() {
+  return [
+    { key: 'attendance', prefix: 'att.', summary: Attendance.summary_, inbox: Attendance.inbox_, decide: Attendance.decide_ },
+    { key: 'hr', prefix: 'hr.', summary: Hr.summary_, inbox: Hr.inbox_, decide: Hr.decide_ }
+  ];
 }
 
 function doPost(e) {
@@ -106,7 +120,7 @@ function doGet() {
 
 /** شغّلها من المحرر مرة واحدة للموافقة على الصلاحيات وإنشاء ملف البيانات. */
 function setup() {
-  var ss = Db.spreadsheet_('core');
-  Logger.log('KMK core database: ' + ss.getUrl());
-  return ss.getUrl();
+  var urls = ['core', 'hr', 'attendance'].map(function (k) { return k + ': ' + Db.spreadsheet_(k).getUrl(); });
+  Logger.log('KMK databases:\n' + urls.join('\n'));
+  return urls.join('\n');
 }

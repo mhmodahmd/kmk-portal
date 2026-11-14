@@ -7,5 +7,6 @@ import './phase1.test.mjs';
 import './device.test.mjs';
 import './migration.test.mjs';
 import './custody.test.mjs';
+import './files.test.mjs';
 
 await runAll();

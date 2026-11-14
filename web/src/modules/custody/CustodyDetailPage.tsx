@@ -12,6 +12,10 @@ import { Dialog } from '../../ui/Overlay';
 import { ReasonDialog } from '../../ui/Decide';
 import { Icon } from '../../ui/Icon';
 import { BalanceBar, ExpenseDialog, Money, SignActions, StageBar, StatusBadge, V_TONE, dateLabel, kwd, useLookups } from './shared';
+import { ACCEPT, filePayload, openFile } from './files';
+import { useToast } from '../../ui/Overlay';
+import { useQueryClient } from '@tanstack/react-query';
+import { api } from '../../lib/api';
 import type { CustodyDetail, ExpenseView } from './types';
 
 export default function CustodyDetailPage() {
@@ -28,6 +32,19 @@ export default function CustodyDetailPage() {
   const inv = ['cus.get', 'cus.list', 'cus.home'];
   const receive = useAction('cus.confirmReceipt', { invalidate: inv, success: tr("تم تأكيد استلام العهدة") });
   const del = useAction('cus.expense.delete', { invalidate: inv, success: tr("حُذف البند"), silentError: true });
+  const lk = useLookups();
+  const toast = useToast();
+  const qc = useQueryClient();
+  const [uploading, setUploading] = useState('');
+  const view = (action: string, p: Record<string, unknown>, fallback?: string) => openFile(action, p, fallback).catch((e) => toast(e instanceof ApiError ? e.message : tr("تعذّر فتح الملف."), 'bad'));
+  const attach = async (expenseId: string, file?: File) => {
+    if (!file) return;
+    setUploading(expenseId);
+    try { await api('cus.attachment.upload', { expenseId, ...(await filePayload(file)) }); toast(tr("أُرفق الملف")); await qc.invalidateQueries({ queryKey: ['cus.get'] }); }
+    catch (e) { toast(e instanceof Error ? e.message : tr("تعذّر رفع الملف."), 'bad'); }
+    finally { setUploading(''); }
+  };
+  const unattach = useAction('cus.attachment.delete', { invalidate: ['cus.get'], success: tr("حُذف المرفق") });
   const reject = useAction('cus.reject', { invalidate: inv, success: tr("رُفض الإقفال وأُعيدت العهدة للموظف"), silentError: true });
   const remove = useAction('cus.delete', { invalidate: ['cus.list', 'cus.home'], success: tr("حُذفت العهدة"), silentError: true, onSuccess: () => nav('/custody/all') });
 
@@ -94,14 +111,29 @@ export default function CustodyDetailPage() {
                       <div className="text-[12px] text-muted">
                         {[e.project, e.docType, e.vendor, e.invoiceNo, e.noAttachmentReason && tr("بلا مرفق: {0}", e.noAttachmentReason)].filter(Boolean).join(' · ')}
                       </div>
-                      {e.attachments.map((a) => (
-                        <a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="me-2 inline-flex items-center gap-1 text-[12px] text-accent-fg no-underline"><Icon name="file" size={14} />{a.fileName}</a>
-                      ))}
+                      {e.attachments.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1.5">
+                          {e.attachments.map((a) => (
+                            <span key={a.id} className="inline-flex items-center gap-1 rounded-md bg-chip px-2 py-0.5 text-[12px]">
+                              <button type="button" className="inline-flex items-center gap-1 text-accent-fg cursor-pointer" onClick={() => view('cus.attachment.content', { id: a.id }, a.url)}>
+                                <Icon name={a.isImage ? 'eye' : 'file'} size={14} />{a.fileName.replace(/^NTH-\d{4}-\d+_\d+_/, '')}
+                              </button>
+                              {can.edit && lk.data?.drive && <button type="button" aria-label={tr("حذف المرفق")} className="text-muted hover:text-bad cursor-pointer" onClick={() => unattach.mutate({ id: a.id })}><Icon name="x" size={12} /></button>}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       {e.reviewNote && <div className="mt-1 rounded bg-warn-bg px-2 py-1 text-[12px] text-warn">{tr("ملاحظة المحاسب: {0}", e.reviewNote)}</div>}
                     </td>
                     <td>{e.entryType === 'receipt' ? <Badge tone="info">{e.entryLabel}</Badge> : e.category}</td>
                     <td className={e.entryType === 'receipt' ? 'text-ok' : ''}><Money fils={e.entryType === 'receipt' ? e.amount : -e.amount} className={e.entryType === 'expense' ? '!text-fg' : ''} /></td>
                     <td className="text-left whitespace-nowrap no-print">
+                      {can.edit && lk.data?.drive && e.entryType === 'expense' && (
+                        <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md px-3 text-[13px] font-medium text-accent-fg hover:bg-chip">
+                          <Icon name={uploading === e.id ? 'refresh' : 'file'} size={16} />{uploading === e.id ? tr("جارٍ الرفع") : tr("إرفاق")}
+                          <input type="file" accept={ACCEPT} className="sr-only" disabled={!!uploading} onChange={(ev) => { attach(e.id, ev.target.files?.[0]); ev.target.value = ''; }} />
+                        </label>
+                      )}
                       {can.edit && <Button size="sm" variant="ghost" icon="edit" onClick={() => setEditing(e)}>{tr("تعديل")}</Button>}
                       {can.edit && <Button size="sm" variant="ghost" icon="trash" onClick={() => setDeleting(e)}>{tr("حذف")}</Button>}
                       {can.note && <Button size="sm" variant="ghost" icon="edit" onClick={() => setNoting(e)}>{tr("ملاحظة")}</Button>}
@@ -125,6 +157,7 @@ export default function CustodyDetailPage() {
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="font-semibold">{v.typeLabel} <span className="num">{v.number}</span></span>
                   <span className="text-[12px] text-muted">{v.signed ? tr("وقّعته الإدارة · {0}", v.signedByName) : tr("لم توقّعه الإدارة بعد")}</span>
+                  {v.hasSignedFile && <button type="button" className="self-start text-[12px] text-accent-fg cursor-pointer" onClick={(ev) => { ev.preventDefault(); view('cus.signed.content', { kind: 'voucher', id: v.id }); }}>{tr("عرض النسخة الموقّعة")}</button>}
                 </span>
                 <span className="flex flex-col items-end gap-1"><Badge tone={V_TONE[v.status]}>{v.statusLabel}</Badge><Money fils={v.amount} className="text-[13px]" /></span>
               </Link>
@@ -136,6 +169,7 @@ export default function CustodyDetailPage() {
               {c.settlementLabel && <span>{tr("التسوية: {0}", c.settlementLabel)}</span>}
               {c.closeSignedAt && <span>{tr("وقّع الكشف: {0} · {1}", c.closeSignedByName, formatDateTime(c.closeSignedAt))}</span>}
               {c.closeSignedNote && <span className="text-muted">{c.closeSignedNote}</span>}
+              {c.hasCloseSignedFile && <button type="button" className="self-start text-accent-fg cursor-pointer" onClick={() => view('cus.signed.content', { kind: 'statement', id: c.id })}>{tr("عرض الكشف الموقّع")}</button>}
             </Card>
           )}
         </div>

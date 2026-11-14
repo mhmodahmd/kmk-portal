@@ -9,6 +9,9 @@ import { Checkbox, Select, TextInput, Textarea } from '../../ui/Field';
 import { Dialog, useToast } from '../../ui/Overlay';
 import { Icon } from '../../ui/Icon';
 import { cx } from '../../ui/cx';
+import { useQueryClient } from '@tanstack/react-query';
+import { api } from '../../lib/api';
+import { filePayload } from './files';
 import type { CustodyStatus, CustodyView, Holder, Lookups, ExpenseView, SignLinkInfo, StageStep, VoucherView } from './types';
 
 type Tone = 'ok' | 'warn' | 'bad' | 'info' | 'neutral';
@@ -259,6 +262,20 @@ export function SignActions({ kind, id, info, onDone }: { kind: 'voucher' | 'sta
     }
   });
   const mark = useAction('cus.markSigned', { invalidate: ['cus.get', 'cus.list', 'cus.home', 'cus.voucher.list'], success: tr("سُجّل توقيع الإدارة"), silentError: true, onSuccess: () => { setPaper(false); onDone?.(); } });
+  const drive = !!useLookups().data?.drive;
+  const qc = useQueryClient();
+  const [upBusy, setUpBusy] = useState(false);
+  const uploadSigned = async (file?: File) => {
+    if (!file) return;
+    setUpBusy(true); setError('');
+    try {
+      await api('cus.signed.upload', { kind, id, ...(await filePayload(file)) });
+      toast(tr("رُفعت النسخة الموقّعة"));
+      ['cus.get', 'cus.list', 'cus.home', 'cus.voucher.list'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+      onDone?.();
+    } catch (e) { setError(e instanceof Error ? e.message : tr("تعذّر رفع الملف.")); }
+    finally { setUpBusy(false); }
+  };
   const statusText: Record<SignLinkInfo['status'], string> = { open: tr("أُرسل رابط التوقيع للمدير"), expired: tr("انتهت صلاحية آخر رابط"), signed: tr("وقّع المدير"), rejected: tr("رفض المدير"), revoked: tr("أُبطل الرابط") };
   return (
     <div className="flex flex-col gap-2">
@@ -272,6 +289,12 @@ export function SignActions({ kind, id, info, onDone }: { kind: 'voucher' | 'sta
           {info?.status === 'open' ? tr("رابط جديد للمدير") : tr("إرسال للمدير للتوقيع")}
         </Button>
         <Button size="sm" variant="ghost" icon="check" onClick={() => { setNote(''); setError(''); setPaper(true); }}>{tr("وقّع ورقياً")}</Button>
+        {drive && (
+          <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md px-3 text-[13px] font-medium text-accent-fg hover:bg-chip">
+            <Icon name="download" size={16} className="rotate-180" />{upBusy ? tr("جارٍ الرفع") : tr("رفع النسخة الموقّعة")}
+            <input type="file" accept="image/*,application/pdf" className="sr-only" disabled={upBusy} onChange={(ev) => { uploadSigned(ev.target.files?.[0]); ev.target.value = ''; }} />
+          </label>
+        )}
       </div>
       {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2 text-bad">{error}</div>}
       <Dialog open={!!link} onClose={() => setLink(null)} title={tr("رابط توقيع المدير")}

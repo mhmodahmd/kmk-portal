@@ -247,8 +247,49 @@ export function createGas({ storage, clock, log } = {}) {
     getScriptLock: () => ({ waitLock() {}, tryLock: () => true, releaseLock() {}, hasLock: () => true })
   };
 
+  // ───── Drive (مجلدات وملفات في الذاكرة، تُحفظ مع الحالة) ─────
+  state.drive = state.drive || { items: {} };
+  const D = state.drive.items;
+  const blobOf = (bytes, mime, name) => ({ bytes, getBytes: () => bytes, getContentType: () => mime, getName: () => name, setName(n) { name = n; return this; } });
+  const fileApi = (id) => {
+    const it = D[id];
+    return {
+      getId: () => id, getName: () => it.name, getUrl: () => 'https://drive.test/file/' + id, isTrashed: () => !!it.trashed,
+      setTrashed(v) { it.trashed = !!v; touch(); }, getBlob: () => blobOf(it.bytes, it.mime, it.name)
+    };
+  };
+  const folderApi = (id) => {
+    const it = D[id];
+    return {
+      getId: () => id, getName: () => it.name, getUrl: () => 'https://drive.test/folder/' + id, isTrashed: () => !!it.trashed,
+      setTrashed(v) { it.trashed = !!v; touch(); },
+      createFolder(name) { const nid = 'fo' + (++state.seq); D[nid] = { kind: 'folder', name, parent: id }; touch(); return folderApi(nid); },
+      getFoldersByName(name) {
+        const ids = Object.keys(D).filter((k) => D[k].kind === 'folder' && D[k].parent === id && D[k].name === name && !D[k].trashed);
+        let i = 0;
+        return { hasNext: () => i < ids.length, next: () => folderApi(ids[i++]) };
+      },
+      createFile(blob) {
+        const nid = 'fi' + (++state.seq);
+        D[nid] = { kind: 'file', name: blob.getName(), mime: blob.getContentType(), bytes: Array.from(blob.getBytes()), parent: id };
+        touch();
+        return fileApi(nid);
+      }
+    };
+  };
+  if (!D.root) D.root = { kind: 'folder', name: 'My Drive' };
+  const need = (id, kind) => { if (!D[id] || D[id].kind !== kind) throw new Error('No item with the given ID could be found'); return id; };
+  const DriveApp = {
+    getRootFolder: () => folderApi('root'),
+    createFolder: (name) => folderApi('root').createFolder(name),
+    getFolderById: (id) => folderApi(need(id, 'folder')),
+    getFileById: (id) => fileApi(need(id, 'file'))
+  };
+
   // ───── Utilities ─────
   const Utilities = {
+    newBlob: (bytes, mime, name) => blobOf(Array.from(bytes), mime, name),
+    base64Decode(str) { return signed(Uint8Array.from(atob(String(str)), (c) => c.charCodeAt(0))); },
     DigestAlgorithm: { SHA_256: 'SHA_256' },
     Charset: { UTF_8: 'UTF_8' },
     getUuid: uuid,
@@ -284,7 +325,7 @@ export function createGas({ storage, clock, log } = {}) {
     clock: C,
     state,
     logs,
-    globals: { SpreadsheetApp, PropertiesService, CacheService, LockService, Utilities, Logger, ContentService, Session, console: consoleShim, Date: Dt },
+    globals: { SpreadsheetApp, PropertiesService, CacheService, LockService, Utilities, DriveApp, Logger, ContentService, Session, console: consoleShim, Date: Dt },
     /** يحفظ الحالة إن تغيّرت */
     flush() { if (dirty && storage) storage.save(state); dirty = false; }
   };

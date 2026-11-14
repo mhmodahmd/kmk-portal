@@ -176,7 +176,7 @@ var Custody = {
       stage: Custody.stage_(c), receivedAt: c.receivedAt, openVoucherId: c.openVoucherId, carryMode: c.carryMode || 'add',
       carryModeLabel: c.carriedBalance ? CUS.CARRY[c.carryMode || 'add'] : '',
       targetAmount: c.carryMode === 'include' ? c.amount + c.carriedBalance : c.amount,
-      closeSignedAt: c.closeSignedAt, hasCloseSigned: !!(c.closeSignedAt),
+      closeSignedAt: c.closeSignedAt, hasCloseSigned: !!(c.closeSignedAt), hasCloseSignedFile: !!c.closeSignedFileId,
       closeSignedByName: c.closeSignedBy === CUS.MANAGER ? mgrName + ' (توقيع إلكتروني)' : Custody.userName_(m, c.closeSignedBy),
       closeSignedNote: c.closeSignedNote
     };
@@ -241,7 +241,7 @@ var Custody = {
       docTypes: Custody.activeNames_('DocTypes'),
       paymentMethods: Object.keys(CUS.PAY).map(function (k) { return { id: k, label: CUS.PAY[k] }; }),
       alertPercent: cfg.alertPercent, defaultAmount: cfg.defaultAmount, today: localDate_(),
-      managerName: cfg.managerName, drive: false
+      managerName: cfg.managerName, drive: Files.available_()
     };
   },
 
@@ -475,7 +475,7 @@ var Custody = {
     var e = Db.getOrThrow('custody', 'Expenses', p && p.id, 'البند');
     var c = Custody.visible_(ctx, e.custodyId);
     Custody.assertEditable_(ctx, c);
-    Custody.rows_('Attachments').filter(function (a) { return a.expenseId === e.id; }).forEach(function (a) { Db.remove('custody', 'Attachments', a.id); });
+    Custody.rows_('Attachments').filter(function (a) { return a.expenseId === e.id; }).forEach(function (a) { Files.trash_(a.driveFileId); Db.remove('custody', 'Attachments', a.id); });
     Db.remove('custody', 'Expenses', e.id);
     var u = Custody.recalc_(c.id);
     Audit.log(ctx.user, 'custody', 'expense.delete', 'Expense', e.id, { custody: c.id, description: e.description, amount: kwd_(e.amount), reason: optionalText(p.reason, 300) });
@@ -615,6 +615,111 @@ var Custody = {
     return true;
   },
 
+  // ───────── الملفات على Drive ─────────
+  folderOf_: function (c) {
+    var emp = Db.get('core', 'Employees', c.employeeId);
+    var folder = Files.folder_(c.driveFolderId, ['العهد', c.id + ' — ' + (emp ? emp.fullName : '')]);
+    if (folder.getId() !== c.driveFolderId) Db.update('custody', 'Custodies', c.id, { driveFolderId: folder.getId() });
+    return folder;
+  },
+
+  /** صورة الفاتورة أو ملفها لبند في عهدة مفتوحة. p: { expenseId, fileName, mimeType, data } */
+  attachmentUpload: function (ctx, p) {
+    Files.require_();
+    p = p || {};
+    var e = Db.getOrThrow('custody', 'Expenses', p.expenseId, 'البند');
+    var c = Custody.visible_(ctx, e.custodyId);
+    Custody.assertEditable_(ctx, c);
+    var up = Files.decode_(p);
+    var no = Custody.expensesOf_(c.id).map(function (x) { return x.id; }).indexOf(e.id) + 1;
+    var name = c.id + '_' + no + '_' + Files.safeName_(p.fileName || ('مرفق.' + up.ext));
+    var f = Files.save_(Custody.folderOf_(c), up, name);
+    var a = Db.insert('custody', 'Attachments', {
+      custodyId: c.id, expenseId: e.id, fileName: name, driveFileId: f.id, url: f.url, mimeType: up.mime,
+      uploadedBy: ctx.user.id, uploadedAt: nowIso(), fileSize: f.size
+    });
+    var cur = Db.get('custody', 'Expenses', e.id);
+    Db.update('custody', 'Expenses', e.id, { attachmentIds: (cur.attachmentIds || []).concat([a.id]), updatedAt: nowIso() });
+    Audit.log(ctx.user, 'custody', 'attachment.upload', 'Attachment', a.id, { file: name, kb: Math.round(f.size / 1024) });
+    return Custody.attachmentView_(a);
+  },
+
+  attachmentDelete: function (ctx, p) {
+    var a = Db.getOrThrow('custody', 'Attachments', p && p.id, 'المرفق');
+    var c = Custody.visible_(ctx, a.custodyId);
+    Custody.assertEditable_(ctx, c);
+    Files.trash_(a.driveFileId);
+    Db.remove('custody', 'Attachments', a.id);
+    var e = Db.get('custody', 'Expenses', a.expenseId);
+    if (e) Db.update('custody', 'Expenses', e.id, { attachmentIds: (e.attachmentIds || []).filter(function (x) { return x !== a.id; }), updatedAt: nowIso() });
+    Audit.log(ctx.user, 'custody', 'attachment.delete', 'Attachment', a.id, { file: a.fileName });
+    return true;
+  },
+
+  attachmentContent: function (ctx, p) {
+    var a = Db.getOrThrow('custody', 'Attachments', p && p.id, 'المرفق');
+    Custody.visible_(ctx, a.custodyId);
+    return Files.content_(a.driveFileId, a.fileName, a.mimeType);
+  },
+
+  /**
+   * رفع النسخة الموقّعة من الإدارة (المحاسب، وليس على عهدته). رفع جديد يستبدل السابق.
+   * سند صرف العهدة ينقلها إلى «جاري الصرف»، والكشف يغلقها نهائياً.
+   */
+  signedUpload: function (ctx, p) {
+    Files.require_();
+    p = p || {};
+    var kind = Custody.enum_(p.kind, CUS.SIGN_KINDS, 'نوع المستند');
+    var up = Files.decode_(p);
+    var now = nowIso();
+    if (kind === 'voucher') {
+      var v = Db.getOrThrow('custody', 'Vouchers', p.id, 'السند');
+      if (v.status !== 'active') throw appError('السند ليس سارياً، لا يُرفع له توقيع.');
+      var vc = v.custodyId ? Db.get('custody', 'Custodies', v.custodyId) : null;
+      if (vc && Custody.isOwner_(ctx, vc)) throw appError('لا يمكنك رفع توقيع سند يخص عهدتك.', 'FORBIDDEN');
+      var folder = vc ? Custody.folderOf_(vc) : Files.folder_('', ['السندات']);
+      var f = Files.save_(folder, up, v.number + '_موقّع.' + up.ext);
+      Files.trash_(v.signedFileId);
+      Db.update('custody', 'Vouchers', v.id, { signedFileId: f.id, signedAt: v.signedAt || now, signedBy: v.signedAt ? v.signedBy : ctx.user.id });
+      Custody.advanceOpen_(vc, v.id);
+      Audit.log(ctx.user, 'custody', 'voucher.signedUpload', 'Voucher', v.id, { number: v.number });
+      return true;
+    }
+    var c = Custody.getOrThrow_(p.id);
+    if (Custody.isOwner_(ctx, c)) throw appError('لا يمكنك رفع كشف عهدتك الموقّع.', 'FORBIDDEN');
+    if (c.status !== 'signing' && c.status !== 'closed') throw appError('العهدة لم يعتمد المحاسب إقفالها بعد.');
+    var file = Files.save_(Custody.folderOf_(c), up, c.id + '_كشف_التسوية_موقّع.' + up.ext);
+    Files.trash_(c.closeSignedFileId);
+    var patch = { closeSignedFileId: file.id };
+    if (c.status === 'signing') { patch.status = 'closed'; patch.closeSignedAt = now; patch.closeSignedBy = ctx.user.id; }
+    Db.update('custody', 'Custodies', c.id, patch);
+    Audit.log(ctx.user, 'custody', 'statement.signedUpload', 'Custody', c.id, null);
+    return true;
+  },
+
+  /** النسخة الموقّعة لمن يرى السند أو العهدة */
+  signedContent: function (ctx, p) {
+    p = p || {};
+    if (p.kind === 'voucher') {
+      var v = Db.get('custody', 'Vouchers', p.id);
+      if (!v || !Vouchers.canSee_(ctx, v, Vouchers.mine_(ctx))) throw appError('السند غير موجود.', 'NOT_FOUND');
+      if (!v.signedFileId) throw appError('لا توجد نسخة موقّعة لهذا السند.');
+      return Files.content_(v.signedFileId, v.number + '_موقّع');
+    }
+    var c = Custody.visible_(ctx, p.id);
+    if (!c.closeSignedFileId) throw appError('لا يوجد كشف موقّع لهذه العهدة.');
+    return Files.content_(c.closeSignedFileId, c.id + '_كشف_التسوية_موقّع');
+  },
+
+  /** صورة توقيع المدير: المحفوظة، أو (للروابط المنقولة) من ملفها على Drive وتُحفظ بعد أول قراءة */
+  managerImage_: function (link) {
+    if (!link) return '';
+    if (link.signatureData) return link.signatureData;
+    var url = Files.dataUrl_(link.signatureFileId, CUS.SIGNATURE_MAX);
+    if (url) { try { Db.update('custody', 'SignLinks', link.id, { signatureData: url }); } catch (e) { /* القراءة تكفي */ } }
+    return url;
+  },
+
   /** سند صرف العهدة بعد توقيعه: العهدة إلى «جاري الصرف» */
   advanceOpen_: function (c, voucherId) {
     if (c && c.openVoucherId === voucherId && c.status === 'open' && c.disburseStage === 'awaiting_signature') {
@@ -658,7 +763,7 @@ var Custody = {
       signs: {
         holder: { name: Custody.empName_(m, c.employeeId), image: requested && emp ? Custody.signatureOf_(emp.userId) : '' },
         reviewer: { name: Custody.userName_(m, c.reviewedBy), image: reviewed ? Custody.signatureOf_(c.reviewedBy) : '' },
-        manager: { name: link ? link.managerName : Custody.settings_().managerName, image: link ? link.signatureData || '' : '', signedAt: c.closeSignedAt }
+        manager: { name: link ? link.managerName : Custody.settings_().managerName, image: Custody.managerImage_(link), signedAt: c.closeSignedAt }
       }
     };
   },
@@ -854,6 +959,11 @@ var Custody = {
       'cus.sign.view': { public: true, fn: Sign.view },
       'cus.sign.submit': { public: true, fn: Sign.submit },
       'cus.sign.reject': { public: true, fn: Sign.reject },
+      'cus.attachment.upload': { perm: any, fn: Custody.attachmentUpload },
+      'cus.attachment.delete': { perm: any, fn: Custody.attachmentDelete },
+      'cus.attachment.content': { perm: any, fn: Custody.attachmentContent },
+      'cus.signed.upload': { perm: acc, fn: Custody.signedUpload },
+      'cus.signed.content': { perm: any, fn: Custody.signedContent },
       'cus.signature.get': { perm: any, fn: Custody.mySignature },
       'cus.signature.save': { perm: any, fn: Custody.mySignatureSave },
       'cus.settings.get': { perm: 'super', fn: Custody.settingsGet },
@@ -1000,7 +1110,7 @@ var Vouchers = {
       createdByName: Custody.userName_(m, v.createdBy), createdAt: v.createdAt,
       approved: approved, approvedBy: approved ? approver : '', approvedByName: approved ? Custody.userName_(m, approver) : '',
       approvedAt: approved ? (v.approvedAt || v.createdAt) : '',
-      signed: !!v.signedAt, signedAt: v.signedAt, signedNote: v.signedNote, mgrSigned: !!v.mgrSignId,
+      signed: !!v.signedAt, signedAt: v.signedAt, signedNote: v.signedNote, mgrSigned: !!v.mgrSignId, hasSignedFile: !!v.signedFileId,
       signedByName: v.signedBy === CUS.MANAGER ? (link ? link.managerName : 'المدير') + ' (توقيع إلكتروني)' : Custody.userName_(m, v.signedBy),
       isOpening: isOpening, requestedBy: requestedBy || '', requestedByName: Custody.userName_(m, requestedBy), requestedAt: requestedAt || '',
       rejectReason: v.rejectReason, rejectedByName: Custody.userName_(m, v.rejectedBy), rejectedAt: v.rejectedAt,
@@ -1135,7 +1245,7 @@ var Vouchers = {
     boxes.push({ label: v.type === 'payment' ? 'المستلم' : 'الدافع', name: v.partyName, image: receiver });
     boxes.push({ label: 'المحاسب', name: view.approvedByName, image: view.approved ? Custody.signatureOf_(view.approvedBy) : '' });
     var link = v.mgrSignId ? m.links[v.mgrSignId] : null;
-    boxes.push({ label: 'المدير', name: link ? link.managerName : Custody.settings_().managerName, image: link ? link.signatureData || '' : '' });
+    boxes.push({ label: 'المدير', name: link ? link.managerName : Custody.settings_().managerName, image: Custody.managerImage_(link) });
     return { company: Settings.company_(), voucher: view, signs: boxes };
   }
 };

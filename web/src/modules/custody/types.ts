@@ -10,7 +10,7 @@ export interface CustodyView {
   reviewedByName: string; reviewDate: string; rejectReason: string; settlementMethod: string; settlementLabel: string;
   settlementVoucherId: string; notes: string; previousCustodyId: string; isImported: boolean;
   stage: Stage; receivedAt: string; openVoucherId: string; carryMode: 'add' | 'include'; carryModeLabel: string; targetAmount: number;
-  closeSignedAt: string; hasCloseSigned: boolean; closeSignedByName: string; closeSignedNote: string;
+  closeSignedAt: string; hasCloseSigned: boolean; hasCloseSignedFile: boolean; closeSignedByName: string; closeSignedNote: string;
 }
 
 export interface StageStep { label: string; state: 'done' | 'current' | 'todo'; at: string; by: string; note: string }
@@ -30,7 +30,7 @@ export interface VoucherView {
   id: string; type: 'payment' | 'receipt'; typeLabel: string; number: string; date: string; custodyId: string; custodyLabel: string;
   partyName: string; amount: number; amountInWords: string; reason: string; paymentMethod: string; paymentMethodLabel: string; chequeNo: string;
   status: 'requested' | 'active' | 'rejected' | 'cancelled'; statusLabel: string; cancelReason: string; createdByName: string; createdAt: string;
-  approved: boolean; approvedByName: string; approvedAt: string; signed: boolean; signedAt: string; signedNote: string; mgrSigned: boolean;
+  approved: boolean; approvedByName: string; approvedAt: string; signed: boolean; signedAt: string; signedNote: string; mgrSigned: boolean; hasSignedFile: boolean;
   signedByName: string; isOpening: boolean; requestedBy: string; requestedByName: string; requestedAt: string;
   rejectReason: string; rejectedByName: string; rejectedAt: string; signLink: SignLinkInfo | null;
 }

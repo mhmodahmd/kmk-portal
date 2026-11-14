@@ -8,6 +8,22 @@ var Auth = {
     return h;
   },
 
+  /** كلمات مرور منقولة من نظام الحضور السابق (64 جولة SHA-256 بترميز base64) */
+  legacyHash_: function (password, salt) {
+    var h = String(salt) + '|' + String(password);
+    for (var i = 0; i < 64; i++) {
+      h = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, h + salt, Utilities.Charset.UTF_8));
+    }
+    return h;
+  },
+
+  /** يتحقق من كلمة المرور (الحالية أو المنقولة من النظام السابق) */
+  checkPassword_: function (u, password) {
+    var stored = String(u.passwordHash || '');
+    if (stored.indexOf('legacy:') === 0) return safeEquals_(Auth.legacyHash_(String(password || ''), u.salt), stored.slice(7));
+    return safeEquals_(Auth.hashPassword_(String(password || ''), u.salt), stored);
+  },
+
   validateNewPassword_: function (pw) {
     pw = String(pw || '');
     if (pw.length < APP.PASSWORD_MIN) throw appError('كلمة المرور ' + APP.PASSWORD_MIN + ' أحرف على الأقل.');
@@ -94,7 +110,7 @@ var Auth = {
     if (u.lockedUntil && new Date(u.lockedUntil) > new Date()) {
       throw appError('الحساب مقفل مؤقتاً بعد محاولات خاطئة. حاول بعد ' + APP.LOCK_MINUTES + ' دقيقة أو تواصل مع مدير النظام.', 'LOCKED');
     }
-    if (!safeEquals_(Auth.hashPassword_(String(p.password || ''), u.salt), u.passwordHash)) {
+    if (!Auth.checkPassword_(u, p.password)) {
       var fails = (u.failedAttempts || 0) + 1;
       var changes = { failedAttempts: fails };
       if (fails >= APP.MAX_FAILED_LOGINS) {
@@ -105,6 +121,8 @@ var Auth = {
       Db.update('core', 'Users', u.id, changes);
       throw generic;
     }
+    // كلمة مرور منقولة: تُعاد بطريقة البوابة عند أول دخول
+    if (String(u.passwordHash).indexOf('legacy:') === 0) u = Auth.setPassword_(u, String(p.password), false);
     u = Db.update('core', 'Users', u.id, { failedAttempts: 0, lockedUntil: '', lastLogin: nowIso() });
     return Auth.sessionResult_(u, !!p.remember);
   },
@@ -132,7 +150,7 @@ var Auth = {
 
   changePassword: function (ctx, p) {
     var u = ctx.user;
-    if (!safeEquals_(Auth.hashPassword_(String(p.current || ''), u.salt), u.passwordHash)) {
+    if (!Auth.checkPassword_(u, p.current)) {
       throw appError('كلمة المرور الحالية غير صحيحة.');
     }
     var next = Auth.validateNewPassword_(p.next);

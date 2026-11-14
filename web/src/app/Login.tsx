@@ -6,6 +6,7 @@ import { useAuth } from './auth';
 import { Button } from '../ui/Button';
 import { Checkbox, PasswordInput, TextInput } from '../ui/Field';
 import { ErrorBox, Loader } from '../ui/Display';
+import { deviceErrorText, hasPasskeyHere, loginWithPasskey, markPasskeyHere, useDeviceSupport } from '../lib/webauthn';
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -70,6 +71,34 @@ function LoginForm() {
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [bioBusy, setBioBusy] = useState(false);
+  const support = useDeviceSupport();
+  const here = hasPasskeyHere();
+  // التحدي يُجلب مسبقاً لأن Safari يشترط بدء التحقق مباشرة بعد الضغطة
+  const options = useQuery({
+    queryKey: ['auth.passkey.options'], queryFn: () => api<{ challenge: string }>('auth.passkey.options'),
+    enabled: support === 'yes', staleTime: 4 * 60_000, refetchInterval: 4 * 60_000, gcTime: 0, retry: 1
+  });
+
+  async function biometric() {
+    setError(''); setBioBusy(true);
+    try {
+      const fresh = options.data && Date.now() - options.dataUpdatedAt < 8 * 60_000;
+      const ch = fresh ? options.data! : (await options.refetch()).data;
+      if (!ch) throw new Error('تعذّر الاتصال بالخادم. حاول مرة أخرى.');
+      const assertion = await loginWithPasskey(ch.challenge);
+      const r = await api<SessionResult>('auth.passkey.login', { assertion, remember });
+      markPasskeyHere();
+      signIn(r);
+    } catch (err) {
+      const name = err instanceof DOMException ? err.name : '';
+      setError(name === 'NotAllowedError'
+        ? 'لم يكتمل الدخول بالبصمة. إن لم تفعّلها على هذا الجهاز بعد، ادخل بكلمة المرور ثم فعّلها من «ملفي».'
+        : err instanceof ApiError ? err.message : deviceErrorText(err));
+      if (err instanceof ApiError && err.code === 'BAD_LOGIN') markPasskeyHere(false);
+      void options.refetch();
+    } finally { setBioBusy(false); }
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -90,11 +119,20 @@ function LoginForm() {
         <h1 className="m-0 text-[28px] font-bold leading-tight">تسجيل الدخول</h1>
         <p className="m-0 text-[15px] text-muted">ادخل بحسابك في بوابة KMK.</p>
       </div>
+      {support === 'yes' && here && (
+        <>
+          <Button type="button" variant="primary" size="lg" icon="fingerprint" loading={bioBusy} disabled={busy} onClick={biometric}>الدخول بالبصمة</Button>
+          <div className="flex items-center gap-3 text-[13px] text-muted"><span className="h-px flex-1 bg-line" />أو بكلمة المرور<span className="h-px flex-1 bg-line" /></div>
+        </>
+      )}
       <TextInput label="اسم المستخدم" autoComplete="username" ltr placeholder="ahmad.ali" value={username} onChange={(e) => setUsername(e.target.value)} autoCapitalize="none" spellCheck={false} />
       <PasswordInput label="كلمة المرور" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
       <Checkbox label="تذكّرني على هذا الجهاز لمدة 30 يوماً" checked={remember} onChange={setRemember} />
       {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
-      <Button type="submit" variant="primary" size="lg" loading={busy}>دخول</Button>
+      <Button type="submit" variant={support === 'yes' && here ? 'secondary' : 'primary'} size="lg" loading={busy} disabled={bioBusy}>دخول</Button>
+      {support === 'yes' && !here && (
+        <Button type="button" variant="ghost" icon="fingerprint" loading={bioBusy} disabled={busy} onClick={biometric}>الدخول بالبصمة</Button>
+      )}
     </form>
   );
 }

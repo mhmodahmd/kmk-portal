@@ -48,17 +48,19 @@
 | **Notifications** | userId, module, type, title, body, link, readAt |
 | **AuditLog** | ts, userId, module, action, entity, entityId, details (json: قبل/بعد) |
 | **Serials** | key (`NTH-2026`, `PV-2026`…), last |
+| **Passkeys** 🆕 | userId, employeeId, credId, rpId, alg (-7 أو -257), publicKey (المفتاح العام فقط), signCount, backup (متزامن عبر iCloud/Google), label, status (`active`/`revoked`), createdAt, lastUsedAt, revokedAt, revokedBy, revokeReason |
+
+> مفاتيح الدخول بالبصمة (WebAuthn): مفتاح نشط واحد لكل مستخدم، للدخول وللبصمة في الحضور معاً. الخادم يتحقق من التوقيع بنفسه (`core/WebAuthn.js`) ولا تصله أي بيانات حيوية. الموظف يغيّر جهازه عبر الموارد البشرية، ومن ليس موظفاً يزيله من «ملفي».
 
 ## 3. الحضور — `KMK-Attendance`
 
 | الجدول | الأعمدة الرئيسية |
 |---|---|
 | **Attendance** | employeeId, date, inTs, outTs, inLat, inLng, inAcc, outLat, outLng, outAcc, source (`app`/`manual`/`correction`), note, editedBy, inVerify, outVerify (`device` = بصمة الجهاز) |
-| **Devices** 🆕 | employeeId, userId, credId, rpId, alg (-7 أو -257), publicKey (المفتاح العام فقط), signCount, backup (مفتاح متزامن عبر iCloud/Google), label, status (`active`/`revoked`), createdAt, lastUsedAt, revokedAt, revokedBy, revokeReason |
 | **Corrections** 🆕 | employeeId, date, kind (`missingOut`/`missingIn`/`wrongTime`), attendanceId, inTime, outTime, reason, status, decidedBy, decidedAt, decisionNote |
 
 > الورديات والعطل والإجازات المعتمدة تُقرأ من الموارد البشرية عبر `Hr.calendar_()`.
-> بصمة الجهاز (WebAuthn): جهاز نشط واحد لكل موظف. الخادم يتحقق من التوقيع بنفسه (`core/WebAuthn.js`)، ولا تصله أي بيانات حيوية. تغيير الهاتف = إعادة ضبط من الإعدادات بسبب إلزامي.
+> بصمة الجهاز تستخدم مفتاح الدخول بالبصمة نفسه (`core.Passkeys`). تغيير هاتف الموظف = إعادة ضبط من إعدادات الحضور بسبب إلزامي.
 > الإعدادات (`Settings.attendance`): التحقق من الموقع، اشتراط بصمة الجهاز، أقصى مدة للحضور المفتوح، وبداية احتساب الحضور (لا يُحتسب غياب قبلها؛ الافتراضي تاريخ أول بصمة).
 
 ## 4. الموارد البشرية — `KMK-HR`

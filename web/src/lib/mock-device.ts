@@ -39,7 +39,7 @@ function der(raw: Uint8Array) {
   return cat(Uint8Array.of(0x30, body.length), body);
 }
 
-function loadKeys(): Record<string, { priv: JsonWebKey }> {
+function loadKeys(): Record<string, { priv: JsonWebKey; user?: string }> {
   try { return JSON.parse(localStorage.getItem(KEYS) || '{}'); } catch { return {}; }
 }
 
@@ -60,7 +60,7 @@ function install() {
     const cose = cbor(new Map<Cbor, Cbor>([[1, 2], [3, -7], [-1, 1], [-2, dec(pub.x!)], [-3, dec(pub.y!)]]));
     const ad = await authData(o.rp.id || location.hostname, 0x45, cat(new Uint8Array(16), Uint8Array.of(0, id.length), id, cose));
     const keys = loadKeys();
-    keys[b64u(id)] = { priv: await crypto.subtle.exportKey('jwk', pair.privateKey) };
+    keys[b64u(id)] = { priv: await crypto.subtle.exportKey('jwk', pair.privateKey), user: b64u(toBytes(o.user.id)) };
     localStorage.setItem(KEYS, JSON.stringify(keys));
     const att = cbor(new Map<Cbor, Cbor>([['fmt', 'none'], ['attStmt', new Map()], ['authData', ad]]));
     return { id: b64u(id), type: 'public-key', response: { clientDataJSON: clientData('webauthn.create', o.challenge).buffer, attestationObject: att.buffer } };
@@ -69,13 +69,14 @@ function install() {
   creds.get = async ({ publicKey: o }: { publicKey: PublicKeyCredentialRequestOptions }) => {
     const keys = loadKeys();
     const allowed = (o.allowCredentials || []).map((c) => b64u(toBytes(c.id)));
-    const id = allowed.find((x) => keys[x]);
+    // بلا قائمة مسموحة (الدخول بالبصمة): يختار المتصفح أحدث مفتاح محفوظ
+    const id = allowed.length ? allowed.find((x) => keys[x]) : Object.keys(keys).pop();
     if (!id) throw new DOMException('no credential', 'NotAllowedError');
     const priv = await crypto.subtle.importKey('jwk', keys[id].priv, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
     const ad = await authData(o.rpId || location.hostname, 0x05);
     const cd = clientData('webauthn.get', o.challenge);
     const sig = new Uint8Array(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, priv, cat(ad, await sha(cd))));
-    return { id, type: 'public-key', response: { clientDataJSON: cd.buffer, authenticatorData: ad.buffer, signature: der(sig).buffer } };
+    return { id, type: 'public-key', response: { clientDataJSON: cd.buffer, authenticatorData: ad.buffer, signature: der(sig).buffer, userHandle: keys[id].user ? Uint8Array.from(atob(keys[id].user!.replace(/-/g, '+').replace(/_/g, '/') + '=='.slice(0, (4 - (keys[id].user!.length % 4)) % 4)), (c) => c.charCodeAt(0)).buffer : null } };
   };
 }
 

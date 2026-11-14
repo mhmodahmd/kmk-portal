@@ -41,6 +41,12 @@ var SCHEMAS = {
     Branches: [
       ['id', 'text'], ['name', 'text'], ['address', 'text'], ['lat', 'text'], ['lng', 'text'],
       ['geoRadius', 'num'], ['active', 'bool'], ['createdAt', 'ts']
+    ],
+    // مفاتيح الدخول بالبصمة (WebAuthn): المفتاح العام فقط. مفتاح نشط واحد لكل مستخدم
+    Passkeys: [
+      ['id', 'text'], ['userId', 'text'], ['employeeId', 'text'], ['credId', 'text'], ['rpId', 'text'], ['alg', 'num'],
+      ['publicKey', 'json'], ['signCount', 'num'], ['backup', 'bool'], ['label', 'text'], ['status', 'text'],
+      ['createdAt', 'ts'], ['lastUsedAt', 'ts'], ['revokedAt', 'ts'], ['revokedBy', 'text'], ['revokeReason', 'text']
     ]
   }
 };

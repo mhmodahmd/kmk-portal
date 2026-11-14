@@ -10,12 +10,6 @@ var ATT_SCHEMA = {
     ['source', 'text'], ['note', 'text'], ['editedBy', 'text'], ['createdAt', 'ts'], ['updatedAt', 'ts'],
     ['inVerify', 'text'], ['outVerify', 'text']
   ],
-  // بصمة الجهاز: جهاز نشط واحد لكل موظف. نخزّن المفتاح العام فقط.
-  Devices: [
-    ['id', 'text'], ['employeeId', 'text'], ['userId', 'text'], ['credId', 'text'], ['rpId', 'text'], ['alg', 'num'],
-    ['publicKey', 'json'], ['signCount', 'num'], ['backup', 'bool'], ['label', 'text'], ['status', 'text'],
-    ['createdAt', 'ts'], ['lastUsedAt', 'ts'], ['revokedAt', 'ts'], ['revokedBy', 'text'], ['revokeReason', 'text']
-  ],
   Corrections: [
     ['id', 'text'], ['employeeId', 'text'], ['date', 'date'], ['kind', 'text'], ['attendanceId', 'text'],
     ['inTime', 'text'], ['outTime', 'text'], ['reason', 'text'], ['status', 'text'],
@@ -151,54 +145,26 @@ var Attendance = {
     };
   },
 
-  // ───────── بصمة الجهاز ─────────
-  deviceOf_: function (empId) {
-    return Db.view('attendance', 'Devices').filter(function (d) { return d.employeeId === empId && d.status === 'active'; })[0] || null;
-  },
-
-  deviceInfo_: function (d) {
-    return d ? { id: d.id, label: d.label, createdAt: d.createdAt, lastUsedAt: d.lastUsedAt, synced: !!d.backup } : null;
-  },
+  // ───────── بصمة الجهاز (مفاتيح الدخول في Passkeys.js) ─────────
+  deviceOf_: function (emp) { return Passkeys.activeOfUser_(emp.userId); },
 
   deviceChallenge: function (ctx) {
-    var emp = Staff.requireOfCtx_(ctx);
-    var d = Attendance.deviceOf_(emp.id);
-    return {
-      challenge: WebAuthn.challenge_(ctx.user.id),
-      rpName: Settings.company_().name || APP.NAME,
-      user: { id: WebAuthn.userHandle_(ctx.user.id), name: ctx.user.username, displayName: emp.fullName },
-      credentialIds: d ? [d.credId] : []
-    };
+    Staff.requireOfCtx_(ctx);
+    return Passkeys.challenge(ctx);
   },
 
   deviceRegister: function (ctx, p) {
-    var emp = Staff.requireOfCtx_(ctx);
-    p = p || {};
-    var existing = Attendance.deviceOf_(emp.id);
-    if (existing) {
-      throw appError('لديك جهاز مسجّل منذ ' + dmy_(localDate_(Attendance.ms_(existing.createdAt))) + '. لتسجيل جهاز آخر اطلب من الموارد البشرية إعادة ضبط جهازك.', 'DEVICE_EXISTS');
-    }
-    var key = WebAuthn.verifyRegistration_(ctx.user.id, p);
-    return withLock(function () {
-      if (Attendance.deviceOf_(emp.id)) throw appError('سُجّل جهاز لك للتو. حدّث الصفحة.', 'DEVICE_EXISTS');
-      var now = nowIso();
-      var saved = Db.insert('attendance', 'Devices', {
-        employeeId: emp.id, userId: ctx.user.id, credId: key.credId, rpId: key.rpId, alg: key.alg, publicKey: key.publicKey,
-        signCount: key.signCount, backup: key.backup, label: optionalText(p.label, 80) || 'جهاز', status: 'active', createdAt: now
-      });
-      Audit.log(ctx.user, 'attendance', 'device.register', 'Device', saved.id, { employee: emp.fullName, label: saved.label, synced: key.backup });
-      return Attendance.deviceInfo_(saved);
-    });
+    Staff.requireOfCtx_(ctx);
+    return Passkeys.register(ctx, p);
   },
 
-  deviceList: function (ctx) {
+  deviceList: function () {
     var maps = Staff.maps_();
-    var active = {};
-    Db.view('attendance', 'Devices').forEach(function (d) { if (d.status === 'active') active[d.employeeId] = d; });
+    var active = Passkeys.activeByUser_();
     var rows = Staff.current_().map(function (e) {
       return {
         employeeId: e.id, name: e.fullName, jobTitle: e.jobTitle, departmentName: (maps.depts[e.departmentId] || {}).name || '',
-        hasAccount: !!e.userId, device: Attendance.deviceInfo_(active[e.id])
+        hasAccount: !!e.userId, device: Passkeys.info_(e.userId ? active[e.userId] : null)
       };
     }).sort(function (a, b) { return a.name.localeCompare(b.name, 'ar'); });
     return { rows: rows, registered: rows.filter(function (r) { return r.device; }).length, required: !!Attendance.settings_().deviceRequired };
@@ -207,21 +173,17 @@ var Attendance = {
   deviceReset: function (ctx, p) {
     var emp = Staff.getOrThrow_(p && p.employeeId);
     var reason = requireText(p.reason, 'سبب إعادة الضبط', 300);
-    var d = Attendance.deviceOf_(emp.id);
-    if (!d) throw appError('لا يوجد جهاز مسجّل لهذا الموظف.');
-    Db.update('attendance', 'Devices', d.id, { status: 'revoked', revokedAt: nowIso(), revokedBy: ctx.user.fullName, revokeReason: reason });
-    Audit.log(ctx.user, 'attendance', 'device.reset', 'Device', d.id, { employee: emp.fullName, label: d.label, reason: reason });
+    var k = Attendance.deviceOf_(emp);
+    if (!k) throw appError('لا يوجد جهاز مسجّل لهذا الموظف.');
+    Passkeys.revoke_(ctx.user, k, reason);
+    Audit.log(ctx.user, 'attendance', 'device.reset', 'Passkey', k.id, { employee: emp.fullName, label: k.label, reason: reason });
     return Attendance.deviceList(ctx);
   },
 
   /** يتحقق من بصمة الجهاز إن أُرسلت أو كانت مطلوبة. يعيد الجهاز المستخدم أو null */
   checkDevice_: function (ctx, emp, p) {
-    var d = Attendance.deviceOf_(emp.id);
-    if (p.assertion) {
-      if (!d) throw appError('لا يوجد جهاز مسجّل لك. سجّل جهازك أولاً.', 'DEVICE_NOT_REGISTERED');
-      var res = WebAuthn.verifyAssertion_(ctx.user.id, { credId: d.credId, rpId: d.rpId, alg: Number(d.alg), publicKey: d.publicKey }, p.assertion);
-      return { device: d, signCount: res.signCount };
-    }
+    var d = Attendance.deviceOf_(emp);
+    if (p.assertion) return Passkeys.verify_(ctx, p.assertion);
     if (Attendance.settings_().deviceRequired) {
       if (!d) throw appError('البصمة تتطلب تسجيل جهازك أولاً: اضغط «تفعيل بصمة الجهاز».', 'DEVICE_NOT_REGISTERED');
       throw appError('البصمة تتطلب التحقق بوجهك أو بصمة إصبعك على جهازك المسجّل.', 'DEVICE_REQUIRED');
@@ -252,7 +214,7 @@ var Attendance = {
       sessions: todays.map(Attendance.sessionView_),
       shift: shift ? { name: shift.name, start: shift.start, end: shift.end, graceMin: shift.graceMin } : null,
       dayType: info.dayType, detail: info.detail, late: info.late,
-      device: (function (d) { return { required: !!cfg.deviceRequired, registered: !!d, label: d ? d.label : '', since: d ? d.createdAt : '' }; })(Attendance.deviceOf_(emp.id)),
+      device: (function (d) { return { required: !!cfg.deviceRequired, registered: !!d, label: d ? d.label : '', since: d ? d.createdAt : '' }; })(Attendance.deviceOf_(emp)),
       geo: { required: geo.length > 0, branches: geo.map(function (b) { return { name: b.name, lat: Number(b.lat), lng: Number(b.lng), radius: b.geoRadius }; }) },
       pendingCorrections: Db.view('attendance', 'Corrections').filter(function (c) { return c.employeeId === emp.id && c.status === 'pending'; }).length
     };
@@ -290,7 +252,7 @@ var Attendance = {
         if (!open) throw appError('لا يوجد حضور مفتوح لتسجيل الانصراف.', 'NOT_IN');
         Db.update('attendance', 'Attendance', open.id, Object.assign({ outTs: iso, outVerify: verify, updatedAt: iso }, loc('out')));
       }
-      if (dev) Db.update('attendance', 'Devices', dev.device.id, { signCount: dev.signCount, lastUsedAt: iso });
+      if (dev) Passkeys.touch_(dev.key, dev.signCount);
     });
     return Attendance.today(ctx);
   },

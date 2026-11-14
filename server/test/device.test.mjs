@@ -103,3 +103,54 @@ test('required device setting, HR reset, RSA keys and local development origin',
   eq(punchWith(c, c.T.ahmad, local, 'in').error.code, 'DEVICE_FAILED');
   truthy(c.ok('audit.list', {}, c.A).rows.some((r) => r.action === 'device.reset'), 'reset is audited');
 });
+
+// ───────── الدخول بالبصمة ─────────
+const loginWith = (c, dev, extra = {}) => {
+  const { challenge: ch } = c.ok('auth.passkey.options', {});
+  return c.call('auth.passkey.login', { assertion: { ...dev.get(ch), ...extra }, remember: true });
+};
+
+test('sign in with the same passkey used for attendance', () => {
+  const c = company(at(SUN, '07:55'));
+  const dev = enroll(c, c.T.ahmad);
+  const r = loginWith(c, dev);
+  truthy(r.ok, JSON.stringify(r.error));
+  eq(r.data.user.username, 'ahmad');
+  truthy(r.data.deviceToken, 'remember me works with passkey sign-in');
+  eq(c.ok('auth.me', {}, r.data.token).user.username, 'ahmad');
+  truthy(c.ok('att.device.list', {}, c.T.huda).rows.find((x) => x.name === 'أحمد').device.lastUsedAt);
+
+  // التحدي لمرة واحدة، ولا يُقبل تحدي مستخدم داخل البوابة للدخول
+  const { challenge: ch } = c.ok('auth.passkey.options', {});
+  const a = dev.get(ch);
+  truthy(c.call('auth.passkey.login', { assertion: a }).ok);
+  eq(c.fail('auth.passkey.login', { assertion: a }).code, 'DEVICE_CHALLENGE');
+  eq(c.fail('auth.passkey.login', { assertion: dev.get(challenge(c, c.T.ahmad)) }).code, 'BAD_LOGIN');
+
+  // مفتاح غير مسجّل، أو مستخدم معطّل، أو جهاز أُعيد ضبطه
+  eq(loginWith(c, virtualAuthenticator()).error.code, 'BAD_LOGIN');
+  eq(loginWith(c, dev, { userHandle: 'AAAA' }).error.code, 'BAD_LOGIN');
+  c.ok('att.device.reset', { employeeId: c.emp.ahmad.id, reason: 'فقد هاتفه' }, c.T.huda);
+  eq(loginWith(c, dev).error.code, 'BAD_LOGIN');
+
+  const sara = enroll(c, c.T.sara);
+  const u = c.ok('users.list', {}, c.A).users.find((x) => x.username === 'sara');
+  c.ok('users.update', { id: u.id, fullName: 'سارة', active: false }, c.A);
+  eq(loginWith(c, sara).error.code, 'BAD_LOGIN');
+});
+
+test('passkeys for users without an employee record, and who may remove them', () => {
+  const c = company();
+  eq(c.ok('auth.passkey.mine', {}, c.A), { passkey: null, canRemove: true });
+  const dev = virtualAuthenticator();
+  c.ok('auth.passkey.register', dev.create(c.ok('auth.passkey.challenge', {}, c.A).challenge), c.A);
+  eq(c.fail('auth.passkey.register', virtualAuthenticator().create(c.ok('auth.passkey.challenge', {}, c.A).challenge), c.A).code, 'DEVICE_EXISTS');
+  truthy(loginWith(c, dev).ok, 'admin signs in with passkey');
+  eq(c.ok('auth.passkey.remove', {}, c.A).passkey, null);
+  eq(loginWith(c, dev).error.code, 'BAD_LOGIN');
+
+  // الموظف لا يزيل جهازه بنفسه حتى لا يتجاوز ضبط الموارد البشرية
+  enroll(c, c.T.ahmad);
+  eq(c.ok('auth.passkey.mine', {}, c.T.ahmad).canRemove, false);
+  eq(c.fail('auth.passkey.remove', {}, c.T.ahmad).code, 'FORBIDDEN');
+});

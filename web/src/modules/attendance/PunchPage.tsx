@@ -8,7 +8,7 @@ import { Badge, Card, ErrorBox, Skeleton } from '../../ui/Display';
 import { Icon } from '../../ui/Icon';
 import { cx } from '../../ui/cx';
 import { CorrectionDialog, NoEmployee } from './shared';
-import { deviceErrorText, registerDevice, signWithDevice, useDeviceChallenge, useDeviceSupport } from '../../lib/webauthn';
+import { deviceErrorText, markPasskeyHere, registerDevice, signWithDevice, useDeviceChallenge, useDeviceSupport } from '../../lib/webauthn';
 import { api } from '../../lib/api';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '../../ui/Overlay';
@@ -67,7 +67,9 @@ export default function PunchPage() {
       const ch = await challenge.take();
       const payload = await registerDevice(ch);
       await api('att.device.register', payload);
+      markPasskeyHere();
       await qc.invalidateQueries({ queryKey: ['att.today'] });
+      void qc.invalidateQueries({ queryKey: ['auth.passkey.mine'] });
       toast('فُعّلت بصمة الجهاز');
     } catch (e) { setError(deviceErrorText(e, true)); }
     finally { setEnrolling(false); challenge.renew(); }

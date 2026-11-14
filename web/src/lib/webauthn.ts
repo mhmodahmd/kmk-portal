@@ -39,9 +39,9 @@ export function useDeviceSupport(): DeviceSupport {
  * تحدٍّ جاهز مسبقاً: بعض المتصفحات (Safari) تشترط أن يبدأ التحقق مباشرة بعد ضغطة المستخدم،
  * فنجلب التحدي قبل الضغط ونجدده كل 4 دقائق (صلاحيته 10).
  */
-export function useDeviceChallenge(enabled: boolean) {
+export function useDeviceChallenge(enabled: boolean, action = 'att.device.challenge') {
   const q = useQuery({
-    queryKey: ['att.device.challenge'], queryFn: () => api<DeviceChallenge>('att.device.challenge'),
+    queryKey: [action], queryFn: () => api<DeviceChallenge>(action),
     enabled, staleTime: 4 * 60_000, refetchInterval: 4 * 60_000, gcTime: 0, retry: 1
   });
   /** يعيد تحدياً صالحاً (من الذاكرة إن كان حديثاً) */
@@ -98,6 +98,24 @@ export async function signWithDevice(ch: DeviceChallenge) {
   const r = cred.response as AuthenticatorAssertionResponse;
   return { credentialId: cred.id, clientDataJSON: toB64u(r.clientDataJSON), authenticatorData: toB64u(r.authenticatorData), signature: toB64u(r.signature) };
 }
+
+/** الدخول بالبصمة: المتصفح يعرض مفاتيح هذا الموقع المحفوظة على الجهاز */
+export async function loginWithPasskey(challenge: string) {
+  const cred = await navigator.credentials.get({
+    publicKey: { challenge: fromB64u(challenge), rpId: location.hostname, userVerification: 'required', timeout: 60_000 }
+  }) as PublicKeyCredential | null;
+  if (!cred) throw new DOMException('cancelled', 'NotAllowedError');
+  const r = cred.response as AuthenticatorAssertionResponse;
+  return {
+    credentialId: cred.id, clientDataJSON: toB64u(r.clientDataJSON), authenticatorData: toB64u(r.authenticatorData),
+    signature: toB64u(r.signature), userHandle: r.userHandle ? toB64u(r.userHandle) : ''
+  };
+}
+
+/** تذكّر أن لهذا الجهاز مفتاح دخول (لإبراز زر الدخول بالبصمة) */
+const HERE = 'kmk.passkey';
+export function markPasskeyHere(on = true) { try { on ? localStorage.setItem(HERE, '1') : localStorage.removeItem(HERE); } catch { /* لا تخزين */ } }
+export function hasPasskeyHere() { try { return localStorage.getItem(HERE) === '1'; } catch { return false; } }
 
 /** رسالة مفهومة لأخطاء المتصفح */
 export function deviceErrorText(e: unknown, registering = false) {

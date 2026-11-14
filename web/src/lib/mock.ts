@@ -65,7 +65,10 @@ async function seed() {
     await call('auth.changePassword', { current: r.tempPassword, next: 'pass12345' }, login.token);
   }
   const hudaUser = (await list()).find((u) => u.username === 'huda')!;
-  await call('users.setRoles', { id: hudaUser.id, roles: { attendance: 'hr', hr: 'hr' } }, A);
+  await call('users.setRoles', { id: hudaUser.id, roles: { attendance: 'hr', hr: 'hr', custody: 'accountant' } }, A);
+  for (const u of (await list()).filter((x) => x.username === 'sara' || x.username === 'ahmad')) {
+    await call('users.setRoles', { id: u.id, roles: { attendance: 'employee', hr: 'employee', custody: 'holder' } }, A);
+  }
   return 'تم: admin / admin1234 · sara, ahmad, huda / pass12345';
 }
 

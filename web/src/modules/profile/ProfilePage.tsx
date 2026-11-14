@@ -7,7 +7,8 @@ import { Avatar, Card, PageHeader } from '../../ui/Display';
 import { Button } from '../../ui/Button';
 import { cx } from '../../ui/cx';
 import { IS_EN, setLang } from '../../lib/i18n';
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
+const SignatureCard = lazy(() => import('../custody/SignatureCard'));
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import type { DeviceInfo } from '../../lib/types';
@@ -18,7 +19,7 @@ import { Icon } from '../../ui/Icon';
 import { useToast } from '../../ui/Overlay';
 
 export default function ProfilePage() {
-  const { user, signOut } = useAuth();
+  const { user, roles, signOut } = useAuth();
   const { choice, setChoice } = useTheme();
   if (!user) return null;
   const themes: { v: ThemeChoice; l: string }[] = [{ v: 'system', l: tr("حسب الجهاز") }, { v: 'light', l: tr("نهاري") }, { v: 'dark', l: tr("ليلي") }];
@@ -62,6 +63,7 @@ export default function ProfilePage() {
         </Card>
         <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-4">
           <PasskeyCard />
+          {(user.isSuperAdmin || roles.custody) && <Suspense fallback={null}><SignatureCard /></Suspense>}
         <Card className="flex flex-col gap-4">
           <h2 className="m-0 text-[16px] font-semibold">{tr("تغيير كلمة المرور")}</h2>
           <ChangePasswordForm />

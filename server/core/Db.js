@@ -305,6 +305,20 @@ var Db = {
     });
   },
 
+  /** يرفع عدّاد تسلسل إلى n على الأقل (بعد نقل أرقام قائمة) */
+  raiseSerial: function (key, n) {
+    return withLock(function () {
+      var rows = Db.find('core', 'Serials', function (r) { return r.key === key; });
+      var sh = Db.sheet_('core', 'Serials');
+      if (!rows.length) sh.appendRow([key, String(n)]);
+      else if (rows[0].last < n) {
+        var data = sh.getDataRange().getValues();
+        for (var i = 1; i < data.length; i++) if (String(data[i][0]) === key) { sh.getRange(i + 1, 2).setValue(String(n)); break; }
+      }
+      Db.bump_('core', 'Serials');
+    });
+  },
+
   /** رقم تسلسلي مثل NTH-2026-0001 */
   nextSerial: function (key, pad) {
     return withLock(function () {

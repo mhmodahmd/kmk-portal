@@ -18,8 +18,20 @@ var Auth = {
   },
 
   /** يتحقق من كلمة المرور (الحالية أو المنقولة من النظام السابق) */
+  /** كلمات مرور منقولة من نظام العهد السابق: v1$<تكرارات>$<hex> */
+  legacyCustodyHash_: function (password, salt, iterations) {
+    var h = String(salt) + ':' + String(password);
+    for (var i = 0; i < iterations; i++) h = sha256Hex_(h + ':' + salt);
+    return 'v1$' + iterations + '$' + h;
+  },
+
   checkPassword_: function (u, password) {
     var stored = String(u.passwordHash || '');
+    if (stored.indexOf('lc:') === 0) {
+      var parts = stored.slice(3).split('$');
+      if (parts.length !== 3 || parts[0] !== 'v1') return false;
+      return safeEquals_(Auth.legacyCustodyHash_(String(password || ''), u.salt, parseInt(parts[1], 10)), stored.slice(3));
+    }
     if (stored.indexOf('legacy:') === 0) return safeEquals_(Auth.legacyHash_(String(password || ''), u.salt), stored.slice(7));
     return safeEquals_(Auth.hashPassword_(String(password || ''), u.salt), stored);
   },
@@ -122,7 +134,7 @@ var Auth = {
       throw generic;
     }
     // كلمة مرور منقولة: تُعاد بطريقة البوابة عند أول دخول
-    if (String(u.passwordHash).indexOf('legacy:') === 0) u = Auth.setPassword_(u, String(p.password), false);
+    if (/^(legacy|lc):/.test(String(u.passwordHash))) u = Auth.setPassword_(u, String(p.password), false);
     u = Db.update('core', 'Users', u.id, { failedAttempts: 0, lockedUntil: '', lastLogin: nowIso() });
     return Auth.sessionResult_(u, !!p.remember);
   },

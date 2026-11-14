@@ -77,14 +77,22 @@
 | **Terminations** 🆕 | employeeId, lastDay, reason, checklist (json), status |
 
 ## 5. العهد — `KMK-Custody`
-كما في النظام الحالي تقريباً، مع استبدال `employeeId` بمعرّف الموظف الموحد و`project` بـ `projectId`.
+كما في النظام السابق (نُقل في 15 نوفمبر 2026)، مع ربط صاحب العهدة بالموظف الموحد. **المبالغ بالفلس** (1 د.ك = 1000).
+المنفّذون في الحقول (createdBy, reviewedBy, approvedBy…) مستخدمو البوابة، و`manager` = توقيع المدير عبر الرابط، و`import` = مستورد.
 
 | الجدول | الأعمدة الرئيسية |
 |---|---|
-| **Custodies** | number (`NTH-2026-001`), periodLabel, employeeId, amount, carriedBalance, openDate, status, disburseStage, carryMode, totals…, settlementMethod, settlementVoucherId, previousCustodyId, driveFolderId, isImported, closeSigned… |
-| **Expenses** | custodyId, entryType, date, categoryId, projectId, description, amount, docType, noAttachmentReason, vendor, invoiceNo, paymentMethod, reviewNote |
+| **Custodies** | id (`NTH-2026-001`), periodLabel, employeeId, amount, carriedBalance, openDate, status (open/pending/signing/closed), disburseStage (awaiting_signature/disbursing/received), carryMode, totalReceipts, totalSpent, remaining, settlementMethod (carry/voucher), settlementVoucherId, previousCustodyId, openVoucherId, receivedAt, reviewedBy, closeSignedAt/By, closeMgrSignId, closeSignedNote, isImported |
+| **Expenses** | custodyId, entryType (expense/receipt), date, category, project, description, amount, docType, noAttachmentReason, vendor, invoiceNo, paymentMethod, attachmentIds, reviewNote |
+| **Attachments** | custodyId, expenseId, fileName, driveFileId, url, mimeType, fileSize (الملفات القديمة باقية على Drive حساب kw2kmk) |
+| **Vouchers** | type (payment/receipt), number (`PV-2026-0001`/`RV-…`), date, custodyId, partyName, amount, amountInWords, reason, paymentMethod, status (requested/active/rejected/cancelled), approvedBy, signedAt/By/Note, mgrSignId, requestedBy… (ينتقل إلى المالية لاحقاً) |
+| **SignLinks** | kind (voucher/statement), targetId, tokenHash (بصمة الرابط فقط), managerName, expiresAt, status, signatureData (صورة توقيع المدير) |
+| **Signatures** | userId, data (صورة توقيع المستخدم للمطبوعات) |
 | **Requests** | employeeId, amount, reason, status, custodyId, handledBy, handledAt, rejectReason |
-| **Vouchers** | ينتقل إلى المالية لاحقاً (انظر 8) |
+| **Categories · DocTypes · Projects** | name, active, sortOrder (والمشاريع: type project/debt). تنتقل المشاريع إلى النواة مع المهام |
+
+> الإعدادات (`Settings.custody`): اسم المدير وجواله، نسبة التنبيه، المبلغ الافتراضي. الترقيم من `Serials` (NTH/PV/RV لكل سنة).
+> رفع المرفقات والنسخ الموقّعة إلى Drive يحتاج منح الخادم صلاحية Drive (موافقة حساب tahfeezcenter)، وحتى ذلك: سبب عدم المرفق، وتأكيد التوقيع الورقي أو رابط المدير.
 
 ## 6. المهام — `KMK-Tasks` 🆕
 

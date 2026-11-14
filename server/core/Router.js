@@ -35,6 +35,7 @@ var Router = {
       'audit.list': { perm: 'super', fn: Audit.list },
       'system.selftest': { perm: 'super', fn: function () { return { webauthn: WebAuthn.selfTest_() }; } },
       'system.migrate.legacyAttendance': { perm: 'super', fn: Migration.legacyAttendance },
+      'system.migrate.legacyCustody': { perm: 'super', fn: Migration.legacyCustody },
       'users.list': { perm: 'super', fn: Users.list },
       'users.create': { perm: 'super', fn: Users.create },
       'users.update': { perm: 'super', fn: Users.update },
@@ -98,19 +99,20 @@ var Router = {
 
 /** مسارات الوحدات. كل وحدة تعلن مساراتها في routes_() */
 function ModuleRoutes_() {
-  return Object.assign({}, Hr.routes_(), Attendance.routes_());
+  return Object.assign({}, Hr.routes_(), Attendance.routes_(), Custody.routes_());
 }
 
 /** مخططات ملفات بيانات الوحدات (النواة في Db.js) */
 function ModuleSchemas_() {
-  return { hr: HR_SCHEMA, attendance: ATT_SCHEMA };
+  return { hr: HR_SCHEMA, attendance: ATT_SCHEMA, custody: CUS_SCHEMA };
 }
 
 /** الوحدات التي تقدّم بطاقات للرئيسية وعناصر لصندوق الموافقات. prefix: بادئة أنواع طلباتها */
 function ModuleProviders_() {
   return [
     { key: 'attendance', prefix: 'att.', summary: Attendance.summary_, inbox: Attendance.inbox_, decide: Attendance.decide_ },
-    { key: 'hr', prefix: 'hr.', summary: Hr.summary_, inbox: Hr.inbox_, decide: Hr.decide_ }
+    { key: 'hr', prefix: 'hr.', summary: Hr.summary_, inbox: Hr.inbox_, decide: Hr.decide_ },
+    { key: 'custody', prefix: 'cus.', summary: Custody.summary_, inbox: Custody.inbox_, decide: Custody.decide_ }
   ];
 }
 
@@ -128,7 +130,8 @@ function doGet() {
 
 /** شغّلها من المحرر مرة واحدة للموافقة على الصلاحيات وإنشاء ملف البيانات. */
 function setup() {
-  var urls = ['core', 'hr', 'attendance'].map(function (k) { return k + ': ' + Db.spreadsheet_(k).getUrl(); });
+  Custody.seed_();
+  var urls = ['core', 'hr', 'attendance', 'custody'].map(function (k) { return k + ': ' + Db.spreadsheet_(k).getUrl(); });
   Logger.log('KMK databases:\n' + urls.join('\n'));
   return urls.join('\n');
 }

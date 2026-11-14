@@ -21,7 +21,7 @@ const GROUPS: { label: string; items: NavItem[] }[] = [
   { label: tr("عام"), items: [{ to: '/', label: tr("الرئيسية"), icon: 'home' }, { to: '/inbox', label: tr("الموافقات"), icon: 'inbox' }] },
   { label: tr("الموظفون"), items: [{ to: '/attendance', label: tr("الحضور والانصراف"), icon: 'clock', module: 'attendance' }, { to: '/hr', label: tr("الموارد البشرية"), icon: 'users', module: 'hr' }] },
   { label: tr("العمل"), items: [{ to: '/tasks', label: tr("المهام"), icon: 'tasks', module: 'tasks', soon: true }, { to: '/crm', label: tr("العملاء"), icon: 'crm', module: 'crm', soon: true }] },
-  { label: tr("المالية"), items: [{ to: '/custody', label: tr("العهد والنثريات"), icon: 'wallet', module: 'custody', soon: true }, { to: '/finance', label: tr("المالية"), icon: 'finance', module: 'finance', soon: true }] },
+  { label: tr("المالية"), items: [{ to: '/custody', label: tr("العهد والنثريات"), icon: 'wallet', module: 'custody' }, { to: '/finance', label: tr("المالية"), icon: 'finance', module: 'finance', soon: true }] },
   { label: tr("النظام"), items: [{ to: '/settings/users', label: tr("المستخدمون والأدوار"), icon: 'shield', superOnly: true }, { to: '/settings/company', label: tr("بيانات الشركة"), icon: 'building', superOnly: true }, { to: '/settings/audit', label: tr("سجل العمليات"), icon: 'history', superOnly: true }] }
 ];
 
@@ -83,6 +83,7 @@ function useMobileTabs(): { to: string; label: string; icon: IconName; end?: boo
   return [
     { to: '/', label: tr("الرئيسية"), icon: 'home', end: true },
     ...(all || roles.attendance ? [{ to: '/attendance', label: tr("البصمة"), icon: 'clock' as IconName, end: true }] : []),
+    ...(roles.custody ? [{ to: '/custody', label: tr("العهدة"), icon: 'wallet' as IconName }] : []),
     { to: '/inbox', label: tr("الموافقات"), icon: 'inbox' },
     all || roles.hr ? { to: '/hr', label: tr("ملفي"), icon: 'user', end: true } : { to: '/profile', label: tr("ملفي"), icon: 'user' }
   ];

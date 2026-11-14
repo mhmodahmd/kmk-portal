@@ -18,6 +18,7 @@ export default function HomePage() {
   const s = q.data;
   const card = (kind: string) => s?.cards.find((c) => c.kind === kind);
   const today = card('att.today'), board = card('att.board'), leave = card('hr.leave'), docs = card('hr.docs');
+  const cusMine = card('cus.mine'), cusStaff = card('cus.staff');
 
   return (
     <div className="flex flex-col gap-5">
@@ -33,6 +34,14 @@ export default function HomePage() {
             {leave && leave.balances[0] && (
               <StatTile label={leave.balances[0].name} value={leave.balances[0].available} icon="calendar"
                 foot={<Link to="/hr/leave" className="text-accent-fg no-underline">{leave.openRequests ? tr("{0} طلب قيد الموافقة", leave.openRequests) : tr("يوم متاح · طلب إجازة")}</Link>} />
+            )}
+            {cusMine?.custody && (
+              <StatTile label={tr("رصيد عهدتي")} value={<span className="ltr inline-block">{kwdText(cusMine.custody.remaining)}</span>} icon="wallet"
+                foot={<Link to={'/custody/' + cusMine.custody.id} className="text-accent-fg no-underline">{cusMine.custody.statusLabel}</Link>} />
+            )}
+            {cusStaff && (
+              <StatTile label={tr("العهد بانتظار إجرائك")} value={cusStaff.pendingClose + cusStaff.pendingRequests + cusStaff.voucherRequests + cusStaff.awaitingSign} icon="wallet"
+                foot={<Link to="/custody/all" className="text-accent-fg no-underline">{tr("{0} عهدة مفتوحة · رصيدها {1}", cusStaff.openCount, kwdText(cusStaff.openBalance))}</Link>} />
             )}
             {docs && <StatTile label={tr("مستندات تنتهي خلال 30 يوماً")} value={docs.count} icon="file" foot={<Link to="/hr/employees" className="text-accent-fg no-underline">{docs.employees} {tr("موظف في الدليل")}</Link>} />}
             {s.setup && !docs && <StatTile label={tr("مستخدمو البوابة")} value={s.setup.usersCount} icon="users" foot={<Link to="/settings/users" className="text-accent-fg no-underline">{tr("إدارة المستخدمين والأدوار")}</Link>} />}
@@ -163,4 +172,10 @@ function SetupChecklist({ setup }: { setup: NonNullable<ReturnType<typeof useSum
       ))}
     </Card>
   );
+}
+
+/** فلوس ← "12.500 د.ك" */
+function kwdText(f: number) {
+  const a = Math.abs(Math.round(f || 0));
+  return (f < 0 ? '-' : '') + Math.floor(a / 1000).toLocaleString('en-US') + '.' + String(a % 1000).padStart(3, '0') + ' ' + tr("د.ك");
 }

@@ -34,8 +34,19 @@ const EmployeesPage = lazy(() => import('../modules/hr/EmployeesPage'));
 const RequestsPage = lazy(() => import('../modules/hr/RequestsPage'));
 const StructurePage = lazy(() => import('../modules/hr/StructurePage'));
 
+const CustodyLayout = lazy(() => import('../modules/custody/CustodyLayout'));
+const MyCustodyPage = lazy(() => import('../modules/custody/MyCustodyPage'));
+const CustodiesPage = lazy(() => import('../modules/custody/CustodiesPage'));
+const CustodyDetailPage = lazy(() => import('../modules/custody/CustodyDetailPage'));
+const CusRequestsPage = lazy(() => import('../modules/custody/RequestsVouchersPages').then((m) => ({ default: m.CusRequestsPage })));
+const VouchersPage = lazy(() => import('../modules/custody/RequestsVouchersPages').then((m) => ({ default: m.VouchersPage })));
+const VoucherPrintPage = lazy(() => import('../modules/custody/Documents').then((m) => ({ default: m.VoucherPrintPage })));
+const StatementPrintPage = lazy(() => import('../modules/custody/Documents').then((m) => ({ default: m.StatementPrintPage })));
+const CusSettingsPage = lazy(() => import('../modules/custody/CusSettingsPage'));
+const SignPage = lazy(() => import('../modules/custody/SignPage'));
+
 const SOON: Record<string, { label: string; phase: number }> = {
-  custody: { label: tr("العهد والنثريات"), phase: 2 }, tasks: { label: tr("المهام"), phase: 3 },
+  tasks: { label: tr("المهام"), phase: 3 },
   crm: { label: tr("العملاء"), phase: 4 }, finance: { label: tr("المالية"), phase: 5 }
 };
 
@@ -54,6 +65,9 @@ function UpdateBanner() {
 
 export default function App() {
   const { status, user, roles, updateRequired } = useAuth();
+  // صفحة توقيع المدير تُفتح بلا حساب: #/sign/<الرمز>
+  const sign = /^#\/sign\/([0-9a-f]{64})$/.exec(location.hash);
+  if (sign) return <Suspense fallback={<Loader />}><SignPage token={sign[1]} /></Suspense>;
   if (status === 'loading') return <div className="min-h-screen bg-bg"><Loader label={tr("جارٍ فتح البوابة")} /></div>;
   if (status === 'out') return <LoginPage />;
   if (user?.mustChangePassword) return <ForcedChangePassword />;
@@ -62,6 +76,8 @@ export default function App() {
   const hr = admin || !!roles.hr;
   const hrStaff = admin || roles.hr === 'hr';
   const attHr = admin || roles.attendance === 'hr';
+  const cus = admin || !!roles.custody;
+  const cusStaff = admin || roles.custody === 'accountant';
   return (
     <HashRouter>
       {updateRequired && <UpdateBanner />}
@@ -92,6 +108,18 @@ export default function App() {
                 {hrStaff && <Route path="employees" element={<EmployeesPage />} />}
                 {hrStaff && <Route path="requests" element={<RequestsPage />} />}
                 {hrStaff && <Route path="structure" element={<StructurePage />} />}
+              </Route>
+            )}
+            {cus && (
+              <Route path="/custody" element={<CustodyLayout />}>
+                <Route index element={<MyCustodyPage />} />
+                {cusStaff && <Route path="all" element={<CustodiesPage />} />}
+                <Route path="requests" element={<CusRequestsPage />} />
+                <Route path="vouchers" element={<VouchersPage />} />
+                {admin && <Route path="settings" element={<CusSettingsPage />} />}
+                <Route path="print/voucher/:id" element={<VoucherPrintPage />} />
+                <Route path="print/statement/:id" element={<StatementPrintPage />} />
+                <Route path=":id" element={<CustodyDetailPage />} />
               </Route>
             )}
             {admin && <Route path="/settings/users" element={<UsersPage />} />}

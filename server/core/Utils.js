@@ -177,3 +177,35 @@ function compareVersions_(a, b) {
   }
   return 0;
 }
+
+// ───────── المبالغ (بالفلس: أعداد صحيحة، الدينار = 1000 فلس) ─────────
+/** فلوس من قيمة مخزّنة أو رقم بالدينار */
+function fils_(kwd) {
+  var n = Number(normalizeDigits(kwd));
+  if (!isFinite(n)) throw appError('المبلغ غير صحيح.');
+  return Math.round(n * 1000);
+}
+
+/** يحلّل مبلغاً أدخله المستخدم بالدينار ويعيده بالفلس. opts: { allowZero, allowNegative, max (بالدينار) } */
+function parseMoney_(input, label, opts) {
+  opts = opts || {};
+  var s = normalizeDigits(input).replace(/٫/g, '.').replace(/[,،\s]/g, '');
+  if (s === '') throw appError('أدخل ' + label + '.');
+  if (!/^-?(\d+(\.\d{1,3})?|\.\d{1,3})$/.test(s)) throw appError(label + ' غير صحيح (ثلاث خانات عشرية كحد أقصى).');
+  var f = Math.round(Number(s) * 1000);
+  if (f < 0 && !opts.allowNegative) throw appError(label + ' لا يمكن أن يكون سالباً.');
+  if (f === 0 && !opts.allowZero) throw appError(label + ' يجب أن يكون أكبر من صفر.');
+  if (opts.max != null && Math.abs(f) > opts.max * 1000) throw appError(label + ' يتجاوز الحد المسموح.');
+  return f;
+}
+
+/** عرض مبلغ بالفلس: 1,234.500 د.ك */
+function kwd_(f, noCurrency) {
+  f = Math.round(Number(f) || 0);
+  var sign = f < 0 ? '-' : '';
+  f = Math.abs(f);
+  var d = String(Math.floor(f / 1000)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  var r = String(f % 1000);
+  while (r.length < 3) r = '0' + r;
+  return sign + d + '.' + r + (noCurrency ? '' : ' د.ك');
+}

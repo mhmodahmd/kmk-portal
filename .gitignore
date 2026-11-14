@@ -1,0 +1,10 @@
+# نسخة مرجعية فيها بيانات حقيقية — لا تُرفع
+legacy/
+
+node_modules/
+dist/
+.env*
+!.env.example
+.clasp.json
+*.log
+.DS_Store

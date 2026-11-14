@@ -1,0 +1,264 @@
+/**
+ * طبقة البيانات فوق Google Sheets.
+ *
+ * - لكل وحدة ملف Sheet خاص (DB_<KEY> في Script Properties)، يُنشأ تلقائياً أول مرة.
+ * - كل جدول ورقة، صفها الأول أسماء الأعمدة، ويُقرأ بأسماء الأعمدة لا بترتيبها.
+ * - كل الخلايا نصية (@) حتى لا يحوّل Sheets القيم إلى تواريخ أو أرقام، والأنواع تُحوَّل هنا.
+ * - ممنوع استخدام SpreadsheetApp خارج هذا الملف.
+ *
+ * أنواع الأعمدة: text · num · bool · json · ts (ISO) · date (yyyy-mm-dd)
+ */
+var SCHEMAS = {
+  core: {
+    Users: [
+      ['id', 'text'], ['username', 'text'], ['fullName', 'text'], ['jobTitle', 'text'],
+      ['phone', 'text'], ['email', 'text'], ['active', 'bool'], ['isSuperAdmin', 'bool'],
+      ['mustChangePassword', 'bool'], ['passwordHash', 'text'], ['salt', 'text'],
+      ['failedAttempts', 'num'], ['lockedUntil', 'ts'], ['lastLogin', 'ts'], ['employeeId', 'text'],
+      ['createdAt', 'ts'], ['createdBy', 'text'], ['updatedAt', 'ts']
+    ],
+    UserRoles: [
+      ['id', 'text'], ['userId', 'text'], ['module', 'text'], ['role', 'text'],
+      ['createdAt', 'ts'], ['createdBy', 'text']
+    ],
+    Settings: [['key', 'text'], ['value', 'json'], ['updatedAt', 'ts'], ['updatedBy', 'text']],
+    AuditLog: [
+      ['id', 'text'], ['ts', 'ts'], ['userId', 'text'], ['userName', 'text'], ['module', 'text'],
+      ['action', 'text'], ['entity', 'text'], ['entityId', 'text'], ['details', 'json']
+    ],
+    Serials: [['key', 'text'], ['last', 'num']]
+  }
+};
+
+var DB_MEMO_ = { ss: {}, rows: {} };
+
+var Db = {
+  /** الملف الخاص بوحدة، ويُنشأ مع جداوله عند أول استخدام. */
+  spreadsheet_: function (dbKey) {
+    if (DB_MEMO_.ss[dbKey]) return DB_MEMO_.ss[dbKey];
+    var schema = SCHEMAS[dbKey];
+    if (!schema) throw new Error('Unknown db: ' + dbKey);
+    var props = PropertiesService.getScriptProperties();
+    var propKey = 'DB_' + dbKey.toUpperCase();
+    var id = props.getProperty(propKey);
+    var ss;
+    if (id) {
+      ss = SpreadsheetApp.openById(id);
+    } else {
+      var lock = LockService.getScriptLock();
+      lock.waitLock(30000);
+      try {
+        id = props.getProperty(propKey);
+        if (id) {
+          ss = SpreadsheetApp.openById(id);
+        } else {
+          var prefix = props.getProperty('ENV_NAME') || 'KMK-Dev';
+          ss = SpreadsheetApp.create(prefix + ' · ' + dbKey);
+          props.setProperty(propKey, ss.getId());
+        }
+      } finally { lock.releaseLock(); }
+    }
+    Db.ensureSchema_(dbKey, ss, schema);
+    DB_MEMO_.ss[dbKey] = ss;
+    return ss;
+  },
+
+  /** ينشئ الأوراق والأعمدة الناقصة. لا يحذف شيئاً. يُفحص فقط عند تغيّر المخطط. */
+  ensureSchema_: function (dbKey, ss, schema) {
+    var sig = sha256Hex_(JSON.stringify(schema)).slice(0, 12);
+    var props = PropertiesService.getScriptProperties();
+    var sigKey = 'SCHEMA_' + dbKey.toUpperCase();
+    if (props.getProperty(sigKey) === sig) return;
+    Object.keys(schema).forEach(function (table) {
+      var cols = schema[table].map(function (c) { return c[0]; });
+      var sh = ss.getSheetByName(table);
+      if (!sh) {
+        sh = ss.insertSheet(table);
+        sh.getRange(1, 1, 1, cols.length).setValues([cols]).setFontWeight('bold');
+        sh.setFrozenRows(1);
+      } else {
+        var lastCol = Math.max(sh.getLastColumn(), 1);
+        var have = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(String);
+        var missing = cols.filter(function (c) { return have.indexOf(c) < 0; });
+        if (missing.length) sh.getRange(1, have.filter(String).length + 1, 1, missing.length).setValues([missing]).setFontWeight('bold');
+      }
+      sh.getRange(1, 1, sh.getMaxRows(), Math.max(sh.getMaxColumns(), cols.length)).setNumberFormat('@');
+    });
+    var def = ss.getSheetByName('Sheet1') || ss.getSheetByName('ورقة1');
+    if (def && ss.getSheets().length > 1) ss.deleteSheet(def);
+    props.setProperty(sigKey, sig);
+  },
+
+  sheet_: function (dbKey, table) {
+    var sh = Db.spreadsheet_(dbKey).getSheetByName(table);
+    if (!sh) throw new Error('Missing table ' + dbKey + '.' + table);
+    return sh;
+  },
+
+  types_: function (dbKey, table) {
+    var map = {};
+    SCHEMAS[dbKey][table].forEach(function (c) { map[c[0]] = c[1]; });
+    return map;
+  },
+
+  fromCell_: function (v, type) {
+    if (v === '' || v == null) {
+      if (type === 'bool') return false;
+      if (type === 'num') return 0;
+      if (type === 'json') return null;
+      return '';
+    }
+    switch (type) {
+      case 'bool': return v === true || String(v).toUpperCase() === 'TRUE' || String(v) === '1';
+      case 'num': return Number(v) || 0;
+      case 'json': try { return JSON.parse(v); } catch (e) { return null; }
+      default: return String(v);
+    }
+  },
+
+  toCell_: function (v, type) {
+    if (v == null) return '';
+    switch (type) {
+      case 'bool': return v ? 'TRUE' : 'FALSE';
+      case 'num': return String(Number(v) || 0);
+      case 'json': return JSON.stringify(v);
+      default: return String(v);
+    }
+  },
+
+  cacheKey_: function (dbKey, table) {
+    var ver = PropertiesService.getScriptProperties().getProperty('VER_' + dbKey + '_' + table) || '0';
+    return 'db_' + dbKey + '_' + table + '_' + ver;
+  },
+
+  /** يُستدعى بعد كل كتابة ليتجاهل الجميع النسخة المخزنة القديمة. */
+  bump_: function (dbKey, table) {
+    var props = PropertiesService.getScriptProperties();
+    var k = 'VER_' + dbKey + '_' + table;
+    props.setProperty(k, String((Number(props.getProperty(k)) || 0) + 1));
+    delete DB_MEMO_.rows[dbKey + '.' + table];
+  },
+
+  /** كل صفوف الجدول ككائنات (مع تخزين مؤقت). */
+  all: function (dbKey, table) {
+    var memoKey = dbKey + '.' + table;
+    if (DB_MEMO_.rows[memoKey]) return DB_MEMO_.rows[memoKey].map(function (r) { return Object.assign({}, r); });
+    var cache = CacheService.getScriptCache();
+    var ck = Db.cacheKey_(dbKey, table);
+    var hit = cache.get(ck);
+    var rows;
+    if (hit) {
+      rows = JSON.parse(hit);
+    } else {
+      var sh = Db.sheet_(dbKey, table);
+      var values = sh.getDataRange().getValues();
+      var headers = values.shift().map(String);
+      var types = Db.types_(dbKey, table);
+      rows = values.filter(function (r) { return r.join('') !== ''; }).map(function (r) {
+        var o = {};
+        headers.forEach(function (h, i) { if (h && types[h]) o[h] = Db.fromCell_(r[i], types[h]); });
+        return o;
+      });
+      var json = JSON.stringify(rows);
+      if (json.length < 90000) cache.put(ck, json, 21600);
+    }
+    DB_MEMO_.rows[memoKey] = rows;
+    return rows.map(function (r) { return Object.assign({}, r); });
+  },
+
+  find: function (dbKey, table, pred) { return Db.all(dbKey, table).filter(pred); },
+
+  get: function (dbKey, table, id) {
+    var rows = Db.all(dbKey, table);
+    for (var i = 0; i < rows.length; i++) if (rows[i].id === id) return rows[i];
+    return null;
+  },
+
+  getOrThrow: function (dbKey, table, id, label) {
+    var r = Db.get(dbKey, table, id);
+    if (!r) throw appError((label || 'السجل') + ' غير موجود.', 'NOT_FOUND');
+    return r;
+  },
+
+  rowValues_: function (sh, dbKey, table, obj) {
+    var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+    var types = Db.types_(dbKey, table);
+    return headers.map(function (h) { return types[h] ? Db.toCell_(obj[h], types[h]) : ''; });
+  },
+
+  insert: function (dbKey, table, obj) {
+    return withLock(function () {
+      var row = Object.assign({}, obj);
+      if (!row.id && Db.types_(dbKey, table).id) row.id = newId();
+      var sh = Db.sheet_(dbKey, table);
+      sh.appendRow(Db.rowValues_(sh, dbKey, table, row));
+      Db.bump_(dbKey, table);
+      return row;
+    });
+  },
+
+  rowIndex_: function (sh, id) {
+    var last = sh.getLastRow();
+    if (last < 2) return -1;
+    var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+    var col = headers.indexOf('id') + 1;
+    var ids = sh.getRange(2, col, last - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) if (String(ids[i][0]) === id) return i + 2;
+    return -1;
+  },
+
+  update: function (dbKey, table, id, changes) {
+    return withLock(function () {
+      var sh = Db.sheet_(dbKey, table);
+      var idx = Db.rowIndex_(sh, id);
+      if (idx < 0) throw appError('السجل غير موجود.', 'NOT_FOUND');
+      DB_MEMO_.rows[dbKey + '.' + table] = null;
+      var current = Db.get(dbKey, table, id) || { id: id };
+      var next = Object.assign({}, current, changes, { id: id });
+      var values = Db.rowValues_(sh, dbKey, table, next);
+      sh.getRange(idx, 1, 1, values.length).setValues([values]);
+      Db.bump_(dbKey, table);
+      return next;
+    });
+  },
+
+  remove: function (dbKey, table, id) {
+    return withLock(function () {
+      var sh = Db.sheet_(dbKey, table);
+      var idx = Db.rowIndex_(sh, id);
+      if (idx < 0) return false;
+      sh.deleteRow(idx);
+      Db.bump_(dbKey, table);
+      return true;
+    });
+  },
+
+  /** رقم تسلسلي مثل NTH-2026-0001 */
+  nextSerial: function (key, pad) {
+    return withLock(function () {
+      var rows = Db.find('core', 'Serials', function (r) { return r.key === key; });
+      var sh = Db.sheet_('core', 'Serials');
+      var n;
+      if (!rows.length) {
+        n = 1;
+        sh.appendRow([key, '1']);
+      } else {
+        n = rows[0].last + 1;
+        var data = sh.getDataRange().getValues();
+        for (var i = 1; i < data.length; i++) if (String(data[i][0]) === key) { sh.getRange(i + 1, 2).setValue(String(n)); break; }
+      }
+      Db.bump_('core', 'Serials');
+      return key + '-' + String(n).padStart(pad || 4, '0');
+    });
+  }
+};
+
+/** قفل عام للكتابة؛ يسمح بالتداخل داخل نفس التنفيذ. */
+var LOCK_DEPTH_ = 0;
+function withLock(fn) {
+  if (LOCK_DEPTH_ > 0) return fn();
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) throw appError('النظام مشغول الآن. حاول بعد لحظات.', 'BUSY');
+  LOCK_DEPTH_++;
+  try { return fn(); } finally { LOCK_DEPTH_--; lock.releaseLock(); }
+}

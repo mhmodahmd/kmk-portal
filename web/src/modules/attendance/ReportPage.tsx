@@ -39,9 +39,10 @@ export default function ReportPage() {
         <h2 className="m-0">{d?.company} {tr("· تقرير الحضور الشهري")}</h2>
         <p className="m-0">{monthLabel(month)}</p>
       </div>
+      <div className="print-only"><p className="m-0 text-[10px]">{tr("التأخير: أيام · دقائق. الساعات بصيغة ساعة:دقيقة.")}</p></div>
       {q.isError && <ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} />}
       {!d ? <Loader /> : (
-        <Card padded={false} className="overflow-hidden">
+        <Card padded={false} className="print-table overflow-hidden">
           {d.rows.length === 0 ? <EmptyState title={tr("لا موظفين في نطاقك")} /> : (
             <DataTable head={[tr("الموظف"), tr("الحضور"), tr("الساعات"), tr("التأخير"), tr("خروج مبكر"), tr("الغياب"), tr("إجازات"), tr("بلا انصراف"), tr("الإضافي")]} minWidth={900}>
               {d.rows.map((r) => (
@@ -100,6 +101,7 @@ export function EmployeeReportPage() {
               <span className="text-muted">{[r.employee.jobTitle, r.employee.empNo && tr("رقم {0}", r.employee.empNo), r.shiftName, monthLabel(month)].filter(Boolean).join(' · ')}</span>
             </div>
           </div>
+          <div className="print-only"><h2 className="m-0">{tr("تقرير حضور {0} · {1}", r.employee.name, monthLabel(month))}</h2></div>
           <SummaryTiles s={r.summary} />
           <MonthDays report={r} />
         </>

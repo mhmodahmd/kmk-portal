@@ -1336,6 +1336,8 @@ const EN: Record<string, string> = {
   'لا يمكنك مراجعة هذه المهمة.': 'You cannot review this task.',
   'اكتب سبب الإعادة.': 'Write why you are sending it back.',
   // ───── الإشعارات ─────
+  'التأخير: أيام · دقائق. الساعات بصيغة ساعة:دقيقة.': 'Lateness: days · minutes. Hours as hour:minute.',
+  'تقرير حضور {0} · {1}': 'Attendance report {0} · {1}',
   'الإشعارات ({0} جديد)': 'Notifications ({0} new)',
   'الإشعارات': 'Notifications',
   'تعليم الكل كمقروء': 'Mark all as read',

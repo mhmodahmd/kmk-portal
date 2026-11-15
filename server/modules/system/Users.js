@@ -42,7 +42,7 @@ var Users = {
         fullName: requireText(p.fullName, 'الاسم الكامل', 80),
         jobTitle: optionalText(p.jobTitle, 60),
         phone: optionalText(normalizeDigits(p.phone), 30),
-        email: optionalText(p.email, 100),
+        email: optionalEmail(p.email),
         active: true, isSuperAdmin: !!p.isSuperAdmin, failedAttempts: 0,
         createdAt: nowIso(), createdBy: ctx.user.id, updatedAt: nowIso()
       });
@@ -61,7 +61,7 @@ var Users = {
         fullName: requireText(p.fullName, 'الاسم الكامل', 80),
         jobTitle: optionalText(p.jobTitle, 60),
         phone: optionalText(normalizeDigits(p.phone), 30),
-        email: optionalText(p.email, 100),
+        email: optionalEmail(p.email),
         active: p.active !== false,
         isSuperAdmin: !!p.isSuperAdmin,
         updatedAt: nowIso()

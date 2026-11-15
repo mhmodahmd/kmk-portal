@@ -130,12 +130,28 @@
 .print-only { display: none; }
 @media print {
   @page { size: A4; margin: 12mm; }
+  /* الطباعة دائماً بألوان النهار، حتى لمن يستخدم الوضع الليلي */
+  [data-theme=dark] {
+    --c-bg: #FFFFFF; --c-surface: #FFFFFF; --c-surface-2: #FFFFFF; --c-border: #CDD2D9; --c-border-strong: #999999;
+    --c-fg: #000000; --c-muted: #444444; --c-chip: #EEEEEE; --c-accent-soft: #EAF1FD; --c-accent-fg: #1D5FD1;
+    --c-ok: #16803C; --c-ok-bg: #E7F6EC; --c-warn: #B45309; --c-warn-bg: #FDF3E2; --c-bad: #B91C1C; --c-bad-bg: #FDECEC;
+    color-scheme: light;
+  }
   body { background: #fff; color: #000; font-size: 11px; }
   aside, header, nav, .no-print { display: none !important; }
   .print-only { display: block !important; }
   main { max-width: none !important; padding: 0 !important; }
   section { border: 0 !important; box-shadow: none !important; }
   tr { page-break-inside: avoid; }
+  /* الجداول: بلا تمرير أو عرض أدنى، بحدود واضحة، ورأس يتكرر في كل صفحة */
+  .print-table, .print-table > div { overflow: visible !important; }
+  .print-table table { min-width: 0 !important; width: 100% !important; border-collapse: collapse; }
+  .print-table th, .print-table td { border: 1px solid #999 !important; padding: 3px 6px !important; font-size: 10px; color: #000; }
+  .print-table thead { display: table-header-group; }
+  .print-table thead th { background: #eee !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* ما يُعرض للجوال فقط يُخفى في الطباعة، والجدول يظهر مهما كان عرض الورقة */
+  .print-hide { display: none !important; }
+  .print-show { display: block !important; }
 }
 
 /* الأيقونات الاتجاهية تنعكس في الواجهة الإنجليزية */

@@ -355,7 +355,8 @@ var Attendance = {
       else if (recs.length) status = 'out';
       else if (info.dayType === 'leave') status = 'leave';
       else if (info.dayType) status = 'off';
-      else if (shift && date >= cal.attStart && (date < today || minutesFrom_(date, now) > hm2min_(shift.start) + shift.graceMin)) status = 'absent';
+      // الغياب بقاعدة classify_ نفسها (بعد بداية الاحتساب وتاريخ التعيين)، واليوم الحالي بعد انتهاء فترة السماح فقط
+      else if (shift && date >= cal.attStart && (!e.hireDate || date >= e.hireDate) && (date < today || minutesFrom_(date, now) > hm2min_(shift.start) + shift.graceMin)) status = 'absent';
       else status = 'none';
       counts.total++; counts[status]++;
       if (info.late) counts.late++;

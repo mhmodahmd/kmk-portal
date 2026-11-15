@@ -36,7 +36,7 @@ export function useAttendanceScope() {
 
 export function SummaryTiles({ s }: { s: MonthReport['summary'] }) {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 print:grid-cols-5">
       <StatTile label={tr("أيام الحضور")} value={s.daysPresent} icon="calendar" foot={s.incomplete ? tr("{0} بلا انصراف", s.incomplete) : tr("كلها مكتملة")} />
       <StatTile label={tr("ساعات العمل")} value={<span className="ltr">{hm(s.totalMinutes)}</span>} icon="clock" foot={s.daysPresent ? tr("متوسط {0} يومياً", hm(s.totalMinutes / s.daysPresent)) : '—'} />
       <StatTile label={tr("التأخير")} value={s.lateDays} icon="alert" foot={s.lateMin ? tr("مجموعه {0}", duration(s.lateMin)) : tr("لا تأخير")} />
@@ -63,7 +63,7 @@ export function MonthDays({ report, onCorrect }: { report: MonthReport; onCorrec
   );
   return (
     <>
-      <Card padded={false} className="hidden overflow-hidden md:block">
+      <Card padded={false} className="print-table print-show hidden overflow-hidden md:block">
         <DataTable head={[tr("اليوم"), tr("الحالة"), tr("الحضور"), tr("الانصراف"), tr("المدة"), '']} minWidth={720}>
           {days.map((d) => (
             <tr key={d.date} className={d.date === today ? 'bg-accent-soft/60' : d.status === 'weekend' || d.status === 'holiday' ? 'bg-chip/40' : ''}>
@@ -79,7 +79,7 @@ export function MonthDays({ report, onCorrect }: { report: MonthReport; onCorrec
           ))}
         </DataTable>
       </Card>
-      <div className="flex flex-col gap-2 md:hidden">
+      <div className="print-hide flex flex-col gap-2 md:hidden">
         {days.slice().reverse().map((d) => (
           <Card key={d.date} className="flex flex-col gap-2 !p-4">
             <div className="flex items-center justify-between gap-2">

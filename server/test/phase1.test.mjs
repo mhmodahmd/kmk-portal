@@ -224,3 +224,17 @@ test('report and document alerts', () => {
   const sum = c.ok('home.summary', {}, c.T.huda);
   truthy(sum.cards.some((x) => x.kind === 'hr.docs' && x.count === 1));
 });
+
+test('board: an employee hired after the date is not counted absent (same rule as the monthly report)', () => {
+  const c = company(at(SUN, '09:00'));
+  // عُيّن بعد اليوم المفحوص (الأحد 15): اللوحة ليوم الخميس 12 يجب ألا تحسبه غائباً
+  c.ok('hr.employee.save', { fullName: 'جديد', jobTitle: 'مصمم', shiftId: c.shift.id, hireDate: '2026-11-15' }, c.A);
+  c.ok('att.punch', { kind: 'in' }, c.T.ahmad); // بداية الاحتساب = اليوم؛ نجعلها أقدم لاختبار يوم سابق
+  c.ok('att.settings.save', { startDate: '2026-11-01', openMaxHours: 16 }, c.T.huda);
+  const b = c.ok('att.board', { date: '2026-11-12' }, c.T.huda);
+  const row = b.rows.find((r) => r.name === 'جديد');
+  eq(row.status, 'none', 'hired later → not absent');
+  eq(b.counts.absent, 3, 'the three earlier hires are absent that day');
+  const rep = c.ok('att.report', { month: '2026-11', employeeId: row.employeeId }, c.T.huda).report;
+  eq(rep.days.find((d) => d.date === '2026-11-12').status, 'none', 'monthly report agrees');
+});

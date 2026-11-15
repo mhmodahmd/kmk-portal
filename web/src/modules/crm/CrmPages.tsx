@@ -308,20 +308,20 @@ export function ReportsPage() {
             <StatTile label={tr("قيمة العروض المقبولة")} value={<Money fils={r.proposals.acceptedValue} />} icon="check" foot={r.proposals.total ? tr("نسبة القبول {0}%", Math.round(r.proposals.accepted * 100 / r.proposals.total)) : ''} />
           </div>
           <div className="grid items-start gap-4 lg:grid-cols-2">
-            <Card padded={false}>
+            <Card padded={false} className="print-table">
               <CardHeader title={tr("التحصيل حسب العميل")} />
               <DataTable head={[tr("العميل"), tr("المحصّل")]} minWidth={300}>
                 {r.byClient.map((x) => <tr key={x.clientId} className="border-t border-line"><td className="px-4 py-2.5">{x.clientName}</td><td className="px-4 py-2.5"><Money fils={x.amount} /></td></tr>)}
               </DataTable>
             </Card>
-            <Card padded={false}>
+            <Card padded={false} className="print-table">
               <CardHeader title={tr("التحصيل الشهري")} />
               <DataTable head={[tr("الشهر"), tr("المحصّل")]} minWidth={300}>
                 {r.byMonth.map((x) => <tr key={x.month} className="border-t border-line"><td className="px-4 py-2.5">{monthLabel(x.month)}</td><td className="px-4 py-2.5"><Money fils={x.amount} /></td></tr>)}
               </DataTable>
             </Card>
           </div>
-          <Card padded={false}>
+          <Card padded={false} className="print-table">
             <CardHeader title={tr("نشاط الفريق")} />
             {r.activities.length === 0 ? <EmptyState title={tr("لا أنشطة في الفترة")} /> : (
               <DataTable head={[tr("الموظف"), tr("الأنشطة")]} minWidth={300}>
@@ -329,7 +329,7 @@ export function ReportsPage() {
               </DataTable>
             )}
           </Card>
-          <Card padded={false}>
+          <Card padded={false} className="print-table">
             <CardHeader title={tr("المشاريع: العقد والتحصيل ومصروف العهد")} />
             <DataTable head={[tr("المشروع"), tr("العميل"), tr("العقد"), tr("المحصّل"), tr("المتبقي"), tr("مصروف العهد")]} minWidth={760}>
               {r.projects.map((p) => (

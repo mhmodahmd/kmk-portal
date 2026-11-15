@@ -461,7 +461,10 @@ var Custody = {
   },
 
   expenseSave: function (ctx, p) {
-    p = p || {};
+    return withLock(function () { return Custody.expenseSave_(ctx, p || {}); });
+  },
+
+  expenseSave_: function (ctx, p) {
     var cur = p.id ? Db.getOrThrow('custody', 'Expenses', p.id, 'البند') : null;
     var c = Custody.visible_(ctx, cur ? cur.custodyId : p.custodyId);
     Custody.assertEditable_(ctx, c);
@@ -479,7 +482,11 @@ var Custody = {
   },
 
   expenseDelete: function (ctx, p) {
-    var e = Db.getOrThrow('custody', 'Expenses', p && p.id, 'البند');
+    return withLock(function () { return Custody.expenseDelete_(ctx, p || {}); });
+  },
+
+  expenseDelete_: function (ctx, p) {
+    var e = Db.getOrThrow('custody', 'Expenses', p.id, 'البند');
     var c = Custody.visible_(ctx, e.custodyId);
     Custody.assertEditable_(ctx, c);
     Custody.rows_('Attachments').filter(function (a) { return a.expenseId === e.id; }).forEach(function (a) { Files.trash_(a.driveFileId); Db.remove('custody', 'Attachments', a.id); });
@@ -575,7 +582,7 @@ var Custody = {
       c = Custody.recalc_(c.id);
       var voucher = null;
       if (method === 'voucher' && c.remaining !== 0) {
-        var emp = Staff.get_ ? Staff.get_(c.employeeId) : Db.get('core', 'Employees', c.employeeId);
+        var emp = Staff.get_(c.employeeId);
         voucher = Vouchers.create_(ctx, {
           type: c.remaining > 0 ? 'receipt' : 'payment', date: localDate_(), custodyId: c.id, partyName: emp ? emp.fullName : '',
           amount: Math.abs(c.remaining),

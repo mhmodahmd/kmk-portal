@@ -869,6 +869,13 @@ var Custody = {
     }
   },
 
+  /** ربط مع الموارد البشرية: سبب منع إنهاء خدمة الموظف ('' = لا مانع) */
+  offboardBlock_: function (empId) {
+    var a = Custody.activeOf_(empId);
+    if (!a) return '';
+    return 'عليه عهدة غير مقفلة ' + a.id + ' (' + Custody.stageLabel_(a) + '، المتبقي ' + kwd_(a.remaining) + '). أقفلها واعتمدها أولاً.';
+  },
+
   // ───────── الرئيسية وصندوق الموافقات ─────────
   summary_: function (ctx) {
     if (!Permissions.has(ctx, 'custody')) return [];

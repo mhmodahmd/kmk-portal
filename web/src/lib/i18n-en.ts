@@ -1204,6 +1204,8 @@ const EN: Record<string, string> = {
  * الترتيب مهم: الأخص قبل الأعم.
  */
 export const EN_PATTERNS: Record<string, string> = {
+  'لا يمكن إنهاء خدمة {0}: {1}': "Cannot end {0}'s service: {1}",
+  'عليه عهدة غير مقفلة {0} ({1}، المتبقي {2}). أقفلها واعتمدها أولاً.': 'They hold an unclosed custody {0} ({1}, remaining {2}). Close and approve it first.',
   'كلمة المرور {0} أحرف على الأقل.': 'The password must be at least {0} characters.',
   'الحساب مقفل مؤقتاً بعد محاولات خاطئة. حاول بعد {0} دقيقة أو تواصل مع مدير النظام.': 'The account is temporarily locked after failed attempts. Try again in {0} minutes or contact the system admin.',
   'لديك جهاز مسجّل منذ {0}. {1}': 'You have had a registered device since {0}. {1}',

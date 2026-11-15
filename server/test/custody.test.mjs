@@ -151,3 +151,19 @@ test('custody lists and settings are for the system admin', () => {
   c.ok('cus.list.save', { list: 'categories', id: cat.id, name: 'ضيافة' }, c.A);
   eq(c.ok('cus.get', { id: cu.id }, c.T.ahmad).expenses[0].category, 'ضيافة', 'renaming updates recorded items');
 });
+
+test('HR cannot end the service of an employee holding an unclosed custody', () => {
+  const c = setup();
+  const cu = openReceived(c);
+  const emp = { ...c.emp.ahmad, status: 'terminated' };
+  const err = c.fail('hr.employee.save', emp, c.A);
+  eq(err.code, 'OFFBOARD_BLOCKED');
+  truthy(err.message.includes(cu.id) && err.message.includes('أحمد'), err.message);
+  // بعد الإقفال والاعتماد يُسمح
+  expense(c, cu.id, '10');
+  c.ok('cus.requestClose', { id: cu.id }, c.T.ahmad);
+  c.ok('cus.approve', { id: cu.id, settlementMethod: 'voucher' }, c.T.huda);
+  c.ok('cus.markSigned', { kind: 'statement', id: cu.id }, c.T.huda);
+  eq(c.ok('cus.get', { id: cu.id }, c.T.huda).custody.status, 'closed');
+  eq(c.ok('hr.employee.save', emp, c.A).status, 'terminated');
+});

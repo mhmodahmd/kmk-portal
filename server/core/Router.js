@@ -112,7 +112,7 @@ function ModuleProviders_() {
   return [
     { key: 'attendance', prefix: 'att.', summary: Attendance.summary_, inbox: Attendance.inbox_, decide: Attendance.decide_ },
     { key: 'hr', prefix: 'hr.', summary: Hr.summary_, inbox: Hr.inbox_, decide: Hr.decide_ },
-    { key: 'custody', prefix: 'cus.', summary: Custody.summary_, inbox: Custody.inbox_, decide: Custody.decide_ }
+    { key: 'custody', prefix: 'cus.', summary: Custody.summary_, inbox: Custody.inbox_, decide: Custody.decide_, offboard: Custody.offboardBlock_ }
   ];
 }
 

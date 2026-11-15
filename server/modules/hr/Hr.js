@@ -403,6 +403,15 @@ var Hr = {
 
   structure: function () { return Hr.structure_(); },
 
+  /** يسأل الوحدات المفعّلة (offboard في ModuleProviders_) إن كان لديها ما يمنع إنهاء خدمة الموظف */
+  assertCanOffboard_: function (emp) {
+    var reasons = ModuleProviders_().filter(function (m) {
+      var def = moduleDef_(m.key);
+      return m.offboard && def && def.enabled;
+    }).map(function (m) { return m.offboard(emp.id); }).filter(Boolean);
+    if (reasons.length) throw appError('لا يمكن إنهاء خدمة ' + emp.fullName + ': ' + reasons.join(' '), 'OFFBOARD_BLOCKED');
+  },
+
   employeeSave: function (ctx, p) {
     return withLock(function () {
       var d = p || {};
@@ -443,6 +452,7 @@ var Hr = {
       };
       if (cur && rec.managerId === cur.id) throw appError('لا يمكن أن يكون الموظف مديراً لنفسه.');
       if (cur && rec.managerId && Staff.teamIds_(cur.id).indexOf(rec.managerId) >= 0) throw appError('لا يمكن اختيار أحد أفراد فريق الموظف مديراً له.');
+      if (cur && rec.status === 'terminated' && cur.status !== 'terminated') Hr.assertCanOffboard_(cur);
       var dupNo = Staff.all_().some(function (e) { return e.empNo === rec.empNo && (!cur || e.id !== cur.id); });
       if (dupNo) throw appError('الرقم الوظيفي ' + rec.empNo + ' مستخدم لموظف آخر.');
       var saved;

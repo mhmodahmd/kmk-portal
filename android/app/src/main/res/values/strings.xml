@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="appName">بوابة KMK</string>
+    <string name="launchUrl">https://mhmodahmd.github.io/kmk-portal/</string>
+    <!-- يربط التطبيق بالموقع (ويقابله ملف assetlinks.json في جذر mhmodahmd.github.io) لإخفاء شريط العنوان -->
+    <string name="assetStatements" translatable="false">
+        [{ \"relation\": [\"delegate_permission/common.handle_all_urls\"],
+           \"target\": { \"namespace\": \"web\", \"site\": \"https://mhmodahmd.github.io\" } }]
+    </string>
+</resources>

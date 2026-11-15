@@ -1,0 +1,8 @@
+# مفتاح التوقيع وكلماته خارج المستودع
+keystore.properties
+*.jks
+.gradle/
+build/
+app/build/
+local.properties
+release/

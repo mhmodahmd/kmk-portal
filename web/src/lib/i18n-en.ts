@@ -1380,6 +1380,7 @@ const EN: Record<string, string> = {
   'أُعيدت مهمتك للعمل': 'Your task was sent back to work',
   'أُلغيت مهمة': 'A task was cancelled',
   // ───── العملاء ─────
+  '{0} دقيقة': '{0} min',
   'حُذف النشاط': 'Activity deleted',
   'الأنشطة.csv': 'activities.csv',
   'التاريخ والوقت': 'Date and time',

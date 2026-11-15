@@ -4,7 +4,7 @@
  */
 var APP = {
   NAME: 'بوابة KMK',
-  VERSION: '0.8.0',
+  VERSION: '0.9.0',
   // أقدم إصدار واجهة مسموح به. الواجهة الأقدم تُطلب منها إعادة التحميل.
   MIN_CLIENT: '0.1.0',
   TZ: 'Asia/Kuwait',
@@ -33,8 +33,8 @@ var MODULES = [
   // defaultRole: يملكه كل مستخدم ما لم يُسند له دور آخر
   { key: 'tasks', label: 'المهام', enabled: true, defaultRole: 'member',
     roles: { member: 'عضو', manager: 'مدير مهام' } },
-  { key: 'crm', label: 'العملاء', enabled: false,
-    roles: { sales: 'مبيعات', manager: 'مدير مبيعات' } },
+  { key: 'crm', label: 'العملاء', enabled: true,
+    roles: { sales: 'مبيعات', accountant: 'محاسب', manager: 'مدير مبيعات' } },
   { key: 'finance', label: 'المالية', enabled: false,
     roles: { viewer: 'مشاهد', accountant: 'محاسب', fmanager: 'مدير مالي' } }
 ];

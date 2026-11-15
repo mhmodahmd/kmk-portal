@@ -236,8 +236,15 @@ var Custody = {
     var cfg = Custody.settings_();
     return {
       categories: Custody.activeNames_('Categories'),
-      projects: Custody.rows_('Projects').filter(function (r) { return r.active; }).sort(function (a, b) { return a.sortOrder - b.sortOrder; })
-        .map(function (r) { return { name: r.name, type: r.type, typeLabel: CUS.PROJECT_TYPES[r.type] || '' }; }),
+      // قائمة العهد ثم مشاريع العملاء الجارية (سجل المشاريع الموحد) دون تكرار الاسم
+      projects: (function () {
+        var list = Custody.rows_('Projects').filter(function (r) { return r.active; }).sort(function (a, b) { return a.sortOrder - b.sortOrder; })
+          .map(function (r) { return { name: r.name, type: r.type, typeLabel: CUS.PROJECT_TYPES[r.type] || '' }; });
+        var seen = {};
+        list.forEach(function (r) { seen[r.name] = true; });
+        Crm.projectOptions_().forEach(function (p) { if (!seen[p.name]) list.push({ name: p.name, type: 'project', typeLabel: CUS.PROJECT_TYPES.project }); });
+        return list;
+      })(),
       docTypes: Custody.activeNames_('DocTypes'),
       paymentMethods: Object.keys(CUS.PAY).map(function (k) { return { id: k, label: CUS.PAY[k] }; }),
       alertPercent: cfg.alertPercent, defaultAmount: cfg.defaultAmount, today: localDate_(),

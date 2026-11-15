@@ -39,6 +39,7 @@ var Router = {
       'system.selftest': { perm: 'super', fn: function () { return { webauthn: WebAuthn.selfTest_() }; } },
       'system.migrate.legacyAttendance': { perm: 'super', fn: Migration.legacyAttendance },
       'system.migrate.legacyCustody': { perm: 'super', fn: Migration.legacyCustody },
+      'system.migrate.legacyCrm': { perm: 'super', fn: MigrationCrm.run },
       'users.list': { perm: 'super', fn: Users.list },
       'users.create': { perm: 'super', fn: Users.create },
       'users.update': { perm: 'super', fn: Users.update },
@@ -102,12 +103,12 @@ var Router = {
 
 /** مسارات الوحدات. كل وحدة تعلن مساراتها في routes_() */
 function ModuleRoutes_() {
-  return Object.assign({}, Hr.routes_(), Attendance.routes_(), Custody.routes_(), Tasks.routes_());
+  return Object.assign({}, Hr.routes_(), Attendance.routes_(), Custody.routes_(), Tasks.routes_(), Crm.routes_());
 }
 
 /** مخططات ملفات بيانات الوحدات (النواة في Db.js) */
 function ModuleSchemas_() {
-  return { hr: HR_SCHEMA, attendance: ATT_SCHEMA, custody: CUS_SCHEMA, tasks: TSK_SCHEMA };
+  return { hr: HR_SCHEMA, attendance: ATT_SCHEMA, custody: CUS_SCHEMA, tasks: TSK_SCHEMA, crm: CRM_SCHEMA };
 }
 
 /** الوحدات التي تقدّم بطاقات للرئيسية وعناصر لصندوق الموافقات. prefix: بادئة أنواع طلباتها */
@@ -116,7 +117,8 @@ function ModuleProviders_() {
     { key: 'attendance', prefix: 'att.', summary: Attendance.summary_, inbox: Attendance.inbox_, decide: Attendance.decide_, notify: Attendance.notify_ },
     { key: 'hr', prefix: 'hr.', summary: Hr.summary_, inbox: Hr.inbox_, decide: Hr.decide_, notify: Hr.notify_ },
     { key: 'custody', prefix: 'cus.', summary: Custody.summary_, inbox: Custody.inbox_, decide: Custody.decide_, offboard: Custody.offboardBlock_, notify: Custody.notify_ },
-    { key: 'tasks', prefix: 'tsk.', summary: Tasks.summary_, inbox: Tasks.inbox_, decide: Tasks.decide_, notify: Tasks.notify_ }
+    { key: 'tasks', prefix: 'tsk.', summary: Tasks.summary_, inbox: Tasks.inbox_, decide: Tasks.decide_, notify: Tasks.notify_ },
+    { key: 'crm', prefix: 'crm.', summary: Crm.summary_, notify: Crm.notify_ }
   ];
 }
 
@@ -135,7 +137,7 @@ function doGet() {
 /** شغّلها من المحرر مرة واحدة للموافقة على الصلاحيات وإنشاء ملف البيانات. */
 function setup() {
   Custody.seed_();
-  var urls = ['core', 'hr', 'attendance', 'custody', 'tasks'].map(function (k) { return k + ': ' + Db.spreadsheet_(k).getUrl(); });
+  var urls = ['core', 'hr', 'attendance', 'custody', 'tasks', 'crm'].map(function (k) { return k + ': ' + Db.spreadsheet_(k).getUrl(); });
   Logger.log('KMK databases:\n' + urls.join('\n'));
   return urls.join('\n');
 }

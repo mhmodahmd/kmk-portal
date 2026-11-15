@@ -32,7 +32,7 @@ var TSK = {
   PRIORITY: { urgent: 'عاجلة', high: 'مرتفعة', normal: 'عادية', low: 'منخفضة' },
   P_RANK: { urgent: 0, high: 1, normal: 2, low: 3 },
   FREQ: { weekly: 'أسبوعية', monthly: 'شهرية' },
-  LINKS: { custody: 'عهدة', employee: 'موظف' },
+  LINKS: { custody: 'عهدة', employee: 'موظف', client: 'عميل', project: 'مشروع' },
   DONE_DAYS: 30,
   MAX_CHECK: 50,
   MAX_WATCHERS: 20
@@ -81,7 +81,12 @@ var Tasks = {
     throw appError('يمكنك إسناد المهام لنفسك ولفريقك فقط.', 'FORBIDDEN');
   },
 
-  projects_: function () {
+  /** المشاريع: سجل المشاريع في وحدة العملاء إن كانت مفعّلة، وإلا قائمة مشاريع العهد. open=true للاختيار فقط */
+  projects_: function (open) {
+    if ((moduleDef_('crm') || {}).enabled) {
+      return Db.view('crm', 'Projects').filter(function (p) { return !open || p.status === 'ongoing' || p.status === 'on_hold'; })
+        .slice().sort(function (a, b) { return a.name.localeCompare(b.name, 'ar'); });
+    }
     if (!(moduleDef_('custody') || {}).enabled) return [];
     return Db.view('custody', 'Projects').filter(function (p) { return p.active !== false && p.type !== 'debt'; })
       .sort(function (a, b) { return (a.sortOrder || 0) - (b.sortOrder || 0); });
@@ -111,6 +116,10 @@ var Tasks = {
   linkLabel_: function (m, type, id) {
     if (!type || !id) return '';
     if (type === 'employee') { var e = m.emps[id]; return e ? e.fullName : ''; }
+    if (type === 'client' || type === 'project') {
+      var x = (moduleDef_('crm') || {}).enabled && Db.get('crm', type === 'client' ? 'Clients' : 'Projects', id);
+      return x ? x.name : '';
+    }
     if (type === 'custody' && (moduleDef_('custody') || {}).enabled) {
       var c = Db.get('custody', 'Custodies', id);
       if (!c) return id;
@@ -168,7 +177,7 @@ var Tasks = {
       me: ctx.user.id,
       people: users.filter(function (u) { return mgr || u.id === ctx.user.id || team.indexOf(u.id) >= 0; }).map(person).sort(byName),
       everyone: users.map(person).sort(byName),
-      projects: Tasks.projects_().map(function (p) { return { id: p.id, name: p.name }; }),
+      projects: Tasks.projects_(true).map(function (p) { return { id: p.id, name: p.name }; }),
       statuses: TSK.ORDER.map(function (k) { return { id: k, label: TSK.STATUS[k] }; }),
       priorities: Object.keys(TSK.PRIORITY).map(function (k) { return { id: k, label: TSK.PRIORITY[k] }; }),
       freqs: Object.keys(TSK.FREQ).map(function (k) { return { id: k, label: TSK.FREQ[k] }; }),
@@ -177,7 +186,7 @@ var Tasks = {
   },
 
   /**
-   * القوائم. view: mine | team | all | created | watching
+   * القوائم. view: mine | team | all | created | watching | any (كل ما يراه المستخدم، للصفحات المرتبطة بعميل أو مشروع)
    * status, assigneeId, projectId, q, linkedType+linkedId · المنجزة/الملغاة الأقدم من 30 يوماً تُخفى إلا مع old=true
    */
   list: function (ctx, p) {
@@ -259,6 +268,10 @@ var Tasks = {
         if (!TSK.LINKS[p.linkedType]) throw appError('نوع الربط غير معروف.');
         var lid = String(p.linkedId || '');
         if (p.linkedType === 'employee') Staff.getOrThrow_(lid);
+        if (p.linkedType === 'client' || p.linkedType === 'project') {
+          if (!(moduleDef_('crm') || {}).enabled) throw appError('وحدة العملاء غير مفعّلة.');
+          Db.getOrThrow('crm', p.linkedType === 'client' ? 'Clients' : 'Projects', lid, p.linkedType === 'client' ? 'العميل' : 'المشروع');
+        }
         if (p.linkedType === 'custody') {
           if (!(moduleDef_('custody') || {}).enabled) throw appError('وحدة العهد غير مفعّلة.');
           Db.getOrThrow('custody', 'Custodies', lid, 'العهدة');

@@ -13,6 +13,7 @@ const InboxPage = lazy(() => import('../modules/inbox/InboxPage'));
 const UsersPage = lazy(() => import('../modules/settings/UsersPage'));
 const CompanyPage = lazy(() => import('../modules/settings/CompanyPage'));
 const AuditPage = lazy(() => import('../modules/settings/AuditPage'));
+const CrmImportPage = lazy(() => import('../modules/settings/CrmImportPage'));
 const ProfilePage = lazy(() => import('../modules/profile/ProfilePage'));
 
 const AttendanceLayout = lazy(() => import('../modules/attendance/AttendanceLayout'));
@@ -51,8 +52,20 @@ const TaskListPage = lazy(() => import('../modules/tasks/TasksPages').then((m) =
 const TaskBoardPage = lazy(() => import('../modules/tasks/BoardPage'));
 const TaskDetailPage = lazy(() => import('../modules/tasks/TaskDetailPage'));
 
+const CrmLayout = lazy(() => import('../modules/crm/CrmPages').then((m) => ({ default: m.CrmLayout })));
+const CrmHomePage = lazy(() => import('../modules/crm/CrmPages').then((m) => ({ default: m.CrmHomePage })));
+const ClientsPage = lazy(() => import('../modules/crm/CrmPages').then((m) => ({ default: m.ClientsPage })));
+const PipelinePage = lazy(() => import('../modules/crm/CrmPages').then((m) => ({ default: m.PipelinePage })));
+const CrmProjectsPage = lazy(() => import('../modules/crm/CrmPages').then((m) => ({ default: m.ProjectsPage })));
+const CrmPaymentsPage = lazy(() => import('../modules/crm/CrmPages').then((m) => ({ default: m.PaymentsPage })));
+const ProposalsPage = lazy(() => import('../modules/crm/CrmPages').then((m) => ({ default: m.ProposalsPage })));
+const ActivitiesPage = lazy(() => import('../modules/crm/CrmPages').then((m) => ({ default: m.ActivitiesPage })));
+const CrmReportsPage = lazy(() => import('../modules/crm/CrmPages').then((m) => ({ default: m.ReportsPage })));
+const ClientPage = lazy(() => import('../modules/crm/DetailPages').then((m) => ({ default: m.ClientPage })));
+const CrmProjectPage = lazy(() => import('../modules/crm/DetailPages').then((m) => ({ default: m.ProjectPage })));
+
 const SOON: Record<string, { label: string; phase: number }> = {
-  crm: { label: tr("العملاء"), phase: 4 }, finance: { label: tr("المالية"), phase: 5 }
+  finance: { label: tr("المالية"), phase: 5 }
 };
 
 function Soon({ k }: { k: string }) {
@@ -84,6 +97,7 @@ export default function App() {
   const cus = admin || !!roles.custody;
   const cusStaff = admin || roles.custody === 'accountant';
   const tasks = admin || !!roles.tasks;
+  const crm = admin || !!roles.crm;
   return (
     <HashRouter>
       {updateRequired && <UpdateBanner />}
@@ -139,9 +153,24 @@ export default function App() {
                 <Route path=":id" element={<TaskDetailPage />} />
               </Route>
             )}
+            {crm && (
+              <Route path="/crm" element={<CrmLayout />}>
+                <Route index element={<CrmHomePage />} />
+                <Route path="clients" element={<ClientsPage />} />
+                <Route path="clients/:id" element={<ClientPage />} />
+                <Route path="pipeline" element={<PipelinePage />} />
+                <Route path="projects" element={<CrmProjectsPage />} />
+                <Route path="projects/:id" element={<CrmProjectPage />} />
+                <Route path="payments" element={<CrmPaymentsPage />} />
+                <Route path="proposals" element={<ProposalsPage />} />
+                <Route path="activities" element={<ActivitiesPage />} />
+                <Route path="reports" element={<CrmReportsPage />} />
+              </Route>
+            )}
             {admin && <Route path="/settings/users" element={<UsersPage />} />}
             {admin && <Route path="/settings/company" element={<CompanyPage />} />}
             {admin && <Route path="/settings/audit" element={<AuditPage />} />}
+            {admin && <Route path="/settings/crm-import" element={<CrmImportPage />} />}
             {Object.keys(SOON).map((k) => <Route key={k} path={'/' + k} element={<Soon k={k} />} />)}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

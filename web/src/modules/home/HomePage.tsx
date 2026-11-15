@@ -18,7 +18,7 @@ export default function HomePage() {
   const s = q.data;
   const card = (kind: string) => s?.cards.find((c) => c.kind === kind);
   const today = card('att.today'), board = card('att.board'), leave = card('hr.leave'), docs = card('hr.docs');
-  const cusMine = card('cus.mine'), cusStaff = card('cus.staff'), tasks = card('tsk.mine');
+  const cusMine = card('cus.mine'), cusStaff = card('cus.staff'), tasks = card('tsk.mine'), crm = card('crm.home');
 
   return (
     <div className="flex flex-col gap-5">
@@ -46,6 +46,11 @@ export default function HomePage() {
             {tasks && (tasks.open > 0 || tasks.review > 0) && (
               <StatTile label={tr("مهامي المفتوحة")} value={tasks.open} icon="tasks"
                 foot={<Link to="/tasks" className={cx('no-underline', tasks.overdue ? 'font-semibold text-bad' : 'text-accent-fg')}>{tasks.overdue ? tr("{0} متأخرة", tasks.overdue) : tasks.today ? tr("{0} موعدها اليوم", tasks.today) : tasks.review ? tr("{0} بانتظار مراجعتك", tasks.review) : tr("فتح مهامي")}</Link>} />
+            )}
+            {crm && (crm.overdue > 0 || crm.due.length > 0 || crm.review > 0) && (
+              <StatTile label={crm.overdue ? tr("دفعات متأخرة التحصيل") : crm.due.length ? tr("دفعات مستحقة قريباً") : tr("مشاريع تحتاج مراجعة")}
+                value={crm.overdue || crm.due.length || crm.review} icon="crm"
+                foot={<Link to={crm.overdue || crm.due.length ? '/crm/payments' : '/crm/projects?review=1'} className="text-accent-fg no-underline">{crm.review && (crm.overdue || crm.due.length) ? tr("و{0} مشاريع تحتاج مراجعة", crm.review) : tr("فتح العملاء")}</Link>} />
             )}
             {docs && <StatTile label={tr("مستندات تنتهي خلال 30 يوماً")} value={docs.count} icon="file" foot={<Link to="/hr/employees" className="text-accent-fg no-underline">{docs.employees} {tr("موظف في الدليل")}</Link>} />}
             {s.setup && !docs && <StatTile label={tr("مستخدمو البوابة")} value={s.setup.usersCount} icon="users" foot={<Link to="/settings/users" className="text-accent-fg no-underline">{tr("إدارة المستخدمين والأدوار")}</Link>} />}

@@ -53,7 +53,7 @@ test('new user must change password and has roles', () => {
   eq(s.fail('home.summary', {}, login.token).code, 'MUST_CHANGE_PASSWORD');
   s.ok('auth.changePassword', { current: c.tempPassword, next: 'pass12345' }, login.token);
   const me = s.ok('auth.me', {}, login.token);
-  eq(me.roles, { attendance: 'employee' });
+  eq(me.roles, { attendance: 'employee', tasks: 'member' });
   eq(s.fail('users.list', {}, login.token).code, 'FORBIDDEN');
 });
 

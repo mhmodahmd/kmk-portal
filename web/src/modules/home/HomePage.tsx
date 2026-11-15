@@ -18,7 +18,7 @@ export default function HomePage() {
   const s = q.data;
   const card = (kind: string) => s?.cards.find((c) => c.kind === kind);
   const today = card('att.today'), board = card('att.board'), leave = card('hr.leave'), docs = card('hr.docs');
-  const cusMine = card('cus.mine'), cusStaff = card('cus.staff');
+  const cusMine = card('cus.mine'), cusStaff = card('cus.staff'), tasks = card('tsk.mine');
 
   return (
     <div className="flex flex-col gap-5">
@@ -43,6 +43,10 @@ export default function HomePage() {
               <StatTile label={tr("العهد بانتظار إجرائك")} value={cusStaff.pendingClose + cusStaff.pendingRequests + cusStaff.voucherRequests + cusStaff.awaitingSign} icon="wallet"
                 foot={<Link to="/custody/all" className="text-accent-fg no-underline">{tr("{0} عهدة مفتوحة · رصيدها {1}", cusStaff.openCount, kwdText(cusStaff.openBalance))}</Link>} />
             )}
+            {tasks && (tasks.open > 0 || tasks.review > 0) && (
+              <StatTile label={tr("مهامي المفتوحة")} value={tasks.open} icon="tasks"
+                foot={<Link to="/tasks" className={cx('no-underline', tasks.overdue ? 'font-semibold text-bad' : 'text-accent-fg')}>{tasks.overdue ? tr("{0} متأخرة", tasks.overdue) : tasks.today ? tr("{0} موعدها اليوم", tasks.today) : tasks.review ? tr("{0} بانتظار مراجعتك", tasks.review) : tr("فتح مهامي")}</Link>} />
+            )}
             {docs && <StatTile label={tr("مستندات تنتهي خلال 30 يوماً")} value={docs.count} icon="file" foot={<Link to="/hr/employees" className="text-accent-fg no-underline">{docs.employees} {tr("موظف في الدليل")}</Link>} />}
             {s.setup && !docs && <StatTile label={tr("مستخدمو البوابة")} value={s.setup.usersCount} icon="users" foot={<Link to="/settings/users" className="text-accent-fg no-underline">{tr("إدارة المستخدمين والأدوار")}</Link>} />}
           </>
@@ -50,6 +54,7 @@ export default function HomePage() {
       </div>
 
       {board && <BoardCard c={board} />}
+      {tasks && tasks.items.length > 0 && <TasksCard c={tasks} />}
       {docs && docs.items.length > 0 && <DocsCard c={docs} />}
       {s?.setup && <SetupChecklist setup={s.setup} />}
 
@@ -178,4 +183,20 @@ function SetupChecklist({ setup }: { setup: NonNullable<ReturnType<typeof useSum
 function kwdText(f: number) {
   const a = Math.abs(Math.round(f || 0));
   return (f < 0 ? '-' : '') + Math.floor(a / 1000).toLocaleString('en-US') + '.' + String(a % 1000).padStart(3, '0') + ' ' + tr("د.ك");
+}
+
+function TasksCard({ c }: { c: HomeCard }) {
+  return (
+    <Card padded={false}>
+      <CardHeader title={tr("مهامي القادمة")} action={<Link to="/tasks" className="text-[13px] font-semibold text-accent-fg no-underline">{tr("كل مهامي")}</Link>} />
+      {c.items.map((t: { id: string; number: string; title: string; dueDate: string; overdue: boolean; priority: string; priorityLabel: string }) => (
+        <Link key={t.id} to={'/tasks/' + t.id} className="flex items-center gap-3 border-t border-line px-5 py-3 text-fg no-underline hover:bg-chip/40">
+          <Icon name="tasks" size={18} className="shrink-0 text-muted" />
+          <span className="min-w-0 flex-1 truncate font-medium">{t.title}</span>
+          {t.priority === 'urgent' || t.priority === 'high' ? <Badge tone={t.priority === 'urgent' ? 'bad' : 'warn'}>{t.priorityLabel}</Badge> : null}
+          {t.dueDate && <span className={cx('text-[12px] num', t.overdue ? 'font-semibold text-bad' : 'text-muted')}>{dmy(t.dueDate)}</span>}
+        </Link>
+      ))}
+    </Card>
+  );
 }

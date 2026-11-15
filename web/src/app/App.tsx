@@ -45,8 +45,13 @@ const StatementPrintPage = lazy(() => import('../modules/custody/Documents').the
 const CusSettingsPage = lazy(() => import('../modules/custody/CusSettingsPage'));
 const SignPage = lazy(() => import('../modules/custody/SignPage'));
 
+const TasksLayout = lazy(() => import('../modules/tasks/TasksPages').then((m) => ({ default: m.TasksLayout })));
+const MyTasksPage = lazy(() => import('../modules/tasks/TasksPages').then((m) => ({ default: m.MyTasksPage })));
+const TaskListPage = lazy(() => import('../modules/tasks/TasksPages').then((m) => ({ default: m.TaskListPage })));
+const TaskBoardPage = lazy(() => import('../modules/tasks/BoardPage'));
+const TaskDetailPage = lazy(() => import('../modules/tasks/TaskDetailPage'));
+
 const SOON: Record<string, { label: string; phase: number }> = {
-  tasks: { label: tr("المهام"), phase: 3 },
   crm: { label: tr("العملاء"), phase: 4 }, finance: { label: tr("المالية"), phase: 5 }
 };
 
@@ -78,6 +83,7 @@ export default function App() {
   const attHr = admin || roles.attendance === 'hr';
   const cus = admin || !!roles.custody;
   const cusStaff = admin || roles.custody === 'accountant';
+  const tasks = admin || !!roles.tasks;
   return (
     <HashRouter>
       {updateRequired && <UpdateBanner />}
@@ -120,6 +126,17 @@ export default function App() {
                 <Route path="print/voucher/:id" element={<VoucherPrintPage />} />
                 <Route path="print/statement/:id" element={<StatementPrintPage />} />
                 <Route path=":id" element={<CustodyDetailPage />} />
+              </Route>
+            )}
+            {tasks && (
+              <Route path="/tasks" element={<TasksLayout />}>
+                <Route index element={<MyTasksPage />} />
+                <Route path="board" element={<TaskBoardPage />} />
+                <Route path="assigned" element={<TaskListPage view="created" />} />
+                <Route path="watching" element={<TaskListPage view="watching" />} />
+                <Route path="team" element={<TaskListPage view="team" />} />
+                <Route path="all" element={<TaskListPage view="all" />} />
+                <Route path=":id" element={<TaskDetailPage />} />
               </Route>
             )}
             {admin && <Route path="/settings/users" element={<UsersPage />} />}

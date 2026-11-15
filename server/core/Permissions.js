@@ -8,7 +8,13 @@ var Permissions = {
   rolesOf: function (userId) {
     var out = {};
     Db.find('core', 'UserRoles', function (r) { return r.userId === userId; }).forEach(function (r) { out[r.module] = r.role; });
-    return out;
+    return Permissions.withDefaults_(out);
+  },
+
+  /** أدوار الوحدات المتاحة للجميع (defaultRole) لمن لا دور له فيها */
+  withDefaults_: function (roles) {
+    MODULES.forEach(function (m) { if (m.enabled && m.defaultRole && !roles[m.key]) roles[m.key] = m.defaultRole; });
+    return roles;
   },
 
   /**

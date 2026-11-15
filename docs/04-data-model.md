@@ -98,9 +98,10 @@
 
 | الجدول | الأعمدة الرئيسية |
 |---|---|
-| **Tasks** | number, title, description, status (`todo`/`doing`/`review`/`done`/`cancelled`), priority (`low`/`normal`/`high`/`urgent`), assigneeId, watchers (json), dueDate, startDate, completedAt, projectId, linkedType, linkedId, parentId, recurrence (json), sortOrder |
-| **TaskChecklist** | taskId, text, done, sortOrder |
-| **TaskComments** | taskId, body, mentions (json) |
+| **Tasks** | number (`T-0001`), title, description, status (`todo`/`doing`/`review`/`done`/`cancelled`), priority (`low`/`normal`/`high`/`urgent`), assigneeId (userId), watchers (json: userIds), dueDate, startDate, completedAt, projectId (مشاريع العهد), linkedType (`custody`/`employee`), linkedId, parentId (مستوى واحد), recurrence (json: `{freq: weekly|monthly}`), nextTaskId, sortOrder, createdBy, updatedBy |
+| **TaskChecklist** | taskId, text, done, sortOrder, doneBy, doneAt |
+| **TaskComments** | taskId, kind (`comment` أو `event` لسجل النشاط), body, mentions (json: userIds يصبحون متابعين) |
+| **TaskFiles** | taskId, fileName, driveFileId, mimeType, fileSize, uploadedBy (على Drive في «بوابة KMK — الملفات/المهام/YYYY-MM») |
 
 ## 7. العملاء — `KMK-CRM` 🆕
 

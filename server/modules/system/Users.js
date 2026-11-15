@@ -3,7 +3,7 @@
  */
 var Users = {
   view_: function (u, rolesByUser) {
-    return Object.assign(Auth.publicUser_(u), { roles: rolesByUser[u.id] || {}, createdAt: u.createdAt });
+    return Object.assign(Auth.publicUser_(u), { roles: Permissions.withDefaults_(Object.assign({}, rolesByUser[u.id] || {})), createdAt: u.createdAt });
   },
 
   list: function () {
@@ -16,7 +16,7 @@ var Users = {
     return {
       users: users,
       modules: MODULES.map(function (m) {
-        return { key: m.key, label: m.label, enabled: m.enabled, roles: Object.keys(m.roles).map(function (k) { return { key: k, label: m.roles[k] }; }) };
+        return { key: m.key, label: m.label, enabled: m.enabled, defaultRole: m.defaultRole || '', roles: Object.keys(m.roles).map(function (k) { return { key: k, label: m.roles[k] }; }) };
       })
     };
   },

@@ -8,5 +8,6 @@ import './device.test.mjs';
 import './migration.test.mjs';
 import './custody.test.mjs';
 import './files.test.mjs';
+import './tasks.test.mjs';
 
 await runAll();

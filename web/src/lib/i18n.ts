@@ -64,7 +64,7 @@ export function trData<T>(data: T): T {
 }
 
 /** حقول يكتبها المستخدمون أو أسماء لا تُترجم */
-const SKIP_FIELDS = new Set(['username', 'amountInWords', 'note', 'reason', 'notes', 'address', 'decisionNote', 'managerNote', 'revokeReason', 'emergencyName']);
+const SKIP_FIELDS = new Set(['username', 'amountInWords', 'note', 'reason', 'notes', 'address', 'decisionNote', 'managerNote', 'revokeReason', 'emergencyName', 'description', 'body', 'text']);
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const COMPILED = Object.entries(EN_PATTERNS).map(([ar, en]) => ({

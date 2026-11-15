@@ -1,6 +1,7 @@
 import { tr } from '../../lib/i18n';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { api, ApiError } from '../../lib/api';
 import type { InboxItem } from '../../lib/types';
 import { relativeTime } from '../../lib/format';
@@ -74,7 +75,7 @@ function Detail({ item, onDone }: { item: InboxItem; onDone: () => void }) {
   const [busy, setBusy] = useState<'a' | 'r' | null>(null);
   useEffect(() => { setNote(''); setError(''); }, [item.id]);
   const decide = useAction('inbox.decide', {
-    invalidate: ['hr.me', 'hr.team', 'hr.leave.list', 'hr.ot.list', 'att.correction.list', 'att.records', 'att.board'],
+    invalidate: ['hr.me', 'hr.team', 'hr.leave.list', 'hr.ot.list', 'att.correction.list', 'att.records', 'att.board', 'tsk.list', 'tsk.get', 'cus.get', 'cus.list', 'cus.home'],
     silentError: true, success: (r) => (r ? tr("تم حفظ القرار") : '')
   });
   const go = (approve: boolean) => {
@@ -99,11 +100,12 @@ function Detail({ item, onDone }: { item: InboxItem; onDone: () => void }) {
         </dl>
       )}
       {item.note && <div className="rounded-lg bg-bg p-3 text-[13px] leading-relaxed text-muted">{item.note}</div>}
+      {item.link && <Link to={item.link} className="self-start text-[13px] font-semibold text-accent-fg no-underline">{tr("فتح التفاصيل")}</Link>}
       <Textarea label={tr("ملاحظة (مطلوبة عند الرفض)")} value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} className="[&_textarea]:min-h-[64px]" />
       {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
       <div className="flex gap-2">
-        <Button variant="primary" icon="check" className="flex-1" loading={busy === 'a'} disabled={!!busy} onClick={() => go(true)}>{tr("موافقة")}</Button>
-        <Button variant="danger-outline" icon="x" className="flex-1" loading={busy === 'r'} disabled={!!busy} onClick={() => go(false)}>{tr("رفض")}</Button>
+        <Button variant="primary" icon="check" className="flex-1" loading={busy === 'a'} disabled={!!busy} onClick={() => go(true)}>{item.approveLabel || tr("موافقة")}</Button>
+        <Button variant="danger-outline" icon="x" className="flex-1" loading={busy === 'r'} disabled={!!busy} onClick={() => go(false)}>{item.rejectLabel || tr("رفض")}</Button>
       </div>
     </Card>
   );

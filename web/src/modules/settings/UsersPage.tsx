@@ -137,9 +137,9 @@ export default function UsersPage() {
               {modules.map((m) => (
                 <div key={m.key} className="flex items-center gap-3 border-t border-line py-2">
                   <span className="flex flex-1 flex-col"><span className="font-medium">{m.label}</span>{!m.enabled && <span className="text-[12px] text-muted">{tr("قريباً")}</span>}</span>
-                  <Select label={tr("دور ") + m.label} className="w-[170px] [&>label]:sr-only" value={draft.roles[m.key] || ''}
+                  <Select label={tr("دور ") + m.label} className="w-[170px] [&>label]:sr-only" value={draft.roles[m.key] || m.defaultRole || ''}
                     onChange={(e) => setDraft({ ...draft, roles: { ...draft.roles, [m.key]: e.target.value } })}
-                    options={[{ value: '', label: tr("بلا وصول") }, ...m.roles.map((r) => ({ value: r.key, label: r.label }))]} />
+                    options={[...(m.defaultRole ? [] : [{ value: '', label: tr("بلا وصول") }]), ...m.roles.map((r) => ({ value: r.key, label: r.label }))]} />
                 </div>
               ))}
             </div>

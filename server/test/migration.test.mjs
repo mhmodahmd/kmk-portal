@@ -81,10 +81,10 @@ test('legacy migration moves people, structure, punches and leaves, and keeps ol
 
   // كلمة المرور القديمة تعمل، ثم تُعاد بطريقة البوابة
   const login = s.ok('auth.login', { username: 'sami', password: 'oldpass1' });
-  eq(login.roles, { attendance: 'employee', hr: 'employee' });
+  eq(login.roles, { attendance: 'employee', hr: 'employee', tasks: 'member' });
   eq(s.fail('auth.login', { username: 'sami', password: 'wrong' }).code, 'BAD_LOGIN');
   truthy(s.ok('auth.login', { username: 'sami', password: 'oldpass1' }).token, 'works again after rehash');
-  eq(s.ok('auth.login', { username: 'chief', password: 'chief123' }).roles, { attendance: 'viewer' });
+  eq(s.ok('auth.login', { username: 'chief', password: 'chief123' }).roles, { attendance: 'viewer', tasks: 'member' });
 
   // سجل سامي الشهري والمدير مرتبط بموظفه
   const month = s.ok('att.myMonth', { month: '2026-10' }, login.token);

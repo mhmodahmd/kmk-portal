@@ -64,7 +64,7 @@ test('employee numbers, duplicates and manager rules', () => {
 test('created account gets employee roles and link', () => {
   const c = company();
   const me = c.ok('auth.me', {}, c.T.ahmad);
-  eq(me.roles, { attendance: 'employee', hr: 'employee' });
+  eq(me.roles, { attendance: 'employee', hr: 'employee', tasks: 'member' });
   const hr = c.ok('hr.me', {}, c.T.ahmad);
   eq(hr.employee.fullName, 'أحمد');
   eq(hr.employee.managerName, 'سارة');

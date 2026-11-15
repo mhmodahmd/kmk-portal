@@ -22,6 +22,8 @@ export interface ManagedUser extends User {
 export interface ModuleRoleDef {
   key: string;
   label: string;
+  /** دور يملكه الجميع تلقائياً (لا خيار «بلا وصول») */
+  defaultRole?: string;
   enabled: boolean;
   roles: { key: string; label: string }[];
 }
@@ -69,6 +71,9 @@ export interface InboxItem {
   status: string;
   facts?: { k: string; v: string }[];
   note?: string;
+  approveLabel?: string;
+  rejectLabel?: string;
+  link?: string;
 }
 
 export interface AuditRow {

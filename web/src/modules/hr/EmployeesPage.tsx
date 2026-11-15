@@ -7,6 +7,7 @@ import { useAction, useApi } from '../../lib/useApi';
 import { Avatar, Badge, Card, CardHeader, EmptyState, ErrorBox, Loader, Skeleton } from '../../ui/Display';
 import { SearchBox, Segmented } from '../../ui/Controls';
 import { Button } from '../../ui/Button';
+import { QuickTaskButton } from '../tasks/shared';
 import { Select, TextInput, Textarea } from '../../ui/Field';
 import { Dialog, useToast } from '../../ui/Overlay';
 import { Icon } from '../../ui/Icon';
@@ -170,6 +171,7 @@ function EmployeeCard({ emp, dir, onCreated, onCancel }: { emp: EmployeeView | n
       <div className="flex flex-wrap gap-2">
         <Button variant="primary" className="flex-[1_1_160px]" loading={save.isPending} onClick={() => { setError(''); save.mutate({ ...f, id: emp?.id || '' }, { onError: (e) => setError(e.message) }); }}>{emp ? tr("حفظ التغييرات") : tr("إضافة الموظف")}</Button>
         {!emp && <Button variant="ghost" onClick={onCancel}>{tr("إلغاء")}</Button>}
+        {emp && <QuickTaskButton size="md" variant="secondary" label={tr("مهمة مرتبطة بالموظف")} draft={{ linkedType: 'employee', linkedId: emp.id, linkedLabel: emp.fullName }} />}
       </div>
 
       {emp && <BalancesBlock emp={emp} />}

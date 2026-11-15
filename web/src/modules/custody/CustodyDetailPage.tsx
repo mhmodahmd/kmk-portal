@@ -13,6 +13,7 @@ import { ReasonDialog } from '../../ui/Decide';
 import { Icon } from '../../ui/Icon';
 import { BalanceBar, ExpenseDialog, Money, SignActions, StageBar, StatusBadge, V_TONE, dateLabel, kwd, useLookups } from './shared';
 import { ACCEPT, filePayload, openFile } from './files';
+import { QuickTaskButton } from '../tasks/shared';
 import { useToast } from '../../ui/Overlay';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api';
@@ -64,6 +65,7 @@ export default function CustodyDetailPage() {
           {c.isImported && <Badge>{tr("مستوردة")}</Badge>}
           <div className="ms-auto flex flex-wrap gap-2 no-print">
             <Link to={'/custody/print/statement/' + c.id} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 font-medium text-fg no-underline hover:border-line-strong"><Icon name="printer" size={16} />{tr("كشف التسوية")}</Link>
+            <QuickTaskButton variant="secondary" draft={{ linkedType: 'custody', linkedId: c.id, linkedLabel: c.id + ' · ' + c.employeeName }} />
             {can.delete && <Button size="sm" variant="danger-outline" icon="trash" onClick={() => setRemoving(true)}>{tr("حذف")}</Button>}
           </div>
         </div>

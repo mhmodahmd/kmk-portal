@@ -164,6 +164,16 @@ var MigrationCrm = {
     rep.ok = rep.reconcile.every(function (r) { return r.ok; });
     rep.totals = { clients: rows('clients').length, projects: rows('projects').length, payments: rows('payments').length, tasks: rows('tasks').length,
       paid: Object.keys(paidBy).reduce(function (a, k) { return a + paidBy[k]; }, 0) };
+    // تصحيح بعد النقل: أسماء مستخدمين سابقين دُمجت في حساب (لا تبقى ملاحظة «كان المسؤول…» عليها)
+    if (!dry && Array.isArray(p.mergedNames) && p.mergedNames.length) {
+      var merged = p.mergedNames.map(String);
+      var strip = function (s) { var out = String(s || ''); merged.forEach(function (n) { out = out.split(' (كانت مسندة إلى ' + n + ')').join('').split('كانت مسندة إلى ' + n + ' · ').join('').split(' (كانت مسندة إلى ' + n + ' · مؤجلة)').join(' (مؤجلة)').split('كان المسؤول في النظام السابق: ' + n).join('').trim(); }); return out; };
+      rep.cleaned = {
+        clients: Db.updateWhere('crm', 'Clients', function (c) { return merged.indexOf(c.legacyOwner) >= 0 ? { legacyOwner: '' } : null; }),
+        activities: Db.updateWhere('crm', 'Activities', function (a) { var n = strip(a.notes); return n !== (a.notes || '') ? { notes: n } : null; }),
+        events: Db.updateWhere('tasks', 'TaskComments', function (c) { if (c.kind !== 'event') return null; var b = strip(c.body); return b !== c.body ? { body: b } : null; })
+      };
+    }
     if (!dry) Audit.log(ctx.user, 'system', 'migration.legacyCrm', 'Migration', 'crm', { created: rep.created, review: rep.review.length, ok: rep.ok });
     return rep;
   }

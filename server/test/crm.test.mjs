@@ -140,4 +140,9 @@ test('crm migration: dry run, import, review flags, tasks, legacy owners, idempo
 
   const again = c.ok('system.migrate.legacyCrm', args, c.A);
   eq([Object.keys(again.created).length, again.unchanged.Clients, again.unchanged.Tasks, again.ok], [0, 2, 3, true]);
+  // دمج اسم سابق في الحساب: تُزال ملاحظاته
+  const fix = c.ok('system.migrate.legacyCrm', { ...args, mergedNames: ['طه عمر'] }, c.A);
+  eq([fix.cleaned.clients, fix.cleaned.events], [1, 1]);
+  eq(c.ok('crm.clients', {}, c.A).find((x) => x.name === 'عميل محتمل').legacyOwner, '');
+  eq(c.ok('tsk.get', { id: byTitle('متابعة شهرية').id }, c.A).comments[0].body, 'نُقلت من نظام العملاء السابق');
 });

@@ -312,6 +312,23 @@ var Db = {
     });
   },
 
+  /** يعدّل صفوفاً كثيرة بكتابة واحدة: fn(row) تعيد التغييرات أو null. يعيد عدد المعدَّل */
+  updateWhere: function (dbKey, table, fn) {
+    return withLock(function () {
+      var rows = Db.all(dbKey, table), n = 0;
+      rows = rows.map(function (r) { var ch = fn(r); if (!ch) return r; n++; return Object.assign(r, ch); });
+      if (!n) return 0;
+      var sh = Db.sheet_(dbKey, table);
+      var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+      var types = Db.types_(dbKey, table);
+      var values = rows.map(function (r) { return headers.map(function (h) { return types[h] ? Db.toCell_(r[h], types[h]) : ''; }); });
+      sh.getRange(2, 1, values.length, headers.length).setValues(values);
+      DB_MEMO_.rows[dbKey + '.' + table] = null;
+      Db.bump_(dbKey, table);
+      return n;
+    });
+  },
+
   /** يحذف كل الصفوف المطابقة بكتابة واحدة (يعيد كتابة الصفوف الباقية ويفرغ ما بعدها). يعيد عدد المحذوف */
   removeWhere: function (dbKey, table, pred) {
     return withLock(function () {

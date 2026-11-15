@@ -69,7 +69,7 @@ export default function CrmImportPage() {
     if (!source || !user) return;
     setBusy(dryRun ? 'dry' : 'run'); setError('');
     try {
-      const userMap = Object.fromEntries(Object.entries(map).filter(([, v]) => v && v !== user.id));
+      const userMap = Object.fromEntries(Object.entries(map).filter(([, v]) => !!v));
       const r = await api<Report>('system.migrate.legacyCrm', { source, userMap, userNames: names, defaultUser: user.id, dryRun });
       setReport(r);
       if (!dryRun) ['crm.home', 'crm.clients', 'crm.projects', 'tsk.list', 'home.summary'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));

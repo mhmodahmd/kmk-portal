@@ -2,14 +2,17 @@
  * حالة النظام العامة (قبل الدخول).
  */
 var System = {
-  status: function () {
+  status: function (ctx, p) {
     var users = Db.all('core', 'Users');
-    return {
+    var out = {
       app: APP.NAME,
       version: APP.VERSION,
       needsSetup: users.length === 0,
       company: Settings.company_().name
     };
+    // فحص تشغيلي اختياري: هل صلاحية Drive مفعّلة؟ (لا يُستدعى عند كل تحميل)
+    if (p && p.check) out.drive = Files.available_();
+    return out;
   }
 };
 

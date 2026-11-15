@@ -11,15 +11,7 @@ var Settings = {
     return withLock(function () {
       var rows = Db.find('core', 'Settings', function (r) { return r.key === key; });
       if (rows.length) {
-        var sh = Db.sheet_('core', 'Settings');
-        var data = sh.getDataRange().getValues();
-        for (var i = 1; i < data.length; i++) {
-          if (String(data[i][0]) === key) {
-            sh.getRange(i + 1, 1, 1, 4).setValues([[key, JSON.stringify(value), nowIso(), user ? user.id : '']]);
-            break;
-          }
-        }
-        Db.bump_('core', 'Settings');
+        Db.updateWhere('core', 'Settings', function (r) { return r.key === key ? { value: value, updatedAt: nowIso(), updatedBy: user ? user.id : '' } : null; });
       } else {
         Db.insert('core', 'Settings', { key: key, value: value, updatedAt: nowIso(), updatedBy: user ? user.id : '' });
       }

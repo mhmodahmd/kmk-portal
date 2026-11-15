@@ -547,6 +547,15 @@ var Tasks = {
     return out;
   },
 
+  /** الإشعارات: المراجعة تضع عنصراً في الصندوق لمن أسند المهمة أو مدير المسؤول أو مديري المهام */
+  approvalActions_: ['task.status'],
+  approvers_: function (id) {
+    var t = Db.get('tasks', 'Tasks', id);
+    if (!t) return [];
+    var emp = Staff.byUser_(t.assigneeId);
+    return [t.createdBy].concat(Notify.usersWithRole_('tasks', ['manager'])).concat(emp ? Notify.managerChainUsers_(emp.id) : []);
+  },
+
   routes_: function () {
     var any = { module: 'tasks' }, mgr = { module: 'tasks', roles: ['manager'] };
     return {

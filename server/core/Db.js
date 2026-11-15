@@ -54,7 +54,9 @@ var SCHEMAS = {
       ['refKey', 'text'], ['read', 'bool'], ['actorName', 'text'], ['createdAt', 'ts'], ['emailedAt', 'ts']
     ],
     // حالة كل مستخدم: id = userId. readUntil: ما قبله مقروء («تعليم الكل»)
-    NotifyState: [['id', 'text'], ['readUntil', 'ts'], ['email', 'bool'], ['updatedAt', 'ts']]
+    NotifyState: [['id', 'text'], ['readUntil', 'ts'], ['email', 'bool'], ['updatedAt', 'ts']],
+    // رسائل بريد بانتظار الإرسال (يصرفها المشغّل الزمني processMailQueue)
+    MailQueue: [['id', 'text'], ['to', 'text'], ['title', 'text'], ['detail', 'text'], ['link', 'text'], ['actorName', 'text'], ['createdAt', 'ts'], ['attempts', 'num']]
   }
 };
 
@@ -65,7 +67,7 @@ function schemaOf_(dbKey) {
   return extra[dbKey] || null;
 }
 
-var DB_MEMO_ = { ss: {}, rows: {} };
+var DB_MEMO_ = { ss: {}, rows: {}, idx: {}, ver: {} };
 
 var Db = {
   /** الملف الخاص بوحدة، ويُنشأ مع جداوله عند أول استخدام. */
@@ -167,17 +169,22 @@ var Db = {
     }
   },
 
+  /** رقم نسخة الجدول (يُقرأ من الخصائص مرة واحدة في التنفيذ) */
   cacheKey_: function (dbKey, table) {
-    var ver = PropertiesService.getScriptProperties().getProperty('VER_' + dbKey + '_' + table) || '0';
-    return 'db_' + dbKey + '_' + table + '_' + ver;
+    var k = 'VER_' + dbKey + '_' + table;
+    if (DB_MEMO_.ver[k] === undefined) DB_MEMO_.ver[k] = PropertiesService.getScriptProperties().getProperty(k) || '0';
+    return 'db_' + dbKey + '_' + table + '_' + DB_MEMO_.ver[k];
   },
 
   /** يُستدعى بعد كل كتابة ليتجاهل الجميع النسخة المخزنة القديمة. */
   bump_: function (dbKey, table) {
     var props = PropertiesService.getScriptProperties();
     var k = 'VER_' + dbKey + '_' + table;
-    props.setProperty(k, String((Number(props.getProperty(k)) || 0) + 1));
+    var next = String((Number(props.getProperty(k)) || 0) + 1);
+    props.setProperty(k, next);
+    DB_MEMO_.ver[k] = next;
     delete DB_MEMO_.rows[dbKey + '.' + table];
+    delete DB_MEMO_.idx[dbKey + '.' + table];
   },
 
   /** كل صفوف الجدول ككائنات (نسخ يمكن تعديلها). */
@@ -231,10 +238,18 @@ var Db = {
 
   find: function (dbKey, table, pred) { return Db.all(dbKey, table).filter(pred); },
 
+  /** سجل واحد بمعرّفه (نسخة قابلة للتعديل) عبر فهرس يُبنى مرة لكل قراءة للجدول، بدل نسخ كل الصفوف */
   get: function (dbKey, table, id) {
-    var rows = Db.all(dbKey, table);
-    for (var i = 0; i < rows.length; i++) if (rows[i].id === id) return rows[i];
-    return null;
+    if (!id) return null;
+    var rows = Db.view(dbKey, table), memoKey = dbKey + '.' + table;
+    var idx = DB_MEMO_.idx[memoKey];
+    if (!idx || idx.rows !== rows) {
+      idx = { rows: rows, map: {} };
+      for (var i = 0; i < rows.length; i++) if (rows[i].id != null && idx.map[rows[i].id] === undefined) idx.map[rows[i].id] = rows[i];
+      DB_MEMO_.idx[memoKey] = idx;
+    }
+    var r = idx.map[id];
+    return r ? Object.assign({}, r) : null;
   },
 
   getOrThrow: function (dbKey, table, id, label) {

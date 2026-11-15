@@ -725,6 +725,13 @@ var Hr = {
     return out;
   },
 
+  /** الإشعارات: الإجراءات التي تضع عنصراً في صندوق الموافقات، ومن يُحتمل أن يراه */
+  approvalActions_: ['leave.request', 'leave.approve', 'ot.request'],
+  approvers_: function (id, entity) {
+    var r = Db.get('hr', entity === 'Overtime' ? 'OvertimeRequests' : 'LeaveRequests', id);
+    return Notify.usersWithRole_('hr', ['hr']).concat(r ? Notify.managerChainUsers_(r.employeeId) : []);
+  },
+
   routes_: function () {
     var any = { module: 'hr' }, hr = { module: 'hr', roles: ['hr'] };
     return {

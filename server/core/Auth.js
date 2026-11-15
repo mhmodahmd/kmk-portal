@@ -2,11 +2,16 @@
  * الدخول والجلسات وكلمات المرور وتذكّر الجهاز.
  */
 var Auth = {
-  hashPassword_: function (password, salt) {
+  /** الصيغة الحالية v2$<hex> بـ APP.HASH_ROUNDS جولة؛ بلا بادئة = الصيغة القديمة (1000 جولة) */
+  hashPassword_: function (password, salt, rounds) {
+    var n = rounds || APP.HASH_ROUNDS;
     var h = String(salt) + '|' + String(password);
-    for (var i = 0; i < 1000; i++) h = sha256Hex_(h + '|' + salt);
-    return h;
+    for (var i = 0; i < n; i++) h = sha256Hex_(h + '|' + salt);
+    return n === 1000 ? h : 'v2$' + h;
   },
+
+  /** هل كلمة المرور مخزنة بالصيغة الحالية؟ */
+  currentHash_: function (u) { return String(u.passwordHash || '').indexOf('v2$') === 0; },
 
   /** كلمات مرور منقولة من نظام الحضور السابق (64 جولة SHA-256 بترميز base64) */
   legacyHash_: function (password, salt) {
@@ -33,7 +38,8 @@ var Auth = {
       return safeEquals_(Auth.legacyCustodyHash_(String(password || ''), u.salt, parseInt(parts[1], 10)), stored.slice(3));
     }
     if (stored.indexOf('legacy:') === 0) return safeEquals_(Auth.legacyHash_(String(password || ''), u.salt), stored.slice(7));
-    return safeEquals_(Auth.hashPassword_(String(password || ''), u.salt), stored);
+    if (stored.indexOf('v2$') === 0) return safeEquals_(Auth.hashPassword_(String(password || ''), u.salt), stored);
+    return safeEquals_(Auth.hashPassword_(String(password || ''), u.salt, 1000), stored);
   },
 
   validateNewPassword_: function (pw) {
@@ -69,21 +75,43 @@ var Auth = {
   // ───────── الجلسات ─────────
   createSession_: function (user) {
     var token = randomToken_();
-    CacheService.getScriptCache().put('s_' + sha256Hex_(token), user.id, APP.SESSION_SECONDS);
+    Auth.storeSession_(token, user);
     return token;
   },
 
-  /** يعيد المستخدم من رمز الجلسة أو null. */
+  /** قيمة الجلسة: المعرّف + ختم كلمة المرور وقت الإنشاء */
+  storeSession_: function (token, user) {
+    CacheService.getScriptCache().put('s_' + sha256Hex_(token), user.id + '|' + Auth.passwordStamp_(user), APP.SESSION_SECONDS);
+  },
+
+  /** يعيد المستخدم من رمز الجلسة أو null. جلسة أُنشئت قبل تغيير كلمة المرور تُرفض */
   userFromToken_: function (token) {
     if (!token) return null;
     var cache = CacheService.getScriptCache();
     var key = 's_' + sha256Hex_(token);
-    var id = cache.get(key);
-    if (!id) return null;
+    var val = cache.get(key);
+    if (!val) return null;
+    var parts = String(val).split('|'), id = parts[0];
     var u = Db.get('core', 'Users', id);
     if (!u || !u.active) return null;
-    cache.put(key, id, APP.SESSION_SECONDS); // جلسة منزلقة: تمتد مع كل استخدام
+    if (parts.length > 1 && parts[1] !== Auth.passwordStamp_(u)) { cache.remove(key); return null; }
+    cache.put(key, val, APP.SESSION_SECONDS); // جلسة منزلقة: تمتد مع كل استخدام
     return u;
+  },
+
+  /** كبح عام: عدّاد محاولات خاطئة في الدقيقة لكل البوابة، وعدّاد لكل اسم مستخدم (حتى غير الموجود) */
+  throttle_: function (username) {
+    var cache = CacheService.getScriptCache();
+    var g = Number(cache.get('lf_all')) || 0, u = Number(cache.get('lf_' + sha256Hex_(username))) || 0;
+    if (g >= APP.LOGIN_BURST || u >= APP.MAX_FAILED_LOGINS * 2) {
+      throw appError('محاولات دخول كثيرة. حاول بعد دقيقة.', 'TOO_MANY_ATTEMPTS');
+    }
+  },
+  noteFailure_: function (username) {
+    var cache = CacheService.getScriptCache();
+    var k = 'lf_' + sha256Hex_(username);
+    cache.put('lf_all', String((Number(cache.get('lf_all')) || 0) + 1), 60);
+    cache.put(k, String((Number(cache.get(k)) || 0) + 1), 900);
   },
 
   // ───────── تذكّر الجهاز (رمز موقّع لا يُخزَّن في الخادم) ─────────
@@ -113,10 +141,13 @@ var Auth = {
 
   // ───────── الإجراءات ─────────
   login: function (ctx, p) {
-    var u = Auth.findByUsername_(normalizeDigits(p.username).trim());
+    var username = normalizeDigits(p.username).trim().toLowerCase();
+    Auth.throttle_(username);
+    var u = Auth.findByUsername_(username);
     var generic = appError('اسم المستخدم أو كلمة المرور غير صحيحة.', 'BAD_LOGIN');
     if (!u || !u.active) {
       Auth.hashPassword_(p.password || '', 'x'); // توقيت متقارب
+      Auth.noteFailure_(username);
       throw generic;
     }
     if (u.lockedUntil && new Date(u.lockedUntil) > new Date()) {
@@ -131,10 +162,11 @@ var Auth = {
         Audit.log({ id: u.id, fullName: u.fullName }, 'core', 'user.locked', 'User', u.id, null);
       }
       Db.update('core', 'Users', u.id, changes);
+      Auth.noteFailure_(username);
       throw generic;
     }
-    // كلمة مرور منقولة: تُعاد بطريقة البوابة عند أول دخول
-    if (/^(legacy|lc):/.test(String(u.passwordHash))) u = Auth.setPassword_(u, String(p.password), false);
+    // كلمة مرور منقولة أو بصيغة أقدم: تُعاد تجزئتها بالصيغة الحالية عند أول دخول ناجح
+    if (!Auth.currentHash_(u)) u = Auth.setPassword_(u, String(p.password), !!u.mustChangePassword);
     u = Db.update('core', 'Users', u.id, { failedAttempts: 0, lockedUntil: '', lastLogin: nowIso() });
     return Auth.sessionResult_(u, !!p.remember);
   },
@@ -152,6 +184,8 @@ var Auth = {
   },
 
   me: function (ctx) {
+    // دخول مدير النظام فرصة للتأكد من تركيب المشغّلات الزمنية (مرة كل 6 ساعات)
+    if (ctx.user.isSuperAdmin) Jobs.ensure_();
     return { user: Auth.publicUser_(ctx.user), roles: ctx.roles };
   },
 
@@ -169,7 +203,8 @@ var Auth = {
     if (next === p.current) throw appError('اختر كلمة مرور مختلفة عن الحالية.');
     u = Auth.setPassword_(u, next, false);
     Audit.log(u, 'core', 'user.changePassword', 'User', u.id, null);
-    // رمز جهاز جديد لأن تغيير كلمة المرور يُبطل الرموز القديمة
+    // الجلسة الحالية تُجدَّد بالختم الجديد؛ الجلسات الأخرى ورموز الأجهزة القديمة تُبطل
+    Auth.storeSession_(ctx.token, u);
     return { user: Auth.publicUser_(u), deviceToken: p.remember ? Auth.createDeviceToken_(u) : '' };
   },
 

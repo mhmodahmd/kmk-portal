@@ -642,6 +642,13 @@ var Attendance = {
     return [{ to: e.userId, title: ok ? 'اعتُمد تصحيح بصمتك' : 'رُفض طلب تصحيح البصمة', detail: dmy_(c.date) + (!ok && c.decisionNote ? ' — ' + c.decisionNote : ''), link: '/attendance/corrections' }];
   },
 
+  /** الإشعارات: الإجراءات التي تضع عنصراً في صندوق الموافقات، ومن يُحتمل أن يراه */
+  approvalActions_: ['correction.request'],
+  approvers_: function (id) {
+    var c = Db.get('attendance', 'Corrections', id);
+    return Notify.usersWithRole_('attendance', ['hr']).concat(c ? Notify.managerChainUsers_(c.employeeId) : []);
+  },
+
   routes_: function () {
     var any = { module: 'attendance' }, hr = { module: 'attendance', roles: ['hr'] };
     return {

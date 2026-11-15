@@ -76,7 +76,24 @@ var Files = {
     if (Math.floor(data.length * 3 / 4) > FILES_MAX_BYTES + 3) throw appError('حجم الملف يتجاوز 10 ميجابايت.');
     var bytes = Utilities.base64Decode(data);
     if (!bytes.length) throw appError('الملف فارغ.');
+    if (!Files.signatureOk_(mime, bytes)) throw appError('محتوى الملف لا يطابق نوعه المعلن (' + FILES_TYPES[mime].toUpperCase() + ').');
     return { mime: mime, bytes: bytes, ext: FILES_TYPES[mime] };
+  },
+
+  /** أول بايتات الملف تطابق نوعه؟ */
+  signatureOk_: function (mime, bytes) {
+    var b = function (i) { return bytes[i] < 0 ? bytes[i] + 256 : bytes[i]; };
+    var ascii = function (from, len) { var s = ''; for (var i = from; i < from + len && i < bytes.length; i++) s += String.fromCharCode(b(i)); return s; };
+    if (bytes.length < 12) return false;
+    switch (mime) {
+      case 'image/jpeg': return b(0) === 0xFF && b(1) === 0xD8 && b(2) === 0xFF;
+      case 'image/png': return b(0) === 0x89 && ascii(1, 3) === 'PNG';
+      case 'image/gif': return ascii(0, 4) === 'GIF8';
+      case 'image/webp': return ascii(0, 4) === 'RIFF' && ascii(8, 4) === 'WEBP';
+      case 'image/heic': case 'image/heif': return ascii(4, 4) === 'ftyp';
+      case 'application/pdf': return ascii(0, 4) === '%PDF';
+      default: return false;
+    }
   },
 
   save_: function (folder, up, name) {

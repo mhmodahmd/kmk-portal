@@ -976,6 +976,10 @@ var Custody = {
     return out;
   },
 
+  /** الإشعارات: الإجراءات التي تضع عنصراً في صندوق الموافقات، ومن يُحتمل أن يراه (المحاسبون) */
+  approvalActions_: ['custody.requestClose', 'request.create', 'voucher.request'],
+  approvers_: function () { return Notify.usersWithRole_('custody', ['accountant']); },
+
   routes_: function () {
     var any = { module: 'custody' }, acc = { module: 'custody', roles: ['accountant'] };
     return {

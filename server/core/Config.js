@@ -4,13 +4,15 @@
  */
 var APP = {
   NAME: 'بوابة KMK',
-  VERSION: '0.9.2',
+  VERSION: '0.9.3',
   // أقدم إصدار واجهة مسموح به. الواجهة الأقدم تُطلب منها إعادة التحميل.
   MIN_CLIENT: '0.1.0',
   TZ: 'Asia/Kuwait',
   SESSION_SECONDS: 21600,      // 6 ساعات (أقصى مدة لـ CacheService)
   DEVICE_DAYS: 30,             // «تذكّرني على هذا الجهاز»
   MAX_FAILED_LOGINS: 5,
+  LOGIN_BURST: 30,             // أقصى محاولات دخول خاطئة في الدقيقة لكل البوابة قبل الكبح
+  HASH_ROUNDS: 3000,           // جولات تجزئة كلمة المرور (v2). الأقدم 1000 جولة تُعاد عند أول دخول ناجح
   LOCK_MINUTES: 15,
   PASSWORD_MIN: 8,
   // مصادر الواجهة المعتمدة لبصمة الجهاز (localhost مسموح للتطوير). مصادر إضافية: WEB_ORIGINS في Script Properties

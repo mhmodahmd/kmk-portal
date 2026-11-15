@@ -11,5 +11,6 @@ import './files.test.mjs';
 import './tasks.test.mjs';
 import './notify.test.mjs';
 import './crm.test.mjs';
+import './jobs.test.mjs';
 
 await runAll();

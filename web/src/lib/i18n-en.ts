@@ -1186,6 +1186,7 @@ const EN: Record<string, string> = {
   'رفع النسخة الموقّعة': 'Upload signed copy',
   'رفع الملفات غير مفعّل بعد. يحتاج موافقة مالك البوابة على صلاحية Google Drive.': 'File upload is not enabled yet. The portal owner must approve Google Drive access.',
   'نوع الملف غير مسموح. المسموح: صور (JPG/PNG/WEBP/HEIC) أو PDF.': 'File type not allowed. Allowed: images (JPG/PNG/WEBP/HEIC) or PDF.',
+  'محاولات دخول كثيرة. حاول بعد دقيقة.': 'Too many sign-in attempts. Try again in a minute.',
   'بيانات الملف غير صالحة.': 'Invalid file data.',
   'الملف فارغ.': 'The file is empty.',
   'تعذّر فتح الملف. إن كان من النظام السابق فشارك مجلده «نثريات KMK» مع حساب البوابة.': 'Could not open the file. If it is from the previous system, share its “نثريات KMK” folder with the portal account.',
@@ -1711,6 +1712,7 @@ const EN: Record<string, string> = {
  * الترتيب مهم: الأخص قبل الأعم.
  */
 export const EN_PATTERNS: Record<string, string> = {
+  'محتوى الملف لا يطابق نوعه المعلن ({0}).': 'The file content does not match its declared type ({0}).',
   '{0} دقيقة': '{0} min',
   '{0} عميل محتمل': '{0} prospective clients',
   '{0} تحتاج مراجعة': '{0} need review',

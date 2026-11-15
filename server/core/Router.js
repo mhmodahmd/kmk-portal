@@ -37,6 +37,8 @@ var Router = {
       'settings.update': { perm: 'super', fn: Settings.update },
       'audit.list': { perm: 'super', fn: Audit.list },
       'system.selftest': { perm: 'super', fn: function () { return { webauthn: WebAuthn.selfTest_() }; } },
+      'system.jobs': { perm: 'super', fn: Jobs.status },
+      'system.backup': { perm: 'super', fn: Backup.now },
       'system.migrate.legacyAttendance': { perm: 'super', fn: Migration.legacyAttendance },
       'system.migrate.legacyCustody': { perm: 'super', fn: Migration.legacyCustody },
       'system.migrate.legacyCrm': { perm: 'super', fn: MigrationCrm.run },
@@ -69,13 +71,17 @@ var Router = {
             return { ok: true, data: Router.run_(route, route.public ? null : ctx, c.action, c.payload || {}) };
           } catch (e) { return Router.errorOf_(e, c.action); }
         });
+        Notify.flush_();
         return { ok: true, data: results, ms: Date.now() - started };
       }
       var route = routes[req.action];
       if (!route) throw appError('إجراء غير معروف.', 'UNKNOWN_ACTION');
       var context = route.public ? { user: null, roles: {}, token: '' } : Router.context_(req.token, route);
-      return { ok: true, data: Router.run_(route, context, req.action, req.payload || {}), ms: Date.now() - started };
+      var data = Router.run_(route, context, req.action, req.payload || {});
+      Notify.flush_();
+      return { ok: true, data: data, ms: Date.now() - started };
     } catch (e) {
+      Notify.discard_();
       return Router.errorOf_(e, req && req.action);
     }
   },
@@ -114,10 +120,10 @@ function ModuleSchemas_() {
 /** الوحدات التي تقدّم بطاقات للرئيسية وعناصر لصندوق الموافقات. prefix: بادئة أنواع طلباتها */
 function ModuleProviders_() {
   return [
-    { key: 'attendance', prefix: 'att.', summary: Attendance.summary_, inbox: Attendance.inbox_, decide: Attendance.decide_, notify: Attendance.notify_ },
-    { key: 'hr', prefix: 'hr.', summary: Hr.summary_, inbox: Hr.inbox_, decide: Hr.decide_, notify: Hr.notify_ },
-    { key: 'custody', prefix: 'cus.', summary: Custody.summary_, inbox: Custody.inbox_, decide: Custody.decide_, offboard: Custody.offboardBlock_, notify: Custody.notify_ },
-    { key: 'tasks', prefix: 'tsk.', summary: Tasks.summary_, inbox: Tasks.inbox_, decide: Tasks.decide_, notify: Tasks.notify_ },
+    { key: 'attendance', prefix: 'att.', summary: Attendance.summary_, inbox: Attendance.inbox_, decide: Attendance.decide_, notify: Attendance.notify_, approvalActions: Attendance.approvalActions_, approvers: Attendance.approvers_ },
+    { key: 'hr', prefix: 'hr.', summary: Hr.summary_, inbox: Hr.inbox_, decide: Hr.decide_, notify: Hr.notify_, approvalActions: Hr.approvalActions_, approvers: Hr.approvers_ },
+    { key: 'custody', prefix: 'cus.', summary: Custody.summary_, inbox: Custody.inbox_, decide: Custody.decide_, offboard: Custody.offboardBlock_, notify: Custody.notify_, approvalActions: Custody.approvalActions_, approvers: Custody.approvers_ },
+    { key: 'tasks', prefix: 'tsk.', summary: Tasks.summary_, inbox: Tasks.inbox_, decide: Tasks.decide_, notify: Tasks.notify_, approvalActions: Tasks.approvalActions_, approvers: Tasks.approvers_ },
     { key: 'crm', prefix: 'crm.', summary: Crm.summary_, notify: Crm.notify_ }
   ];
 }

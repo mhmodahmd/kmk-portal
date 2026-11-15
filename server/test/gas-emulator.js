@@ -255,7 +255,20 @@ export function createGas({ storage, clock, log } = {}) {
     const it = D[id];
     return {
       getId: () => id, getName: () => it.name, getUrl: () => 'https://drive.test/file/' + id, isTrashed: () => !!it.trashed,
-      setTrashed(v) { it.trashed = !!v; touch(); }, getBlob: () => blobOf(it.bytes, it.mime, it.name)
+      setTrashed(v) { it.trashed = !!v; touch(); }, getBlob: () => blobOf(it.bytes, it.mime, it.name),
+      getDateCreated: () => new Dt(it.created || 0), getSize: () => (it.bytes ? it.bytes.length : 0),
+      makeCopy(name, folder) {
+        const nid = 'fi' + (++state.seq);
+        D[nid] = { kind: 'file', name, mime: it.mime, bytes: it.bytes ? it.bytes.slice() : [], parent: folder.getId(), created: Dt.now() };
+        if (it.ssId) { // نسخة كاملة من جدول بيانات
+          const sid = 'mock' + (++state.seq) + uuid().replace(/-/g, '').slice(0, 20);
+          state.files[sid] = JSON.parse(JSON.stringify(state.files[it.ssId]));
+          state.files[sid].name = name;
+          D[nid].ssId = sid;
+        }
+        touch();
+        return fileApi(nid);
+      }
     };
   };
   const folderApi = (id) => {
@@ -271,9 +284,19 @@ export function createGas({ storage, clock, log } = {}) {
       },
       createFile(blob) {
         const nid = 'fi' + (++state.seq);
-        D[nid] = { kind: 'file', name: blob.getName(), mime: blob.getContentType(), bytes: Array.from(blob.getBytes()), parent: id };
+        D[nid] = { kind: 'file', name: blob.getName(), mime: blob.getContentType(), bytes: Array.from(blob.getBytes()), parent: id, created: Dt.now() };
         touch();
         return fileApi(nid);
+      },
+      getFiles() {
+        const ids = Object.keys(D).filter((k) => D[k].kind === 'file' && D[k].parent === id && !D[k].trashed);
+        let i = 0;
+        return { hasNext: () => i < ids.length, next: () => fileApi(ids[i++]) };
+      },
+      getFilesByName(name) {
+        const ids = Object.keys(D).filter((k) => D[k].kind === 'file' && D[k].parent === id && D[k].name === name && !D[k].trashed);
+        let i = 0;
+        return { hasNext: () => i < ids.length, next: () => fileApi(ids[i++]) };
       }
     };
   };
@@ -283,7 +306,11 @@ export function createGas({ storage, clock, log } = {}) {
     getRootFolder: () => folderApi('root'),
     createFolder: (name) => folderApi('root').createFolder(name),
     getFolderById: (id) => folderApi(need(id, 'folder')),
-    getFileById: (id) => fileApi(need(id, 'file'))
+    getFileById(id) {
+      // جدول بيانات يُرى في درايف ملفاً أيضاً
+      if (!D[id] && state.files[id]) D[id] = { kind: 'file', name: state.files[id].name, mime: 'application/vnd.google-apps.spreadsheet', parent: 'root', ssId: id, created: Dt.now() };
+      return fileApi(need(id, 'file'));
+    }
   };
 
   // ───── Utilities ─────
@@ -324,12 +351,34 @@ export function createGas({ storage, clock, log } = {}) {
   const mail = [];
   const MailApp = { getRemainingDailyQuota: () => 100 - mail.length, sendEmail(o) { mail.push(o); } };
 
+  // ───── ScriptApp (المشغّلات الزمنية فقط) ─────
+  const triggers = [];
+  const ScriptApp = {
+    getProjectTriggers: () => triggers.slice(),
+    deleteTrigger(t) { const i = triggers.indexOf(t); if (i >= 0) triggers.splice(i, 1); },
+    newTrigger(fn) {
+      const spec = { fn, kind: '', every: 0, hour: null };
+      const b = {
+        timeBased() { spec.kind = 'time'; return b; },
+        everyMinutes(n) { spec.every = n; spec.unit = 'min'; return b; },
+        everyHours(n) { spec.every = n; spec.unit = 'hour'; return b; },
+        everyDays(n) { spec.every = n; spec.unit = 'day'; return b; },
+        atHour(h) { spec.hour = h; return b; },
+        nearMinute() { return b; },
+        inTimezone() { return b; },
+        create() { const t = { getHandlerFunction: () => fn, getUniqueId: () => uuid(), spec }; triggers.push(t); return t; }
+      };
+      return b;
+    }
+  };
+
   return {
     clock: C,
     state,
     logs,
     mail,
-    globals: { SpreadsheetApp, PropertiesService, CacheService, LockService, Utilities, DriveApp, MailApp, Logger, ContentService, Session, console: consoleShim, Date: Dt },
+    triggers,
+    globals: { SpreadsheetApp, PropertiesService, CacheService, LockService, Utilities, DriveApp, MailApp, ScriptApp, Logger, ContentService, Session, console: consoleShim, Date: Dt },
     /** يحفظ الحالة إن تغيّرت */
     flush() { if (dirty && storage) storage.save(state); dirty = false; }
   };
@@ -344,6 +393,6 @@ export function loadServer(sources, globals) {
   const code = ordered.map((s) => '// ── ' + s.path + '\n' + s.code).join('\n;\n');
   const names = Object.keys(globals);
   // eslint-disable-next-line no-new-func
-  const factory = new Function(...names, code + '\n;return { Router: Router, setup: setup, doPost: doPost };');
+  const factory = new Function(...names, code + '\n;return { Router: Router, setup: setup, doPost: doPost, processMailQueue: processMailQueue, dailyMaintenance: dailyMaintenance, installTriggers: installTriggers, Notify: Notify, Backup: Backup, Db: Db, Hr: Hr, Tasks: Tasks, Auth: Auth };');
   return factory(...names.map((n) => globals[n]));
 }

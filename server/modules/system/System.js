@@ -11,7 +11,7 @@ var System = {
       company: Settings.company_().name
     };
     // فحص تشغيلي اختياري: هل صلاحية Drive مفعّلة؟ (لا يُستدعى عند كل تحميل)
-    if (p && p.check) out.drive = Files.available_();
+    if (p && p.check) { out.drive = Files.available_(); out.mail = Notify.mailAvailable_(); }
     return out;
   }
 };

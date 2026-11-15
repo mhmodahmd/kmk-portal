@@ -17,6 +17,8 @@ import { deviceErrorText, markPasskeyHere, registerDevice, useDeviceChallenge, u
 import { dmy, kwDate, relativeTime } from '../../lib/format';
 import { Icon } from '../../ui/Icon';
 import { useToast } from '../../ui/Overlay';
+import { Checkbox } from '../../ui/Field';
+import { browserAlertsOn, browserAlertsSupported, setBrowserAlerts, useNotifications } from '../../app/Notifications';
 
 export default function ProfilePage() {
   const { user, roles, signOut } = useAuth();
@@ -63,6 +65,7 @@ export default function ProfilePage() {
         </Card>
         <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-4">
           <PasskeyCard />
+          <NotifyCard />
           {(user.isSuperAdmin || roles.custody) && <Suspense fallback={null}><SignatureCard /></Suspense>}
         <Card className="flex flex-col gap-4">
           <h2 className="m-0 text-[16px] font-semibold">{tr("تغيير كلمة المرور")}</h2>
@@ -126,6 +129,34 @@ function PasskeyCard() {
         </>
       )}
       {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
+    </Card>
+  );
+}
+
+/** تفضيلات الإشعارات: البريد (من الخادم) وتنبيه المتصفح (على هذا الجهاز) */
+function NotifyCard() {
+  const q = useNotifications();
+  const toast = useToast();
+  const [browser, setBrowser] = useState(browserAlertsOn());
+  const prefs = useAction<{ email: boolean }>('notify.prefs', { invalidate: ['notify.list'], success: tr("حُفظ التفضيل") });
+  const e = q.data?.email;
+  const emailHint = !e ? '' : !e.available ? tr("يُفعَّل بعد موافقة مالك البوابة على صلاحية إرسال البريد.") : !e.address ? tr("لا يوجد بريد في حسابك. يضيفه مدير النظام من «المستخدمون والأدوار».") : e.address;
+  const blocked = browserAlertsSupported() && Notification.permission === 'denied';
+  return (
+    <Card className="flex flex-col gap-3">
+      <div className="flex items-center gap-3">
+        <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-chip text-muted"><Icon name="bell" size={22} /></span>
+        <div className="flex min-w-0 flex-col">
+          <h2 className="m-0 text-[16px] font-semibold">{tr("الإشعارات")}</h2>
+          <span className="text-[13px] text-muted">{tr("تصلك داخل البوابة دائماً (الجرس أعلى الصفحة)")}</span>
+        </div>
+      </div>
+      <Checkbox label={tr("بالبريد الإلكتروني")} description={emailHint} checked={!!e && e.on && e.available && !!e.address}
+        disabled={!e || !e.available || !e.address || prefs.isPending} onChange={(v) => prefs.mutate({ email: v })} />
+      <Checkbox label={tr("تنبيه على هذا الجهاز")}
+        description={!browserAlertsSupported() ? tr("المتصفح لا يدعم التنبيهات.") : blocked ? tr("التنبيهات محظورة لهذا الموقع من إعدادات المتصفح.") : tr("يظهر تنبيه عند وصول إشعار والبوابة مفتوحة في الخلفية.")}
+        checked={browser} disabled={!browserAlertsSupported() || blocked}
+        onChange={async (v) => { const on = await setBrowserAlerts(v); setBrowser(on); if (v && !on) toast(tr("لم يُسمح بالتنبيهات."), 'bad'); }} />
     </Card>
   );
 }

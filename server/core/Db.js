@@ -47,7 +47,14 @@ var SCHEMAS = {
       ['id', 'text'], ['userId', 'text'], ['employeeId', 'text'], ['credId', 'text'], ['rpId', 'text'], ['alg', 'num'],
       ['publicKey', 'json'], ['signCount', 'num'], ['backup', 'bool'], ['label', 'text'], ['status', 'text'],
       ['createdAt', 'ts'], ['lastUsedAt', 'ts'], ['revokedAt', 'ts'], ['revokedBy', 'text'], ['revokeReason', 'text']
-    ]
+    ],
+    // الإشعارات (Notify.js). refKey يمنع تكرار الإشعار نفسه
+    Notifications: [
+      ['id', 'text'], ['userId', 'text'], ['kind', 'text'], ['module', 'text'], ['title', 'text'], ['detail', 'text'], ['link', 'text'],
+      ['refKey', 'text'], ['read', 'bool'], ['actorName', 'text'], ['createdAt', 'ts'], ['emailedAt', 'ts']
+    ],
+    // حالة كل مستخدم: id = userId. readUntil: ما قبله مقروء («تعليم الكل»)
+    NotifyState: [['id', 'text'], ['readUntil', 'ts'], ['email', 'bool'], ['updatedAt', 'ts']]
   }
 };
 
@@ -302,6 +309,25 @@ var Db = {
       sh.deleteRow(idx);
       Db.bump_(dbKey, table);
       return true;
+    });
+  },
+
+  /** يحذف كل الصفوف المطابقة بكتابة واحدة (يعيد كتابة الصفوف الباقية ويفرغ ما بعدها). يعيد عدد المحذوف */
+  removeWhere: function (dbKey, table, pred) {
+    return withLock(function () {
+      var rows = Db.all(dbKey, table);
+      var keep = rows.filter(function (r) { return !pred(r); });
+      var removed = rows.length - keep.length;
+      if (!removed) return 0;
+      var sh = Db.sheet_(dbKey, table);
+      var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+      var types = Db.types_(dbKey, table);
+      var values = keep.map(function (r) { return headers.map(function (h) { return types[h] ? Db.toCell_(r[h], types[h]) : ''; }); });
+      for (var i = 0; i < removed; i++) values.push(headers.map(function () { return ''; }));
+      sh.getRange(2, 1, values.length, headers.length).setValues(values);
+      DB_MEMO_.rows[dbKey + '.' + table] = null;
+      Db.bump_(dbKey, table);
+      return removed;
     });
   },
 

@@ -696,6 +696,35 @@ var Hr = {
     return cards;
   },
 
+  /** الإشعارات (Notify): نتيجة طلب الإجازة والإضافي لصاحبه. الطلبات الجديدة تصل للمعتمدين عبر صندوق الموافقات */
+  notify_: function (ev) {
+    var out = [];
+    var userOf = function (empId) { var e = Staff.get_(empId); return e ? e.userId : ''; };
+    if (ev.entity === 'LeaveRequest') {
+      var r = Db.get('hr', 'LeaveRequests', ev.id);
+      if (!r) return out;
+      var t = indexBy_(Hr.types_())[r.typeId];
+      var detail = (t ? t.name + ' · ' : '') + dmy_(r.from) + ' – ' + dmy_(r.to), to = userOf(r.employeeId), link = '/hr/leave';
+      var note = r.decisionNote || r.managerNote;
+      if (ev.action === 'leave.create') out.push({ to: to, title: 'سُجّلت لك إجازة', detail: detail, link: link });
+      else if (ev.action === 'leave.adminCancel') out.push({ to: to, title: 'أُلغيت إجازتك', detail: detail + (r.decisionNote ? ' — ' + r.decisionNote : ''), link: link });
+      else if (ev.action === 'leave.approve' || ev.action === 'leave.reject') {
+        if (r.status === 'approved') out.push({ to: to, title: 'اعتُمدت إجازتك', detail: detail, link: link });
+        else if (r.status === 'rejected') out.push({ to: to, title: 'رُفض طلب إجازتك', detail: detail + (note ? ' — ' + note : ''), link: link });
+        else if (r.status === 'pending_hr') out.push({ to: to, title: 'وافق مديرك على إجازتك، وهي الآن لدى الموارد البشرية', detail: detail, link: link });
+      }
+    } else if (ev.entity === 'Overtime') {
+      var o = Db.get('hr', 'OvertimeRequests', ev.id);
+      if (!o) return out;
+      var od = dmy_(o.date) + ' · ' + o.minutes + ' دقيقة', ou = userOf(o.employeeId), ol = '/hr/overtime';
+      if (ev.action === 'ot.add') out.push({ to: ou, title: 'سُجّل لك عمل إضافي', detail: od, link: ol });
+      else if (ev.action === 'ot.approve') out.push({ to: ou, title: 'اعتُمد العمل الإضافي', detail: od, link: ol });
+      else if (ev.action === 'ot.reject') out.push({ to: ou, title: 'رُفض طلب العمل الإضافي', detail: od + (o.decisionNote ? ' — ' + o.decisionNote : ''), link: ol });
+      else if (ev.action === 'ot.cancel') out.push({ to: ou, title: 'أُلغي العمل الإضافي', detail: od + (o.decisionNote ? ' — ' + o.decisionNote : ''), link: ol });
+    }
+    return out;
+  },
+
   routes_: function () {
     var any = { module: 'hr' }, hr = { module: 'hr', roles: ['hr'] };
     return {

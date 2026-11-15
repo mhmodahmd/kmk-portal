@@ -30,6 +30,9 @@ var Router = {
       'home.summary': { fn: Home.summary },
       'inbox.list': { fn: Home.inbox },
       'inbox.decide': { fn: Home.decide },
+      'notify.list': { fn: Notify.list },
+      'notify.read': { fn: Notify.read },
+      'notify.prefs': { fn: Notify.prefs },
       'settings.get': { fn: Settings.get },
       'settings.update': { perm: 'super', fn: Settings.update },
       'audit.list': { perm: 'super', fn: Audit.list },
@@ -110,10 +113,10 @@ function ModuleSchemas_() {
 /** الوحدات التي تقدّم بطاقات للرئيسية وعناصر لصندوق الموافقات. prefix: بادئة أنواع طلباتها */
 function ModuleProviders_() {
   return [
-    { key: 'attendance', prefix: 'att.', summary: Attendance.summary_, inbox: Attendance.inbox_, decide: Attendance.decide_ },
-    { key: 'hr', prefix: 'hr.', summary: Hr.summary_, inbox: Hr.inbox_, decide: Hr.decide_ },
-    { key: 'custody', prefix: 'cus.', summary: Custody.summary_, inbox: Custody.inbox_, decide: Custody.decide_, offboard: Custody.offboardBlock_ },
-    { key: 'tasks', prefix: 'tsk.', summary: Tasks.summary_, inbox: Tasks.inbox_, decide: Tasks.decide_ }
+    { key: 'attendance', prefix: 'att.', summary: Attendance.summary_, inbox: Attendance.inbox_, decide: Attendance.decide_, notify: Attendance.notify_ },
+    { key: 'hr', prefix: 'hr.', summary: Hr.summary_, inbox: Hr.inbox_, decide: Hr.decide_, notify: Hr.notify_ },
+    { key: 'custody', prefix: 'cus.', summary: Custody.summary_, inbox: Custody.inbox_, decide: Custody.decide_, offboard: Custody.offboardBlock_, notify: Custody.notify_ },
+    { key: 'tasks', prefix: 'tsk.', summary: Tasks.summary_, inbox: Tasks.inbox_, decide: Tasks.decide_, notify: Tasks.notify_ }
   ];
 }
 

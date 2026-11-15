@@ -320,12 +320,16 @@ export function createGas({ storage, clock, log } = {}) {
     createTextOutput(s) { const o = { content: s, getContent: () => s, setMimeType: () => o }; return o; }
   };
   const Session = { getScriptTimeZone: () => 'Asia/Kuwait' };
+  // البريد: يُسجَّل ولا يُرسل
+  const mail = [];
+  const MailApp = { getRemainingDailyQuota: () => 100 - mail.length, sendEmail(o) { mail.push(o); } };
 
   return {
     clock: C,
     state,
     logs,
-    globals: { SpreadsheetApp, PropertiesService, CacheService, LockService, Utilities, DriveApp, Logger, ContentService, Session, console: consoleShim, Date: Dt },
+    mail,
+    globals: { SpreadsheetApp, PropertiesService, CacheService, LockService, Utilities, DriveApp, MailApp, Logger, ContentService, Session, console: consoleShim, Date: Dt },
     /** يحفظ الحالة إن تغيّرت */
     flush() { if (dirty && storage) storage.save(state); dirty = false; }
   };

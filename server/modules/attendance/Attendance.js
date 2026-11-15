@@ -632,6 +632,15 @@ var Attendance = {
     return cards;
   },
 
+  /** الإشعارات (Notify): نتيجة طلب تصحيح البصمة لصاحبه */
+  notify_: function (ev) {
+    if (ev.entity !== 'Correction' || !/^correction\.(approve|reject)$/.test(ev.action)) return [];
+    var c = Db.get('attendance', 'Corrections', ev.id), e = c && Staff.get_(c.employeeId);
+    if (!e || !e.userId) return [];
+    var ok = c.status === 'approved';
+    return [{ to: e.userId, title: ok ? 'اعتُمد تصحيح بصمتك' : 'رُفض طلب تصحيح البصمة', detail: dmy_(c.date) + (!ok && c.decisionNote ? ' — ' + c.decisionNote : ''), link: '/attendance/corrections' }];
+  },
+
   routes_: function () {
     var any = { module: 'attendance' }, hr = { module: 'attendance', roles: ['hr'] };
     return {

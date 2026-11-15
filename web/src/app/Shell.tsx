@@ -12,6 +12,7 @@ import { Avatar } from '../ui/Display';
 import { IconButton } from '../ui/Button';
 import { cx } from '../ui/cx';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
+import { NotificationBell } from './Notifications';
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -116,10 +117,7 @@ export default function Shell({ children }: { children: ReactNode }) {
           <div className="ms-auto flex items-center gap-1">
             <LangToggle />
             <IconButton icon={isDark ? 'sun' : 'moon'} label={isDark ? tr("الوضع النهاري") : tr("الوضع الليلي")} onClick={toggle} />
-            <NavLink to="/inbox" aria-label={tr("الموافقات")} className="relative inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted hover:bg-chip hover:text-fg">
-              <Icon name="bell" />
-              {(summary.data?.inboxCount || 0) > 0 && <span className="absolute top-2 end-2 h-2 w-2 rounded-full bg-brand ring-2 ring-surface" />}
-            </NavLink>
+            <NotificationBell />
           </div>
         </header>
 

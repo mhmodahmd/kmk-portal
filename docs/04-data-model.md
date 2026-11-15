@@ -49,6 +49,8 @@
 | **AuditLog** | ts, userId, module, action, entity, entityId, details (json: قبل/بعد) |
 | **Serials** | key (`NTH-2026`, `PV-2026`…), last |
 | **Passkeys** 🆕 | userId, employeeId, credId, rpId, alg (-7 أو -257), publicKey (المفتاح العام فقط), signCount, backup (متزامن عبر iCloud/Google), label, status (`active`/`revoked`), createdAt, lastUsedAt, revokedAt, revokedBy, revokeReason |
+| **Notifications** 🆕 | userId, kind (`approval` بانتظار قرارك / `event`), module, title (جملة ثابتة تُترجم), detail, link, refKey (يمنع التكرار لنفس المرحلة), read, actorName, createdAt, emailedAt · تُحذف بعد 60 يوماً |
+| **NotifyState** 🆕 | id = userId، readUntil («تعليم الكل كمقروء»)، email (تفضيل البريد) |
 
 > مفاتيح الدخول بالبصمة (WebAuthn): مفتاح نشط واحد لكل مستخدم، للدخول وللبصمة في الحضور معاً. الخادم يتحقق من التوقيع بنفسه (`core/WebAuthn.js`) ولا تصله أي بيانات حيوية. الموظف يغيّر جهازه عبر الموارد البشرية، ومن ليس موظفاً يزيله من «ملفي».
 

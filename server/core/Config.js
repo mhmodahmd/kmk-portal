@@ -4,7 +4,7 @@
  */
 var APP = {
   NAME: 'بوابة KMK',
-  VERSION: '0.7.0',
+  VERSION: '0.8.0',
   // أقدم إصدار واجهة مسموح به. الواجهة الأقدم تُطلب منها إعادة التحميل.
   MIN_CLIENT: '0.1.0',
   TZ: 'Asia/Kuwait',
@@ -14,7 +14,9 @@ var APP = {
   LOCK_MINUTES: 15,
   PASSWORD_MIN: 8,
   // مصادر الواجهة المعتمدة لبصمة الجهاز (localhost مسموح للتطوير). مصادر إضافية: WEB_ORIGINS في Script Properties
-  WEB_ORIGINS: ['https://mhmodahmd.github.io']
+  WEB_ORIGINS: ['https://mhmodahmd.github.io'],
+  // رابط الواجهة في رسائل البريد
+  WEB_URL: 'https://mhmodahmd.github.io/kmk-portal/'
 };
 
 /**

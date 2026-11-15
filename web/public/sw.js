@@ -27,3 +27,14 @@ self.addEventListener('fetch', (e) => {
     return res;
   })));
 });
+
+// تنبيهات الإشعارات (تُعرض من الواجهة عبر showNotification): النقر يفتح البوابة على الرابط
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const target = BASE + '#' + ((e.notification.data && e.notification.data.link) || '/');
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+    const win = list.find((c) => c.url.includes(BASE));
+    if (win) { win.navigate(target).catch(() => {}); return win.focus(); }
+    return self.clients.openWindow(target);
+  }));
+});

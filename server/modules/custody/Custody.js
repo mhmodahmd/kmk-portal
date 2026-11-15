@@ -931,6 +931,37 @@ var Custody = {
     return null;
   },
 
+  /** الإشعارات (Notify): ما يخص صاحب العهدة أو طالب السند. الطلبات الجديدة تصل للمحاسبين عبر صندوق الموافقات */
+  notify_: function (ev) {
+    var out = [];
+    var userOf = function (empId) { var e = Staff.get_(empId); return e ? e.userId : ''; };
+    if (ev.entity === 'Custody') {
+      var c = Db.get('custody', 'Custodies', ev.id);
+      if (!c) return out;
+      var to = userOf(c.employeeId), link = '/custody/' + c.id, detail = c.id + ' · ' + c.periodLabel;
+      if (ev.action === 'custody.open') out.push({ to: to, title: 'فُتحت لك عهدة', detail: c.id + ' · ' + kwd_(c.amount), link: link });
+      else if (ev.action === 'custody.approve') out.push({ to: to, title: 'اعتُمد إقفال عهدتك', detail: detail + ' · ' + kwd_(c.remaining), link: link });
+      else if (ev.action === 'custody.reject') out.push({ to: to, title: 'رُفض طلب إقفال عهدتك', detail: detail + (c.rejectReason ? ' — ' + c.rejectReason : ''), link: link });
+      else if (ev.action === 'statement.signed' || ev.action === 'statement.signedUpload') out.push({ to: to, title: 'أُغلقت عهدتك نهائياً', detail: detail, link: link });
+    } else if (ev.entity === 'Voucher') {
+      var v = Db.get('custody', 'Vouchers', ev.id);
+      if (!v) return out;
+      var vd = v.number + ' · ' + kwd_(v.amount);
+      if (ev.action === 'voucher.signed' || ev.action === 'voucher.signedUpload') {
+        var oc = v.custodyId && Db.get('custody', 'Custodies', v.custodyId);
+        if (oc && oc.openVoucherId === v.id) out.push({ to: userOf(oc.employeeId), title: 'وقّعت الإدارة سند صرف عهدتك', detail: vd, link: '/custody/' + oc.id });
+      } else if (ev.action === 'voucher.approve') out.push({ to: v.requestedBy, title: 'اعتُمد طلب السند', detail: vd, link: '/custody/vouchers' });
+      else if (ev.action === 'voucher.reject') out.push({ to: v.requestedBy, title: 'رُفض طلب السند', detail: vd + (v.rejectReason ? ' — ' + v.rejectReason : ''), link: '/custody/vouchers' });
+    } else if (ev.entity === 'Request' && ev.action === 'request.reject') {
+      var r = Db.get('custody', 'Requests', ev.id);
+      if (r) out.push({ to: userOf(r.employeeId), title: 'رُفض طلب العهدة', detail: kwd_(r.amount) + (r.rejectReason ? ' — ' + r.rejectReason : ''), link: '/custody' });
+    } else if (ev.entity === 'Expense' && (ev.action === 'expense.note' || ev.action === 'expense.correct')) {
+      var e = Db.get('custody', 'Expenses', ev.id), ec = e && Db.get('custody', 'Custodies', e.custodyId);
+      if (ec) out.push({ to: userOf(ec.employeeId), title: 'ملاحظة من المحاسب على بند في عهدتك', detail: ec.id + ' · ' + e.description + (e.reviewNote ? ' — ' + e.reviewNote : ''), link: '/custody/' + ec.id });
+    }
+    return out;
+  },
+
   routes_: function () {
     var any = { module: 'custody' }, acc = { module: 'custody', roles: ['accountant'] };
     return {

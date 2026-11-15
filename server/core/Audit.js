@@ -11,6 +11,7 @@ var Audit = {
     } catch (e) {
       console.error('Audit failed: ' + e);
     }
+    Notify.onAudit_(user, module, action, entity, entityId, details);
   },
 
   /** payload: { module?, userId?, q?, page?, pageSize? } */

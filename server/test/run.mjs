@@ -9,5 +9,6 @@ import './migration.test.mjs';
 import './custody.test.mjs';
 import './files.test.mjs';
 import './tasks.test.mjs';
+import './notify.test.mjs';
 
 await runAll();

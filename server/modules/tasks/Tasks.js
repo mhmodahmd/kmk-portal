@@ -15,7 +15,7 @@ var TSK_SCHEMA = {
     ['id', 'text'], ['number', 'text'], ['title', 'text'], ['description', 'text'], ['status', 'text'], ['priority', 'text'],
     ['assigneeId', 'text'], ['watchers', 'json'], ['dueDate', 'date'], ['startDate', 'date'], ['completedAt', 'ts'],
     ['projectId', 'text'], ['linkedType', 'text'], ['linkedId', 'text'], ['parentId', 'text'], ['recurrence', 'json'],
-    ['nextTaskId', 'text'], ['sortOrder', 'num'], ['createdBy', 'text'], ['createdAt', 'ts'], ['updatedBy', 'text'], ['updatedAt', 'ts']
+    ['nextTaskId', 'text'], ['sortOrder', 'num'], ['reviewAt', 'ts'], ['createdBy', 'text'], ['createdAt', 'ts'], ['updatedBy', 'text'], ['updatedAt', 'ts']
   ],
   TaskChecklist: [['id', 'text'], ['taskId', 'text'], ['text', 'text'], ['done', 'bool'], ['sortOrder', 'num'], ['doneBy', 'text'], ['doneAt', 'ts']],
   TaskComments: [['id', 'text'], ['taskId', 'text'], ['kind', 'text'], ['body', 'text'], ['mentions', 'json'], ['createdBy', 'text'], ['createdAt', 'ts']],
@@ -286,7 +286,10 @@ var Tasks = {
         if ((cur.priority || 'normal') !== rec.priority) changes.push('الأولوية: ' + TSK.PRIORITY[rec.priority]);
         saved = Db.update('tasks', 'Tasks', cur.id, rec);
         if (changes.length) Tasks.event_(ctx, cur.id, changes.join(' · '));
-        Audit.log(ctx.user, 'tasks', 'task.update', 'Task', cur.id, { number: cur.number, changes: changes.join(' · ') });
+        Audit.log(ctx.user, 'tasks', 'task.update', 'Task', cur.id, {
+          number: cur.number, changes: changes.join(' · '), assigneeChanged: cur.assigneeId !== assignee,
+          newWatchers: watchers.filter(function (w) { return (cur.watchers || []).indexOf(w) < 0; })
+        });
       } else {
         var parent = '';
         if (p.parentId) {
@@ -328,10 +331,11 @@ var Tasks = {
       if (to !== t.status) {
         changes.status = to;
         changes.completedAt = to === 'done' ? nowIso() : '';
+        if (to === 'review') changes.reviewAt = nowIso();
         Tasks.event_(ctx, t.id, (review ? 'أرسلها للمراجعة' : 'نقلها إلى «' + TSK.STATUS[to] + '»') + (p.note ? ': ' + optionalText(p.note, 500) : ''));
-        Audit.log(ctx.user, 'tasks', 'task.status', 'Task', t.id, { number: t.number, from: t.status, to: to });
       }
       Db.update('tasks', 'Tasks', t.id, changes);
+      if (to !== t.status) Audit.log(ctx.user, 'tasks', 'task.status', 'Task', t.id, { number: t.number, from: t.status, to: to, note: optionalText(p.note, 500) });
       var next = to === 'done' && to !== t.status ? Tasks.spawnNext_(ctx, Db.get('tasks', 'Tasks', t.id)) : null;
       var out = Tasks.view_(Db.get('tasks', 'Tasks', t.id), Tasks.maps_(), ctx);
       out.review = review;
@@ -422,7 +426,8 @@ var Tasks = {
       var c = Db.insert('tasks', 'TaskComments', { taskId: t.id, kind: 'comment', body: requireText(p.body, 'التعليق', 2000), mentions: mentions, createdBy: ctx.user.id, createdAt: nowIso() });
       var w = (t.watchers || []).slice();
       mentions.forEach(function (id) { if (id !== t.assigneeId && w.indexOf(id) < 0) w.push(id); });
-      Db.update('tasks', 'Tasks', t.id, { watchers: w.slice(0, TSK.MAX_WATCHERS), updatedAt: nowIso() });
+      Db.update('tasks', 'Tasks', t.id, { watchers: w.slice(0, TSK.MAX_WATCHERS) });
+      Audit.log(ctx.user, 'tasks', 'task.comment', 'Task', t.id, { number: t.number, mentions: mentions, excerpt: c.body.slice(0, 140) });
       return { id: c.id };
     });
   },
@@ -488,7 +493,7 @@ var Tasks = {
       var v = Tasks.view_(t, m, ctx);
       return {
         id: 'tsk.review:' + t.id, kind: 'tsk.review', refId: t.id, module: 'tasks', moduleLabel: 'مراجعة مهمة', title: t.number + ' · ' + t.title,
-        who: v.assigneeName, createdAt: t.updatedAt, status: TSK.STATUS.review, note: '', needsNoteOnReject: true,
+        who: v.assigneeName, createdAt: t.reviewAt || t.updatedAt, status: TSK.STATUS.review, note: '', needsNoteOnReject: true,
         facts: [{ k: 'الموعد', v: t.dueDate ? dmy_(t.dueDate) : '—' }, { k: 'القائمة الفرعية', v: v.checklistTotal ? v.checklistDone + '/' + v.checklistTotal : '—' }],
         approveLabel: 'اعتماد الإنجاز', rejectLabel: 'إعادتها للعمل', link: '/tasks/' + t.id
       };
@@ -502,6 +507,31 @@ var Tasks = {
     if (!Tasks.canManage_(ctx, t) || t.assigneeId === ctx.user.id) throw appError('لا يمكنك مراجعة هذه المهمة.', 'FORBIDDEN');
     if (!p.approve && !optionalText(p.note, 500)) throw appError('اكتب سبب الإعادة.');
     return Tasks.status(ctx, { id: t.id, status: p.approve ? 'done' : 'doing', note: p.note });
+  },
+
+  /** الإشعارات (Notify): من يُبلَّغ بكل حدث. المراجعة نفسها تصل عبر صندوق الموافقات */
+  notify_: function (ev) {
+    var t = Db.get('tasks', 'Tasks', ev.id), d = ev.details || {}, a = ev.actor.fullName, out = [];
+    if (!t) return out;
+    var link = '/tasks/' + t.id, detail = t.number + ' · ' + t.title;
+    if (ev.action === 'task.create') {
+      out.push({ to: t.assigneeId, title: 'أسند إليك ' + a + ' مهمة', detail: detail, link: link });
+      out.push({ to: t.watchers || [], title: 'أضافك ' + a + ' متابعاً لمهمة', detail: detail, link: link });
+    } else if (ev.action === 'task.update') {
+      if (d.assigneeChanged) out.push({ to: t.assigneeId, title: 'أسند إليك ' + a + ' مهمة', detail: detail, link: link });
+      out.push({ to: d.newWatchers || [], title: 'أضافك ' + a + ' متابعاً لمهمة', detail: detail, link: link });
+    } else if (ev.action === 'task.status') {
+      if (d.from === 'review' && d.to === 'done') out.push({ to: t.assigneeId, title: 'اعتُمد إنجاز مهمتك', detail: detail, link: link });
+      else if (d.from === 'review' && d.to === 'doing') out.push({ to: t.assigneeId, title: 'أُعيدت مهمتك للعمل', detail: detail + (d.note ? ' — ' + d.note : ''), link: link });
+      else if (d.to === 'cancelled') out.push({ to: [t.assigneeId].concat(t.watchers || []), title: 'أُلغيت مهمة', detail: detail + (d.note ? ' — ' + d.note : ''), link: link });
+      else if (d.to === 'done' && ev.actor.id === t.assigneeId) out.push({ to: t.createdBy, title: 'أنجز ' + a + ' مهمة أسندتها', detail: detail, link: link });
+    } else if (ev.action === 'task.comment') {
+      var m = d.mentions || [];
+      out.push({ to: m, title: 'أشار إليك ' + a + ' في مهمة', detail: detail + ' — ' + (d.excerpt || ''), link: link });
+      var rest = [t.assigneeId, t.createdBy].concat(t.watchers || []).filter(function (id, i, arr) { return id && arr.indexOf(id) === i && m.indexOf(id) < 0; });
+      out.push({ to: rest, title: 'علّق ' + a + ' على مهمة', detail: detail + ' — ' + (d.excerpt || ''), link: link });
+    }
+    return out;
   },
 
   routes_: function () {

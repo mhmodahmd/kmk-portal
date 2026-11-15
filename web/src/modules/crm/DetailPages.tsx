@@ -241,11 +241,16 @@ export function ProjectPage() {
           ...(p.billing === 'fixed' ? [{ k: tr("قيمة العقد"), v: <Money fils={p.contractValue} /> }] : []),
           { k: tr("المحصّل"), v: <Money fils={p.paid} /> },
           ...(p.billing === 'fixed' ? [{ k: tr("المتبقي"), v: <span className={cx(p.overCollected && 'text-warn')}><Money fils={p.remaining} />{p.overCollected ? ' · ' + tr("تجاوز العقد") : ''}</span> }] : []),
+          ...(p.cycle ? [
+            { k: tr("الاشتراك"), v: <span><Money fils={p.cycleAmount} /> · {p.billingCycleLabel}</span> },
+            { k: p.cycle.future ? tr("تبدأ أول دورة") : tr("الدورة الحالية"), v: <span className="num">{dmy(p.cycle.start)} ← {dmy(p.cycle.end)}</span> },
+            ...(p.cycle.future ? [] : [{ k: tr("مستحق هذه الدورة"), v: <span className={cx(p.cycle.due > 0 && 'font-semibold text-warn')}><Money fils={p.cycle.due} /></span> }])
+          ] : []),
           { k: tr("مجدول"), v: p.scheduled ? <span><Money fils={p.scheduled} />{p.nextDue ? ' · ' + dmy(p.nextDue) : ''}</span> : '—' },
           { k: tr("المدة"), v: [p.startDate && dmy(p.startDate), p.endDate && dmy(p.endDate)].filter(Boolean).join(' ← ') || '—' },
           ...(p.spent ? [{ k: tr("مصروف العهد على المشروع"), v: <Money fils={p.spent} /> }] : [])
         ]} />
-        {p.billing === 'fixed' && <CollectBar p={p} />}
+        {(p.billing === 'fixed' || p.cycle) && <CollectBar p={p} />}
         {p.notes && <p className="m-0 whitespace-pre-wrap text-[13px] text-muted">{p.notes}</p>}
       </Card>
       <div className="grid items-start gap-4 lg:grid-cols-[3fr_2fr]">
@@ -272,7 +277,7 @@ export function ProjectPage() {
         </div>
       </div>
       {dlg === 'edit' && <ProjectDialog open onClose={() => setDlg('')} project={p} />}
-      {dlg === 'pay' && <PaymentDialog open onClose={() => setDlg('')} projectId={p.id} payment={pay} />}
+      {dlg === 'pay' && <PaymentDialog open onClose={() => setDlg('')} projectId={p.id} payment={pay} defaultAmount={!pay && p.cycle ? p.cycle.due : 0} />}
       {dlg === 'link' && <LinkDialog open onClose={() => setDlg('')} ownerType="project" ownerId={p.id} />}
       <Dialog open={removing} onClose={() => setRemoving(false)} title={tr("حذف المشروع")}
         footer={<><Button variant="danger" className="flex-1" loading={remove.isPending} onClick={() => remove.mutate({ id: p.id })}>{tr("حذف نهائياً")}</Button><Button variant="ghost" onClick={() => setRemoving(false)}>{tr("تراجع")}</Button></>}>

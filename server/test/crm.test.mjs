@@ -67,7 +67,12 @@ test('crm: proposals become projects; follow-up activities create tasks; shared 
   c.ok('users.setRoles', { id: c.u('ahmad').id, roles: { crm: 'sales', custody: 'holder' } }, c.A);
   truthy(c.ok('cus.lookups', {}, c.T.ahmad).projects.some((x) => x.name === 'تطبيق النور'), 'custody expenses pick CRM projects');
   const rep = c.ok('crm.report', {}, c.T.huda);
-  eq([rep.proposals.total, rep.proposals.accepted, rep.activities[0].total], [1, 1, 1]);
+  eq([rep.proposals.total, rep.proposals.accepted, rep.activities[0].total, rep.activitiesTotal], [1, 1, 1, 1]);
+  eq([rep.from, rep.to, rep.byMonth.length, rep.receivables.items.length], ['2026-01-01', SUN, 11, 0]);
+  // فترة محددة ومقارنة بالسابقة: دفعة محصّلة اليوم فقط
+  c.ok('crm.payment.save', { projectId: p.id, amount: '200', date: SUN }, c.T.huda);
+  const r2 = c.ok('crm.report', { from: '2026-11-01', to: SUN }, c.T.huda);
+  eq([r2.collected, r2.previousCollected, r2.collectedChange, r2.byMonth.length, r2.byMonth[0].amount], [200000, 0, 100, 1, 200000]);
 });
 
 /** ملف تصدير صغير بالشكل نفسه (بيانات وهمية) */
@@ -145,4 +150,30 @@ test('crm migration: dry run, import, review flags, tasks, legacy owners, idempo
   eq([fix.cleaned.clients, fix.cleaned.events], [1, 1]);
   eq(c.ok('crm.clients', {}, c.A).find((x) => x.name === 'عميل محتمل').legacyOwner, '');
   eq(c.ok('tsk.get', { id: byTitle('متابعة شهرية').id }, c.A).comments[0].body, 'نُقلت من نظام العملاء السابق');
+});
+
+test('crm: subscription projects have a billing cycle; due for the current period, reminders, and client remaining', () => {
+  const c = setup();
+  const cl = c.ok('crm.client.save', { name: 'شركة الاشتراك', category: 'current' }, c.T.sara);
+  truthy(c.fail('crm.project.save', { clientId: cl.id, name: 'بلا قيمة', billing: 'open', billingCycle: 'monthly' }, c.T.sara).message.includes('قيمة الدورة'));
+  const sub = c.ok('crm.project.save', { clientId: cl.id, name: 'استضافة شهرية', billing: 'open', billingCycle: 'monthly', cycleAmount: '100', startDate: '2026-09-10' }, c.T.sara);
+  eq([sub.billingCycleLabel, sub.cycleAmount, sub.contractValue], ['شهري', 100000, 0]);
+  // اليوم 2026-11-15 → الدورة الحالية من 10 نوفمبر إلى 9 ديسمبر
+  eq([sub.cycle.start, sub.cycle.end, sub.cycle.due, sub.remaining], ['2026-11-10', '2026-12-09', 100000, 100000]);
+  c.ok('crm.payment.save', { projectId: sub.id, amount: '40', date: '2026-11-12' }, c.T.huda);
+  c.ok('crm.payment.save', { projectId: sub.id, amount: '100', date: '2026-10-15' }, c.T.huda); // الدورة السابقة لا تُحتسب
+  const p = c.ok('crm.project', { id: sub.id }, c.T.sara).project;
+  eq([p.paid, p.cycle.paid, p.cycle.due, p.remaining, p.percent], [140000, 40000, 60000, 60000, 40]);
+  eq(c.ok('crm.client', { id: cl.id }, c.T.sara).client.remaining, 60000, 'client remaining includes the cycle due');
+  const home = c.ok('crm.home', {}, c.T.huda);
+  eq([home.remaining, home.cycles.length, home.cycles[0].due], [60000, 1, 60000]);
+  // تذكير الاشتراك يصل للمحاسب عند بداية الدورة
+  c.ok('home.summary', {}, c.T.huda);
+  truthy(c.ok('notify.list', {}, c.T.huda).items.some((x) => x.title === 'اشتراك مستحق لدورة جديدة' && x.link === '/crm/projects/' + sub.id));
+  // اشتراك يبدأ مستقبلاً لا يُستحق بعد
+  const later = c.ok('crm.project.save', { clientId: cl.id, name: 'اشتراك لاحق', billing: 'open', billingCycle: 'yearly', cycleAmount: '500', startDate: '2026-12-01' }, c.T.sara);
+  eq([later.cycle.future, later.remaining], [true, 0]);
+  // عقد ثابت لا يتأثر
+  const fx = c.ok('crm.project.save', { clientId: cl.id, name: 'عقد', billing: 'fixed', contractValue: '300', billingCycle: 'monthly', cycleAmount: '9' }, c.T.sara);
+  eq([fx.billingCycle, fx.cycleAmount, fx.remaining], ['', 0, 300000]);
 });

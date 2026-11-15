@@ -107,6 +107,8 @@
 
 ## 7. العملاء — `KMK-CRM` 🆕
 
+> **Projects** في وحدة العملاء: `billing` (`fixed` عقد ثابت / `open` اشتراك أو مفتوح)، وللاشتراك `billingCycle` (`monthly`/`quarterly`/`yearly`) و`cycleAmount` (فلس): الدورات تبدأ من `startDate`، والمستحق للدورة الحالية = قيمتها − المحصّل خلالها. أُضيف العمودان في 0.9.2 (الدفعة 2 من المراجعة) ويُنشئهما `Db.ensureSchema_` تلقائياً بلا حذف.
+
 | الجدول | الأعمدة الرئيسية |
 |---|---|
 | **Customers** | code, name, type (`company`/`individual`), sector, status (`lead`/`active`/`inactive`), ownerId, phone, email, address, taxNo, source, tags (json), notes |

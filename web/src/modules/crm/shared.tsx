@@ -9,8 +9,9 @@ import { Select, TextInput, Textarea } from '../../ui/Field';
 import { Dialog } from '../../ui/Overlay';
 import { cx } from '../../ui/cx';
 import { kwd, toInput } from '../custody/shared';
+import { dmy } from '../../lib/format';
 import { ACCEPT, filePayload } from '../custody/files';
-import type { ActivityView, ClientView, ContactView, CrmLookups, PaymentView, ProjectView, ProposalView } from './types';
+import type { ActivityView, ClientDetail, ClientView, ContactView, CrmLookups, PaymentView, ProjectView, ProposalView } from './types';
 
 export { kwd, toInput };
 export const CRM_KEYS = ['crm.clients', 'crm.client', 'crm.projects', 'crm.project', 'crm.payments', 'crm.proposals', 'crm.activities', 'crm.pipeline', 'crm.home', 'crm.report', 'tsk.list'];
@@ -31,7 +32,16 @@ export function StageChip({ c }: { c: Pick<ClientView, 'stageName' | 'stageColor
 
 /** مؤشر التحصيل: المحصّل من العقد، أو المحصّل فقط للمفتوح */
 export function CollectBar({ p }: { p: ProjectView }) {
-  if (p.billing === 'open') return <span className="text-[13px] text-muted">{tr("محصّل")} <Money fils={p.paid} /></span>;
+  if (p.billing === 'open') {
+    if (!p.cycle) return <span className="text-[13px] text-muted">{tr("محصّل")} <Money fils={p.paid} /></span>;
+    if (p.cycle.future) return <span className="text-[13px] text-muted">{tr("يبدأ {0}", dmy(p.cycle.start))}</span>;
+    return (
+      <div className="flex min-w-[140px] flex-col gap-1">
+        <div className="h-1.5 overflow-hidden rounded-full bg-chip"><div className={cx('h-full rounded-full', p.cycle.due ? 'bg-warn' : 'bg-ok')} style={{ width: Math.min(100, p.percent) + '%' }} /></div>
+        <span className="text-[12px] text-muted num">{p.cycle.due ? tr("مستحق للدورة {0}", kwd(p.cycle.due)) : tr("دورة {0} محصّلة", p.billingCycleLabel)} · {tr("حتى {0}", dmy(p.cycle.end))}</span>
+      </div>
+    );
+  }
   const pct = Math.min(100, p.percent);
   return (
     <div className="flex min-w-[140px] flex-col gap-1">
@@ -59,6 +69,16 @@ function FormDialog({ open, onClose, title, action, payload, success, children, 
 }
 
 const opts = (list: { id: string; label: string }[]) => list.map((o) => ({ value: o.id, label: o.label }));
+
+/** قائمة العملاء للاختيار داخل حوار (تُحمَّل عند الحاجة فقط) */
+function useClientOptions(enabled: boolean) {
+  const q = useApi<ClientView[]>('crm.clients', {}, { enabled, staleTime: 60_000 });
+  return [{ value: '', label: tr("اختر العميل") }, ...(q.data || []).map((c) => ({ value: c.id, label: c.name }))];
+}
+/** تفاصيل عميل مختار (مشاريعه وجهات اتصاله) */
+function useClientPick(clientId: string) {
+  return useApi<ClientDetail>('crm.client', { id: clientId }, { enabled: !!clientId, staleTime: 30_000 });
+}
 
 export function ClientDialog({ open, onClose, client, onSaved }: { open: boolean; onClose: () => void; client?: ClientView | null; onSaved?: (c: ClientView) => void }) {
   const L = useCrmLookups().data;
@@ -116,6 +136,7 @@ export function ProjectDialog({ open, onClose, project, clientId, clients, onSav
   const [f, setF] = useState(() => ({
     name: project?.name || '', clientId: project?.clientId || clientId || '', type: project?.type || '', billing: project?.billing || 'fixed',
     contractValue: toInput(project?.contractValue || 0), startDate: project ? project.startDate : L?.today || '', endDate: project?.endDate || '',
+    billingCycle: project?.billingCycle || '', cycleAmount: toInput(project?.cycleAmount || 0),
     status: project?.status || 'ongoing', notes: project?.notes || '', reviewed: false
   }));
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
@@ -136,6 +157,11 @@ export function ProjectDialog({ open, onClose, project, clientId, clients, onSav
         <Select label={tr("الفوترة")} value={f.billing} onChange={set('billing')} options={opts(L?.billing || [])}
           hint={f.billing === 'open' ? tr("بلا قيمة ثابتة: يُعرض المحصّل فقط ولا يُحسب متبقٍ") : undefined} />
         {f.billing === 'fixed' && <TextInput label={tr("قيمة العقد (د.ك)")} ltr inputMode="decimal" value={f.contractValue} onChange={set('contractValue')} />}
+        {f.billing === 'open' && (
+          <Select label={tr("دورة الفوترة")} value={f.billingCycle} onChange={set('billingCycle')} options={[{ value: '', label: tr("بلا دورة (يُدفع عند الحاجة)") }, ...opts(L?.cycles || [])]}
+            hint={f.billingCycle ? tr("تبدأ الدورات من تاريخ البداية، ويُحسب مستحق كل دورة من دفعاتها") : undefined} />
+        )}
+        {f.billing === 'open' && f.billingCycle && <TextInput label={tr("قيمة الدورة (د.ك)")} ltr inputMode="decimal" value={f.cycleAmount} onChange={set('cycleAmount')} />}
         <TextInput label={tr("البداية")} type="date" ltr value={f.startDate} onChange={set('startDate')} />
         <TextInput label={tr("النهاية")} type="date" ltr value={f.endDate} onChange={set('endDate')} />
       </Grid>
@@ -145,18 +171,31 @@ export function ProjectDialog({ open, onClose, project, clientId, clients, onSav
   );
 }
 
-export function PaymentDialog({ open, onClose, projectId, payment }: { open: boolean; onClose: () => void; projectId: string; payment?: PaymentView | null }) {
+export function PaymentDialog({ open, onClose, projectId, payment, defaultAmount }: { open: boolean; onClose: () => void; projectId?: string; payment?: PaymentView | null; defaultAmount?: number }) {
   const L = useCrmLookups().data;
+  const pick = !projectId && !payment;
+  const [sel, setSel] = useState({ clientId: '', projectId: '' });
+  const clients = useClientOptions(pick);
+  const detail = useClientPick(pick ? sel.clientId : '');
+  const projects = (detail.data?.projects || []).filter((p) => p.status === 'ongoing' || p.status === 'on_hold');
   const [f, setF] = useState(() => ({
-    amount: toInput(payment?.amount || 0), status: payment?.status || 'paid', kind: payment?.kind || 'partial', method: payment?.method || 'transfer',
+    amount: toInput(payment?.amount || defaultAmount || 0), status: payment?.status || 'paid', kind: payment?.kind || 'partial', method: payment?.method || 'transfer',
     date: payment?.date || L?.today || '', invoiceNo: payment?.invoiceNo || '', recipient: payment?.recipient || '', notes: payment?.notes || '', attachmentUrl: payment?.attachmentUrl || ''
   }));
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   return (
     <FormDialog open={open} onClose={onClose} title={payment ? tr("تعديل الدفعة") : tr("دفعة جديدة")} action="crm.payment.save" success={tr("حُفظت الدفعة")}
-      payload={() => ({ ...f, id: payment?.id, projectId })}>
+      payload={() => ({ ...f, id: payment?.id, projectId: projectId || payment?.projectId || sel.projectId })}>
+      {pick && (
+        <Grid>
+          <Select label={tr("العميل")} value={sel.clientId} onChange={(e) => setSel({ clientId: e.target.value, projectId: '' })} options={clients} autoFocus />
+          <Select label={tr("المشروع")} value={sel.projectId} onChange={(e) => setSel({ ...sel, projectId: e.target.value })} disabled={!sel.clientId}
+            hint={sel.clientId && detail.data && !projects.length ? tr("لا مشاريع جارية لهذا العميل") : undefined}
+            options={[{ value: '', label: tr("اختر المشروع") }, ...projects.map((p) => ({ value: p.id, label: p.name }))]} />
+        </Grid>
+      )}
       <Grid>
-        <TextInput label={tr("المبلغ (د.ك)")} ltr inputMode="decimal" value={f.amount} onChange={set('amount')} autoFocus />
+        <TextInput label={tr("المبلغ (د.ك)")} ltr inputMode="decimal" value={f.amount} onChange={set('amount')} autoFocus={!pick} />
         <Select label={tr("الحالة")} value={f.status} onChange={set('status')} options={[{ value: 'paid', label: tr("محصّلة") }, { value: 'scheduled', label: tr("مجدولة (موعد قادم)") }]} />
         <TextInput label={f.status === 'paid' ? tr("تاريخ التحصيل") : tr("موعد الاستحقاق")} type="date" ltr value={f.date} onChange={set('date')} />
         <Select label={tr("النوع")} value={f.kind} onChange={set('kind')} options={opts(L?.payKinds || [])} />
@@ -170,14 +209,18 @@ export function PaymentDialog({ open, onClose, projectId, payment }: { open: boo
   );
 }
 
-export function ProposalDialog({ open, onClose, clientId, proposal }: { open: boolean; onClose: () => void; clientId: string; proposal?: ProposalView | null }) {
+export function ProposalDialog({ open, onClose, clientId, proposal }: { open: boolean; onClose: () => void; clientId?: string; proposal?: ProposalView | null }) {
   const L = useCrmLookups().data;
+  const pick = !clientId && !proposal;
+  const [selClient, setSelClient] = useState('');
+  const clients = useClientOptions(pick);
   const [f, setF] = useState(() => ({ name: proposal?.name || '', type: proposal?.type || '', value: toInput(proposal?.value || 0), issueDate: proposal?.issueDate || L?.today || '', notes: proposal?.notes || '', attachmentUrl: proposal?.attachmentUrl || '' }));
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   return (
     <FormDialog open={open} onClose={onClose} title={proposal ? tr("تعديل العرض") : tr("عرض سعر جديد")} action="crm.proposal.save" success={tr("حُفظ العرض")}
-      payload={() => ({ ...f, id: proposal?.id, clientId })}>
-      <TextInput label={tr("اسم العرض")} value={f.name} onChange={set('name')} autoFocus />
+      payload={() => ({ ...f, id: proposal?.id, clientId: clientId || proposal?.clientId || selClient })}>
+      {pick && <Select label={tr("العميل")} value={selClient} onChange={(e) => setSelClient(e.target.value)} options={clients} autoFocus />}
+      <TextInput label={tr("اسم العرض")} value={f.name} onChange={set('name')} autoFocus={!pick} />
       <Grid>
         <TextInput label={tr("القيمة (د.ك)")} ltr inputMode="decimal" value={f.value} onChange={set('value')} />
         <TextInput label={tr("التاريخ")} type="date" ltr value={f.issueDate} onChange={set('issueDate')} />
@@ -190,10 +233,16 @@ export function ProposalDialog({ open, onClose, clientId, proposal }: { open: bo
   );
 }
 
-export function ActivityDialog({ open, onClose, clientId, contacts, projects, activity }: {
-  open: boolean; onClose: () => void; clientId: string; contacts: ContactView[]; projects: ProjectView[]; activity?: ActivityView | null;
+export function ActivityDialog({ open, onClose, clientId, contacts: contactsIn, projects: projectsIn, activity }: {
+  open: boolean; onClose: () => void; clientId?: string; contacts?: ContactView[]; projects?: ProjectView[]; activity?: ActivityView | null;
 }) {
   const L = useCrmLookups().data;
+  const pick = !clientId && !activity;
+  const [selClient, setSelClient] = useState('');
+  const clients = useClientOptions(pick);
+  const detail = useClientPick(pick ? selClient : '');
+  const contacts = contactsIn || detail.data?.contacts || [];
+  const projects = projectsIn || detail.data?.projects || [];
   const now = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   const [f, setF] = useState(() => ({
     type: activity?.type || 'meeting', title: activity?.title || '', description: activity?.description || '', at: activity?.at ? new Date(activity.at).toISOString().slice(0, 16) : now,
@@ -203,7 +252,8 @@ export function ActivityDialog({ open, onClose, clientId, contacts, projects, ac
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   return (
     <FormDialog open={open} onClose={onClose} wide title={activity ? tr("تعديل النشاط") : tr("نشاط جديد")} action="crm.activity.save" success={tr("سُجّل النشاط")}
-      payload={() => ({ ...f, id: activity?.id, clientId, at: new Date(f.at).toISOString() })}>
+      payload={() => ({ ...f, id: activity?.id, clientId: clientId || activity?.clientId || selClient, at: new Date(f.at).toISOString() })}>
+      {pick && <Select label={tr("العميل")} value={selClient} onChange={(e) => { setSelClient(e.target.value); setF((x) => ({ ...x, contactId: '', projectId: '' })); }} options={clients} autoFocus />}
       <Grid>
         <Select label={tr("النوع")} value={f.type} onChange={set('type')} options={opts(L?.activityTypes || [])} />
         <TextInput label={tr("الوقت")} type="datetime-local" ltr value={f.at} onChange={set('at')} />

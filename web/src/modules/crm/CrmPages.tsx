@@ -2,7 +2,7 @@ import { useMemo, useState, type DragEvent } from 'react';
 import { Link, Outlet, useNavigate } from 'react-router-dom';
 import { tr } from '../../lib/i18n';
 import { useAction, useApi } from '../../lib/useApi';
-import { dmy, formatDateTime, kwMonth, monthLabel } from '../../lib/format';
+import { dmy, formatDateTime, kwDate, monthLabel } from '../../lib/format';
 import { Badge, Card, CardHeader, EmptyState, ErrorBox, Loader, PageHeader, StatTile } from '../../ui/Display';
 import { Button } from '../../ui/Button';
 import { DataTable, SearchBox, Segmented, TabNav } from '../../ui/Controls';
@@ -11,7 +11,7 @@ import { ReasonDialog } from '../../ui/Decide';
 import { Icon } from '../../ui/Icon';
 import { cx } from '../../ui/cx';
 import { downloadCsv } from '../attendance/shared';
-import { CRM_KEYS, ClientDialog, CollectBar, Money, ProjectBadge, ProjectDialog, ProposalBadge, StageChip, kwd, useCrmLookups } from './shared';
+import { ActivityDialog, CRM_KEYS, ClientDialog, CollectBar, Money, PaymentDialog, ProjectBadge, ProjectDialog, ProposalBadge, ProposalDialog, StageChip, kwd, useCrmLookups } from './shared';
 import type { ActivityView, ClientView, CrmHome, CrmReport, PaymentView, ProjectView, ProposalView } from './types';
 
 export function CrmLayout() {
@@ -49,10 +49,21 @@ export function CrmHomePage() {
         <StatTile label={tr("المحصّل")} value={<Money fils={h.collected} />} icon="wallet" foot={tr("المتبقي على العقود الثابتة {0}", kwd(h.remaining))} />
         <StatTile label={tr("العروض قيد التفاوض")} value={h.openProposals} icon="file" foot={<Link to="/crm/proposals" className="text-accent-fg no-underline">{tr("كل العروض")}</Link>} />
       </div>
-      <Card padded={false}>
-        <CardHeader title={tr("دفعات مستحقة خلال أسبوعين")} action={<Link to="/crm/payments" className="text-[13px] font-semibold text-accent-fg no-underline">{tr("كل الدفعات")}</Link>} />
-        {h.due.length === 0 ? <EmptyState title={tr("لا دفعات مستحقة قريباً")} /> : h.due.map((d) => <PaymentLine key={d.id} d={d} />)}
-      </Card>
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <Card padded={false}>
+          <CardHeader title={tr("دفعات مستحقة خلال أسبوعين")} action={<Link to="/crm/payments" className="text-[13px] font-semibold text-accent-fg no-underline">{tr("كل الدفعات")}</Link>} />
+          {h.due.length === 0 ? <EmptyState title={tr("لا دفعات مستحقة قريباً")} /> : h.due.map((d) => <PaymentLine key={d.id} d={d} />)}
+        </Card>
+        <Card padded={false}>
+          <CardHeader title={tr("اشتراكات مستحقة للدورة الحالية")} action={<Link to="/crm/projects" className="text-[13px] font-semibold text-accent-fg no-underline">{tr("المشاريع")}</Link>} />
+          {h.cycles.length === 0 ? <EmptyState title={tr("لا اشتراكات مستحقة")} /> : h.cycles.map((x) => (
+            <Link key={x.projectId} to={'/crm/projects/' + x.projectId} className="flex flex-wrap items-center gap-3 border-t border-line px-5 py-3 text-fg no-underline first:border-t-0 hover:bg-chip/40">
+              <span className="flex min-w-0 flex-1 flex-col"><span className="font-semibold">{x.projectName}</span><span className="text-[13px] text-muted">{x.clientName}</span></span>
+              <span className="flex flex-col items-end gap-0.5"><Money fils={x.due} className="font-semibold" /><span className={cx('text-[12px] num', x.late ? 'font-semibold text-bad' : 'text-muted')}>{tr("حتى {0}", dmy(x.end))}</span></span>
+            </Link>
+          ))}
+        </Card>
+      </div>
     </div>
   );
 }
@@ -182,7 +193,7 @@ export function ProjectsPage() {
                 <td className="px-4 py-3"><span className="flex flex-col"><Link to={'/crm/projects/' + p.id} className="font-semibold text-fg no-underline">{p.name}</Link>
                   <span className="text-[12px] text-muted">{[p.type, p.startDate && dmy(p.startDate)].filter(Boolean).join(' · ')}</span></span></td>
                 <td className="px-4 py-3 text-[13px]">{p.clientName}</td>
-                <td className="px-4 py-3 text-[13px]">{p.billing === 'fixed' ? <Money fils={p.contractValue} /> : p.billingLabel}</td>
+                <td className="px-4 py-3 text-[13px]">{p.billing === 'fixed' ? <Money fils={p.contractValue} /> : p.cycle ? <span><Money fils={p.cycleAmount} /> <span className="text-muted">/ {p.billingCycleLabel}</span></span> : p.billingLabel}</td>
                 <td className="px-4 py-3"><CollectBar p={p} /></td>
                 <td className="px-4 py-3"><span className="flex flex-col items-start gap-1"><ProjectBadge p={p} />{p.needsReview && <Badge tone="warn">{tr("تحتاج مراجعة")}</Badge>}</span></td>
               </tr>
@@ -196,18 +207,23 @@ export function ProjectsPage() {
 }
 
 export function PaymentsPage() {
+  const lk = useCrmLookups();
   const [status, setStatus] = useState<'scheduled' | 'overdue' | 'paid' | ''>('scheduled');
+  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<PaymentView | null>(null);
   const q = useApi<PaymentView[]>('crm.payments', status ? { status } : {});
   const total = (q.data || []).reduce((a, x) => a + x.amount, 0);
+  const canPay = !!lk.data?.isAccountant;
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-end gap-3">
         <Segmented label={tr("الحالة")} value={status} onChange={setStatus} options={[{ value: 'scheduled', label: tr("مجدولة") }, { value: 'overdue', label: tr("متأخرة") }, { value: 'paid', label: tr("محصّلة") }, { value: '', label: tr("الكل") }]} />
         <span className="ms-auto text-muted">{tr("المجموع")} <Money fils={total} className="font-bold text-fg" /></span>
+        {canPay && <Button variant="primary" icon="plus" onClick={() => setAdding(true)}>{tr("دفعة جديدة")}</Button>}
       </div>
       <Card padded={false}>
         {q.isError ? <ErrorBox message={(q.error as Error).message} /> : !q.data ? <Loader /> : q.data.length === 0 ? <EmptyState title={tr("لا دفعات")} /> : (
-          <DataTable head={[tr("التاريخ"), tr("المشروع"), tr("العميل"), tr("المبلغ"), tr("الطريقة"), tr("الفاتورة"), tr("الحالة")]} minWidth={820}>
+          <DataTable head={[tr("التاريخ"), tr("المشروع"), tr("العميل"), tr("المبلغ"), tr("الطريقة"), tr("الفاتورة"), tr("الحالة"), '']} minWidth={860}>
             {q.data.map((d) => (
               <tr key={d.id} className="border-t border-line">
                 <td className={cx('px-4 py-3 num', d.overdue && 'font-semibold text-bad')}>{dmy(d.date)}</td>
@@ -217,23 +233,30 @@ export function PaymentsPage() {
                 <td className="px-4 py-3 text-[13px]">{d.methodLabel}{d.recipient ? ' · ' + d.recipient : ''}</td>
                 <td className="px-4 py-3 ltr text-right text-[13px]">{d.invoiceNo}</td>
                 <td className="px-4 py-3"><Badge tone={d.status === 'paid' ? 'ok' : d.overdue ? 'bad' : 'warn'}>{d.overdue ? tr("متأخرة") : d.statusLabel}</Badge></td>
+                <td className="px-2 py-3">{canPay && <Button size="sm" variant="ghost" icon="edit" aria-label={tr("تعديل")} onClick={() => setEditing(d)} />}</td>
               </tr>
             ))}
           </DataTable>
         )}
       </Card>
+      {adding && <PaymentDialog open onClose={() => setAdding(false)} />}
+      {editing && <PaymentDialog open onClose={() => setEditing(null)} projectId={editing.projectId} payment={editing} />}
     </div>
   );
 }
 
 export function ProposalsPage() {
   const [status, setStatus] = useState('');
+  const [adding, setAdding] = useState(false);
   const q = useApi<ProposalView[]>('crm.proposals', status ? { status } : {});
   return (
     <div className="flex flex-col gap-3">
-      <Segmented label={tr("الحالة")} value={status} onChange={setStatus} options={[{ value: '', label: tr("الكل") }, { value: 'negotiation', label: tr("قيد التفاوض") }, { value: 'accepted', label: tr("مقبولة") }, { value: 'rejected', label: tr("مرفوضة") }]} />
+      <div className="flex flex-wrap items-end gap-3">
+        <Segmented label={tr("الحالة")} value={status} onChange={setStatus} options={[{ value: '', label: tr("الكل") }, { value: 'negotiation', label: tr("قيد التفاوض") }, { value: 'accepted', label: tr("مقبولة") }, { value: 'rejected', label: tr("مرفوضة") }]} />
+        <Button variant="primary" icon="plus" className="ms-auto" onClick={() => setAdding(true)}>{tr("عرض سعر جديد")}</Button>
+      </div>
       <Card padded={false}>
-        {q.isError ? <ErrorBox message={(q.error as Error).message} /> : !q.data ? <Loader /> : q.data.length === 0 ? <EmptyState title={tr("لا عروض")} body={tr("أضف عرض السعر من صفحة العميل.")} /> : (
+        {q.isError ? <ErrorBox message={(q.error as Error).message} /> : !q.data ? <Loader /> : q.data.length === 0 ? <EmptyState title={tr("لا عروض")} body={tr("القبول والرفض من صفحة العميل.")} /> : (
           <DataTable head={[tr("العرض"), tr("العميل"), tr("القيمة"), tr("التاريخ"), tr("الحالة")]} minWidth={680}>
             {q.data.map((p) => (
               <tr key={p.id} className="border-t border-line">
@@ -247,6 +270,7 @@ export function ProposalsPage() {
           </DataTable>
         )}
       </Card>
+      {adding && <ProposalDialog open onClose={() => setAdding(false)} />}
     </div>
   );
 }
@@ -273,72 +297,168 @@ export function ActivityList({ items }: { items: ActivityView[] }) {
 export function ActivitiesPage() {
   const lk = useCrmLookups();
   const [type, setType] = useState('');
+  const [adding, setAdding] = useState(false);
   const q = useApi<ActivityView[]>('crm.activities', type ? { type } : {});
   return (
     <div className="flex flex-col gap-3">
-      <Select label={tr("النوع")} className="w-44" value={type} onChange={(e) => setType(e.target.value)} options={[{ value: '', label: tr("الكل") }, ...(lk.data?.activityTypes || []).map((t) => ({ value: t.id, label: t.label }))]} />
+      <div className="flex flex-wrap items-end gap-3">
+        <Select label={tr("النوع")} className="w-44" value={type} onChange={(e) => setType(e.target.value)} options={[{ value: '', label: tr("الكل") }, ...(lk.data?.activityTypes || []).map((t) => ({ value: t.id, label: t.label }))]} />
+        <Button variant="primary" icon="plus" className="ms-auto" onClick={() => setAdding(true)}>{tr("نشاط جديد")}</Button>
+      </div>
       <Card padded={false}>{q.isError ? <ErrorBox message={(q.error as Error).message} /> : !q.data ? <Loader /> : <ActivityList items={q.data} />}</Card>
-      <p className="m-0 text-[13px] text-muted">{tr("سجّل النشاط من صفحة العميل.")}</p>
+      {adding && <ActivityDialog open onClose={() => setAdding(false)} />}
     </div>
   );
 }
 
+type Preset = 'month' | 'quarter' | 'year' | 'all' | 'custom';
+function presetRange(p: Preset, today: string): { from: string; to: string } {
+  const y = today.slice(0, 4), m = Number(today.slice(5, 7));
+  if (p === 'month') return { from: today.slice(0, 7) + '-01', to: today };
+  if (p === 'quarter') return { from: y + '-' + String(Math.floor((m - 1) / 3) * 3 + 1).padStart(2, '0') + '-01', to: today };
+  if (p === 'year') return { from: y + '-01-01', to: today };
+  return { from: '2000-01-01', to: today };
+}
+
+/** تغيّر نسبي مقارنة بالفترة السابقة */
+function Change({ pct, label }: { pct: number; label: string }) {
+  if (!pct) return <span className="text-[12px] text-muted">{label}</span>;
+  return <span className={cx('text-[12px] font-semibold', pct > 0 ? 'text-ok' : 'text-bad')}>{pct > 0 ? '▲' : '▼'} {Math.abs(pct)}% <span className="font-normal text-muted">{label}</span></span>;
+}
+
+/** رسم أعمدة بسيط بلا مكتبة */
+function MonthBars({ data }: { data: { month: string; amount: number }[] }) {
+  const max = Math.max(1, ...data.map((d) => d.amount));
+  const W = 720, H = 180, pad = 28, bw = Math.max(8, Math.min(48, (W - pad * 2) / data.length - 8));
+  const step = (W - pad * 2) / data.length;
+  return (
+    <svg viewBox={`0 0 ${W} ${H + 40}`} className="w-full" role="img" aria-label={tr("التحصيل الشهري")}>
+      {[0.25, 0.5, 0.75, 1].map((f) => <line key={f} x1={pad} x2={W - pad} y1={H - H * f} y2={H - H * f} stroke="var(--c-border)" strokeDasharray="3 4" />)}
+      {data.map((d, i) => {
+        const h = Math.round((d.amount / max) * (H - 10)), x = pad + i * step + (step - bw) / 2;
+        return (
+          <g key={d.month}>
+            <rect x={x} y={H - h} width={bw} height={h} rx={4} fill={d.amount ? 'var(--c-accent)' : 'var(--c-chip)'}>
+              <title>{monthLabel(d.month)}: {kwd(d.amount)}</title>
+            </rect>
+            {d.amount > 0 && <text x={x + bw / 2} y={H - h - 5} textAnchor="middle" fontSize="10" fill="var(--c-muted)" className="num">{Math.round(d.amount / 1000).toLocaleString('en-US')}</text>}
+            <text x={x + bw / 2} y={H + 18} textAnchor="middle" fontSize="11" fill="var(--c-muted)">{monthLabel(d.month).replace(/ \d{4}$/, '')}</text>
+            {(i === 0 || d.month.endsWith('-01')) && <text x={x + bw / 2} y={H + 33} textAnchor="middle" fontSize="10" fill="var(--c-muted)" className="num">{d.month.slice(0, 4)}</text>}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+type SortKey = 'name' | 'clientName' | 'contractValue' | 'paid' | 'remaining' | 'spent';
+
 export function ReportsPage() {
-  const [from, setFrom] = useState(kwMonth().slice(0, 4) + '-01-01');
-  const [to, setTo] = useState('');
-  const q = useApi<CrmReport>('crm.report', { from, to: to || undefined });
+  const lk = useCrmLookups();
+  const today = lk.data?.today || kwDate();
+  const [preset, setPreset] = useState<Preset>('year');
+  const [custom, setCustom] = useState({ from: today.slice(0, 4) + '-01-01', to: today });
+  const range = preset === 'custom' ? custom : presetRange(preset, today);
+  const q = useApi<CrmReport>('crm.report', { from: range.from, to: range.to }, { placeholderData: (p) => p });
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'paid', dir: -1 });
+  const [pstatus, setPstatus] = useState<'' | 'ongoing' | 'completed' | 'on_hold'>('');
   const r = q.data;
-  const exportCsv = () => r && downloadCsv(tr("تحصيل-المشاريع.csv"), [
+  const projects = useMemo(() => {
+    const list = (r?.projects || []).filter((p) => !pstatus || p.status === pstatus);
+    return list.sort((a, b) => { const va = a[sort.key], vb = b[sort.key]; return (typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb), 'ar')) * sort.dir; });
+  }, [r, sort, pstatus]);
+  const th = (key: SortKey, label: string) => (
+    <button type="button" onClick={() => setSort((s) => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : -1 }))} className={cx('inline-flex items-center gap-1 cursor-pointer', sort.key === key && 'text-fg')}>
+      {label}{sort.key === key && <span aria-hidden="true">{sort.dir === -1 ? '▼' : '▲'}</span>}
+    </button>
+  );
+  const exportProjects = () => r && downloadCsv(tr("تحصيل-المشاريع.csv"), [
     [tr("المشروع"), tr("العميل"), tr("الفوترة"), tr("العقد"), tr("المحصّل"), tr("المجدول"), tr("المتبقي"), tr("مصروف العهد"), tr("الحالة")],
-    ...r.projects.map((p) => [p.name, p.clientName, p.billingLabel, kwd(p.contractValue, false), kwd(p.paid, false), kwd(p.scheduled, false), p.billing === 'fixed' ? kwd(p.remaining, false) : '', kwd(p.spent, false), p.statusLabel])
+    ...projects.map((p) => [p.name, p.clientName, p.cycle ? p.billingCycleLabel + ' ' + kwd(p.cycleAmount, false) : p.billingLabel, kwd(p.contractValue, false), kwd(p.paid, false), kwd(p.scheduled, false), kwd(p.remaining, false), kwd(p.spent, false), p.statusLabel])
   ]);
+  const exportReceivables = () => r && downloadCsv(tr("المستحقات.csv"), [
+    [tr("النوع"), tr("المشروع"), tr("العميل"), tr("المبلغ"), tr("الموعد"), tr("أيام التأخير")],
+    ...r.receivables.items.map((x) => [x.kind === 'cycle' ? tr("اشتراك") : tr("دفعة مجدولة"), x.projectName, x.clientName, kwd(x.amount, false), dmy(x.date), x.daysLate])
+  ]);
+  const periodLabel = `${dmy(range.from)} ← ${dmy(range.to)}`;
+  const typeLabel = (k: string) => lk.data?.activityTypes.find((t) => t.id === k)?.label || k;
   return (
     <div className="flex flex-col gap-4">
       <div className="no-print flex flex-wrap items-end gap-3">
-        <TextInput label={tr("من")} type="date" ltr value={from} onChange={(e) => setFrom(e.target.value)} className="w-44" />
-        <TextInput label={tr("إلى")} type="date" ltr value={to} onChange={(e) => setTo(e.target.value)} className="w-44" />
-        <Button icon="download" onClick={exportCsv} disabled={!r}>{tr("تصدير Excel")}</Button>
-        <Button icon="printer" onClick={() => window.print()}>{tr("طباعة")}</Button>
+        <Segmented label={tr("الفترة")} value={preset} onChange={setPreset} options={[{ value: 'month', label: tr("هذا الشهر") }, { value: 'quarter', label: tr("هذا الربع") }, { value: 'year', label: tr("هذه السنة") }, { value: 'all', label: tr("الكل") }, { value: 'custom', label: tr("فترة محددة") }]} />
+        {preset === 'custom' && <>
+          <TextInput label={tr("من")} type="date" ltr value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} className="w-40" />
+          <TextInput label={tr("إلى")} type="date" ltr value={custom.to} onChange={(e) => setCustom({ ...custom, to: e.target.value })} className="w-40" />
+        </>}
+        <span className="ms-auto" />
+        <Button icon="download" onClick={exportProjects} disabled={!r}>{tr("تصدير CSV")}</Button>
+        <Button icon="printer" onClick={() => window.print()} disabled={!r}>{tr("طباعة")}</Button>
       </div>
-      {q.isError ? <ErrorBox message={(q.error as Error).message} /> : !r ? <Loader /> : (
+      <div className="print-only"><h2 className="m-0">{tr("تقرير العملاء · {0}", periodLabel)}</h2></div>
+      {q.isError ? <ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} /> : !r ? <Loader /> : (
         <>
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-4">
-            <StatTile label={tr("المحصّل في الفترة")} value={<Money fils={r.collected} />} icon="wallet" />
-            <StatTile label={tr("العروض")} value={r.proposals.total} icon="file" foot={tr("{0} مقبول · {1} مرفوض", r.proposals.accepted, r.proposals.rejected)} />
-            <StatTile label={tr("قيمة العروض المقبولة")} value={<Money fils={r.proposals.acceptedValue} />} icon="check" foot={r.proposals.total ? tr("نسبة القبول {0}%", Math.round(r.proposals.accepted * 100 / r.proposals.total)) : ''} />
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <StatTile label={tr("المحصّل في الفترة")} value={<Money fils={r.collected} />} icon="wallet" foot={<Change pct={r.collectedChange} label={tr("عن الفترة السابقة ({0})", kwd(r.previousCollected))} />} />
+            <StatTile label={tr("مستحقات متأخرة")} value={<Money fils={r.receivables.overdue} className={r.receivables.overdue ? 'text-bad' : ''} />} icon="alert" foot={tr("من إجمالي مستحق {0}", kwd(r.receivables.total))} />
+            <StatTile label={tr("العروض")} value={r.proposals.total} icon="file" foot={<span className="text-[12px] text-muted">{r.proposals.total ? tr("قبول {0}% · قيمة المقبول {1}", Math.round(r.proposals.accepted * 100 / r.proposals.total), kwd(r.proposals.acceptedValue)) : tr("لا عروض في الفترة")}</span>} />
+            <StatTile label={tr("الأنشطة")} value={r.activitiesTotal} icon="users" foot={<Change pct={r.activitiesChange} label={tr("عن الفترة السابقة · {0} عميل جديد", r.newClients)} />} />
           </div>
+
+          <Card className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-3"><h2 className="m-0 text-[16px] font-semibold">{tr("التحصيل الشهري")}</h2><span className="text-[12px] text-muted">{tr("بالدينار")}</span></div>
+            {r.byMonth.every((x) => !x.amount) ? <EmptyState title={tr("لا تحصيل في الفترة")} /> : <MonthBars data={r.byMonth} />}
+          </Card>
+
           <div className="grid items-start gap-4 lg:grid-cols-2">
             <Card padded={false} className="print-table">
-              <CardHeader title={tr("التحصيل حسب العميل")} />
-              <DataTable head={[tr("العميل"), tr("المحصّل")]} minWidth={300}>
-                {r.byClient.map((x) => <tr key={x.clientId} className="border-t border-line"><td className="px-4 py-2.5">{x.clientName}</td><td className="px-4 py-2.5"><Money fils={x.amount} /></td></tr>)}
-              </DataTable>
+              <CardHeader title={tr("المستحقات الآن · {0}", r.receivables.items.length)} action={<Button size="sm" variant="ghost" icon="download" onClick={exportReceivables}>{tr("CSV")}</Button>} />
+              {r.receivables.items.length === 0 ? <EmptyState title={tr("لا مستحقات")} /> : (
+                <DataTable head={[tr("المشروع"), tr("المبلغ"), tr("الموعد")]} minWidth={360}>
+                  {r.receivables.items.map((x) => (
+                    <tr key={x.kind + x.id} className="border-t border-line">
+                      <td className="px-4 py-2.5"><Link to={'/crm/projects/' + x.projectId} className="font-medium text-fg no-underline hover:underline">{x.projectName}</Link><div className="text-[12px] text-muted">{x.clientName} · {x.kind === 'cycle' ? tr("اشتراك") : tr("دفعة مجدولة")}</div></td>
+                      <td className="px-4 py-2.5"><Money fils={x.amount} /></td>
+                      <td className={cx('px-4 py-2.5 num', x.daysLate > 0 && 'font-semibold text-bad')}>{dmy(x.date)}{x.daysLate > 0 ? <div className="text-[12px]">{tr("متأخرة {0} يوم", x.daysLate)}</div> : null}</td>
+                    </tr>
+                  ))}
+                </DataTable>
+              )}
             </Card>
             <Card padded={false} className="print-table">
-              <CardHeader title={tr("التحصيل الشهري")} />
-              <DataTable head={[tr("الشهر"), tr("المحصّل")]} minWidth={300}>
-                {r.byMonth.map((x) => <tr key={x.month} className="border-t border-line"><td className="px-4 py-2.5">{monthLabel(x.month)}</td><td className="px-4 py-2.5"><Money fils={x.amount} /></td></tr>)}
-              </DataTable>
+              <CardHeader title={tr("التحصيل حسب العميل")} />
+              {r.byClient.length === 0 ? <EmptyState title={tr("لا تحصيل في الفترة")} /> : (
+                <DataTable head={[tr("العميل"), tr("المحصّل"), tr("النسبة")]} minWidth={360}>
+                  {r.byClient.map((x) => (
+                    <tr key={x.clientId} className="border-t border-line">
+                      <td className="px-4 py-2.5"><Link to={'/crm/clients/' + x.clientId} className="font-medium text-fg no-underline hover:underline">{x.clientName}</Link><div className="text-[12px] text-muted">{tr("{0} مشروع", x.projects)}</div></td>
+                      <td className="px-4 py-2.5"><Money fils={x.amount} /></td>
+                      <td className="px-4 py-2.5"><div className="flex items-center gap-2"><div className="h-1.5 w-20 overflow-hidden rounded-full bg-chip"><div className="h-full rounded-full bg-accent" style={{ width: x.percent + '%' }} /></div><span className="text-[12px] text-muted num">{x.percent}%</span></div></td>
+                    </tr>
+                  ))}
+                </DataTable>
+              )}
             </Card>
           </div>
+
           <Card padded={false} className="print-table">
-            <CardHeader title={tr("نشاط الفريق")} />
+            <CardHeader title={tr("نشاط الفريق في الفترة")} />
             {r.activities.length === 0 ? <EmptyState title={tr("لا أنشطة في الفترة")} /> : (
-              <DataTable head={[tr("الموظف"), tr("الأنشطة")]} minWidth={300}>
-                {r.activities.map((x) => <tr key={x.userName} className="border-t border-line"><td className="px-4 py-2.5">{x.userName}</td><td className="px-4 py-2.5 num">{x.total}</td></tr>)}
+              <DataTable head={[tr("الموظف"), tr("الأنشطة"), tr("التفصيل")]} minWidth={420}>
+                {r.activities.map((x) => <tr key={x.userName} className="border-t border-line"><td className="px-4 py-2.5 font-medium">{x.userName}</td><td className="px-4 py-2.5 num">{x.total}</td><td className="px-4 py-2.5 text-[12px] text-muted">{Object.entries(x.types).map(([k, v]) => typeLabel(k) + ' ' + v).join(' · ')}</td></tr>)}
               </DataTable>
             )}
           </Card>
+
           <Card padded={false} className="print-table">
-            <CardHeader title={tr("المشاريع: العقد والتحصيل ومصروف العهد")} />
-            <DataTable head={[tr("المشروع"), tr("العميل"), tr("العقد"), tr("المحصّل"), tr("المتبقي"), tr("مصروف العهد")]} minWidth={760}>
-              {r.projects.map((p) => (
+            <CardHeader title={tr("المشاريع: العقد والتحصيل ومصروف العهد")} action={<Segmented label={tr("الحالة")} value={pstatus} onChange={setPstatus} options={[{ value: '', label: tr("الكل") }, { value: 'ongoing', label: tr("جارية") }, { value: 'on_hold', label: tr("متوقفة") }, { value: 'completed', label: tr("مكتملة") }]} />} />
+            <DataTable head={[th('name', tr("المشروع")), th('clientName', tr("العميل")), th('contractValue', tr("العقد / الاشتراك")), th('paid', tr("المحصّل")), th('remaining', tr("المتبقي")), th('spent', tr("مصروف العهد"))]} minWidth={760}>
+              {projects.map((p) => (
                 <tr key={p.id} className="border-t border-line">
                   <td className="px-4 py-2.5"><Link to={'/crm/projects/' + p.id} className="text-fg no-underline hover:underline">{p.name}</Link></td>
                   <td className="px-4 py-2.5 text-[13px]">{p.clientName}</td>
-                  <td className="px-4 py-2.5">{p.billing === 'fixed' ? <Money fils={p.contractValue} /> : <span className="text-[13px] text-muted">{p.billingLabel}</span>}</td>
+                  <td className="px-4 py-2.5">{p.billing === 'fixed' ? <Money fils={p.contractValue} /> : p.cycle ? <span><Money fils={p.cycleAmount} /> <span className="text-[12px] text-muted">/ {p.billingCycleLabel}</span></span> : <span className="text-[13px] text-muted">{p.billingLabel}</span>}</td>
                   <td className="px-4 py-2.5"><Money fils={p.paid} /></td>
-                  <td className="px-4 py-2.5">{p.billing === 'fixed' ? <Money fils={p.remaining} /> : '—'}</td>
+                  <td className="px-4 py-2.5">{p.billing === 'fixed' || p.cycle ? <Money fils={p.remaining} /> : '—'}</td>
                   <td className="px-4 py-2.5">{p.spent ? <Money fils={p.spent} /> : '—'}</td>
                 </tr>
               ))}

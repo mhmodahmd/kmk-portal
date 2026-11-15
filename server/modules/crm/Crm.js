@@ -22,7 +22,7 @@ var CRM_SCHEMA = {
   Projects: [
     ['id', 'text'], ['name', 'text'], ['clientId', 'text'], ['type', 'text'], ['billing', 'text'], ['contractValue', 'num'], ['startDate', 'date'],
     ['endDate', 'date'], ['status', 'text'], ['parentId', 'text'], ['needsReview', 'bool'], ['reviewNote', 'text'], ['notes', 'text'],
-    ['proposalId', 'text'], ['createdBy', 'text'], ['createdAt', 'ts'], ['updatedAt', 'ts']
+    ['proposalId', 'text'], ['createdBy', 'text'], ['createdAt', 'ts'], ['updatedAt', 'ts'], ['billingCycle', 'text'], ['cycleAmount', 'num']
   ],
   Payments: [
     ['id', 'text'], ['projectId', 'text'], ['amount', 'num'], ['kind', 'text'], ['method', 'text'], ['status', 'text'], ['date', 'date'],
@@ -52,6 +52,9 @@ var CRM = {
   STATUS: { active: 'نشط', stopped: 'متوقف', suspended: 'معلّق' },
   P_STATUS: { ongoing: 'جاري', on_hold: 'متوقف مؤقتاً', completed: 'مكتمل', cancelled: 'ملغى' },
   BILLING: { fixed: 'عقد ثابت', open: 'اشتراك أو مفتوح' },
+  // الاشتراك: دورة الفوترة وقيمتها (اختياريان). المستحق للدورة الحالية = القيمة − المحصّل خلال الدورة
+  CYCLE: { monthly: 'شهري', quarterly: 'ربع سنوي', yearly: 'سنوي' },
+  CYCLE_MONTHS: { monthly: 1, quarterly: 3, yearly: 12 },
   PAY_KIND: { advance: 'مقدمة', partial: 'جزئية', final: 'نهائية' },
   PAY_METHOD: { transfer: 'تحويل', check: 'شيك', cash: 'نقد', link: 'رابط دفع' },
   PAY_STATUS: { paid: 'محصّلة', scheduled: 'مجدولة' },
@@ -125,17 +128,44 @@ var Crm = {
     return s;
   },
 
+  /** يضيف أشهراً لتاريخ مع تثبيت اليوم عند نهاية الشهر */
+  addMonths_: function (ds, n) {
+    var y = Number(ds.slice(0, 4)), m = Number(ds.slice(5, 7)) - 1 + n, d = Number(ds.slice(8, 10));
+    y += Math.floor(m / 12); m = ((m % 12) + 12) % 12;
+    var ym = y + '-' + String(m + 1).padStart(2, '0');
+    return ym + '-' + String(Math.min(d, daysInMonth_(ym))).padStart(2, '0');
+  },
+
+  /** الدورة الحالية لاشتراك: تبدأ من تاريخ البداية وتتكرر بطول الدورة. null لغير الاشتراكات */
+  period_: function (p, today) {
+    var months = CRM.CYCLE_MONTHS[p.billingCycle];
+    if (p.billing !== 'open' || !months || !p.cycleAmount) return null;
+    var start = p.startDate || localDate_(p.createdAt);
+    if (start > today) return { start: start, end: addDays_(Crm.addMonths_(start, months), -1), future: true };
+    var next = Crm.addMonths_(start, months);
+    while (next <= today) { start = next; next = Crm.addMonths_(start, months); }
+    return { start: start, end: addDays_(next, -1), future: false };
+  },
+
+  /** المستحق للدورة الحالية (بالفلس) والمحصّل فيها */
+  cycleState_: function (p, m, today) {
+    var per = Crm.period_(p, today);
+    if (!per) return null;
+    var paid = (m.paidList[p.id] || []).filter(function (x) { return x.date >= per.start && x.date <= per.end; }).reduce(function (a, x) { return a + x.amount; }, 0);
+    return { start: per.start, end: per.end, paid: paid, due: Math.max(0, p.cycleAmount - paid), future: per.future };
+  },
+
   seed_: function () {
     if (Crm.rows_('Stages').length) return;
     Db.insertMany('crm', 'Stages', CRM.STAGES.map(function (s, i) { return { id: s[0], name: s[1], color: s[2], sortOrder: i + 1, kind: s[3] }; }));
   },
 
   maps_: function () {
-    var pays = {}, spent = {};
+    var pays = {}, spent = {}, paidList = {};
     Crm.rows_('Payments').forEach(function (p) {
       var x = pays[p.projectId] = pays[p.projectId] || { paid: 0, scheduled: 0, overdue: 0, count: 0, nextDue: '' };
       x.count++;
-      if (p.status === 'paid') x.paid += p.amount;
+      if (p.status === 'paid') { x.paid += p.amount; (paidList[p.projectId] = paidList[p.projectId] || []).push({ date: p.date, amount: p.amount }); }
       else {
         x.scheduled += p.amount;
         if (p.date && p.date < localDate_()) x.overdue += p.amount;
@@ -149,7 +179,7 @@ var Crm = {
     }
     return {
       users: indexBy_(Db.view('core', 'Users')), clients: indexBy_(Crm.rows_('Clients')), projects: indexBy_(Crm.rows_('Projects')),
-      stages: indexBy_(Crm.rows_('Stages')), contacts: indexBy_(Crm.rows_('Contacts')), pays: pays, spent: spent
+      stages: indexBy_(Crm.rows_('Stages')), contacts: indexBy_(Crm.rows_('Contacts')), pays: pays, spent: spent, paidList: paidList, today: localDate_()
     };
   },
   userName_: function (m, id) { var u = id && m.users[id]; return u ? u.fullName : ''; },
@@ -159,7 +189,12 @@ var Crm = {
     var st = m.stages[c.stageId];
     var projects = Crm.rows_('Projects').filter(function (p) { return p.clientId === c.id; });
     var paid = 0, remaining = 0;
-    projects.forEach(function (p) { var x = m.pays[p.id] || { paid: 0 }; paid += x.paid; if (p.billing === 'fixed') remaining += Math.max(0, p.contractValue - x.paid); });
+    projects.forEach(function (p) {
+      var x = m.pays[p.id] || { paid: 0 }; paid += x.paid;
+      if (p.status === 'cancelled') return;
+      if (p.billing === 'fixed') remaining += Math.max(0, p.contractValue - x.paid);
+      else { var cs = Crm.cycleState_(p, m, m.today); if (cs && !cs.future) remaining += cs.due; }
+    });
     return {
       id: c.id, name: c.name, type: c.type, typeLabel: CRM.TYPE[c.type] || '', category: c.category, categoryLabel: CRM.CATEGORY[c.category] || '',
       status: c.status, statusLabel: CRM.STATUS[c.status] || '', stageId: c.stageId || '', stageName: st ? st.name : '', stageColor: st ? st.color : '',
@@ -174,13 +209,17 @@ var Crm = {
   projectView_: function (p, m) {
     var c = m.clients[p.clientId], x = m.pays[p.id] || { paid: 0, scheduled: 0, overdue: 0, count: 0, nextDue: '' }, par = p.parentId && m.projects[p.parentId];
     var fixed = p.billing === 'fixed';
+    var cs = fixed ? null : Crm.cycleState_(p, m, m.today);
     return {
       id: p.id, name: p.name, clientId: p.clientId, clientName: c ? c.name : '', type: p.type || '', billing: p.billing, billingLabel: CRM.BILLING[p.billing] || '',
       contractValue: p.contractValue || 0, startDate: p.startDate || '', endDate: p.endDate || '', status: p.status, statusLabel: CRM.P_STATUS[p.status] || '',
       parentId: p.parentId || '', parentName: par ? par.name : '', needsReview: !!p.needsReview, reviewNote: p.reviewNote || '', notes: p.notes || '',
       paid: x.paid, scheduled: x.scheduled, overdue: x.overdue, nextDue: x.nextDue, paymentsCount: x.count,
-      remaining: fixed ? p.contractValue - x.paid : 0, overCollected: fixed && x.paid > p.contractValue,
-      percent: fixed && p.contractValue ? Math.round(x.paid * 100 / p.contractValue) : 0, spent: m.spent[p.name] || 0, createdAt: p.createdAt
+      remaining: fixed ? p.contractValue - x.paid : (cs && !cs.future ? cs.due : 0), overCollected: fixed && x.paid > p.contractValue,
+      percent: fixed && p.contractValue ? Math.round(x.paid * 100 / p.contractValue) : (cs && p.cycleAmount ? Math.min(100, Math.round(cs.paid * 100 / p.cycleAmount)) : 0),
+      spent: m.spent[p.name] || 0, createdAt: p.createdAt,
+      billingCycle: p.billingCycle || '', billingCycleLabel: CRM.CYCLE[p.billingCycle] || '', cycleAmount: p.cycleAmount || 0,
+      cycle: cs ? { start: cs.start, end: cs.end, paid: cs.paid, due: cs.due, future: cs.future } : null
     };
   },
 
@@ -229,7 +268,7 @@ var Crm = {
         .map(function (u) { return { id: u.id, name: u.fullName }; }).sort(function (a, b) { return a.name.localeCompare(b.name, 'ar'); }),
       stages: Crm.rows_('Stages').slice().sort(function (a, b) { return a.sortOrder - b.sortOrder; }).map(function (s) { return { id: s.id, name: s.name, color: s.color, kind: s.kind }; }),
       clientTypes: dict(CRM.TYPE), categories: dict(CRM.CATEGORY), statuses: dict(CRM.STATUS), projectStatuses: dict(CRM.P_STATUS), billing: dict(CRM.BILLING),
-      payKinds: dict(CRM.PAY_KIND), payMethods: dict(CRM.PAY_METHOD), proposalStatuses: dict(CRM.PR_STATUS), activityTypes: dict(CRM.ACT),
+      payKinds: dict(CRM.PAY_KIND), payMethods: dict(CRM.PAY_METHOD), proposalStatuses: dict(CRM.PR_STATUS), activityTypes: dict(CRM.ACT), cycles: dict(CRM.CYCLE),
       projectTypes: Object.keys(types).sort(function (a, b) { return a.localeCompare(b, 'ar'); })
     };
   },
@@ -347,14 +386,21 @@ var Crm = {
     var projects = Crm.rows_('Projects').filter(function (p) { return vis[p.clientId]; });
     var due = Crm.rows_('Payments').filter(function (x) { var pr = m.projects[x.projectId]; return pr && vis[pr.clientId] && x.status === 'scheduled' && x.date && x.date <= soon; })
       .map(function (x) { return Crm.payView_(x, m); }).sort(function (a, b) { return a.date.localeCompare(b.date); });
-    var paid = 0, contract = 0;
-    projects.forEach(function (p) { var x = m.pays[p.id] || { paid: 0 }; paid += x.paid; if (p.billing === 'fixed' && p.status !== 'cancelled') contract += p.contractValue; });
+    var paid = 0, contract = 0, cycles = [];
+    projects.forEach(function (p) {
+      var x = m.pays[p.id] || { paid: 0 }; paid += x.paid;
+      if (p.status === 'cancelled') return;
+      if (p.billing === 'fixed') contract += p.contractValue;
+      else { var cs = Crm.cycleState_(p, m, today); if (cs && !cs.future && cs.due > 0) cycles.push({ projectId: p.id, projectName: p.name, clientName: (m.clients[p.clientId] || {}).name || '', due: cs.due, end: cs.end, late: cs.end < today }); }
+    });
+    cycles.sort(function (a, b) { return a.end.localeCompare(b.end); });
     var fixedRemaining = projects.filter(function (p) { return p.billing === 'fixed' && p.status !== 'cancelled'; })
-      .reduce(function (a, p) { return a + Math.max(0, p.contractValue - ((m.pays[p.id] || {}).paid || 0)); }, 0);
+      .reduce(function (a, p) { return a + Math.max(0, p.contractValue - ((m.pays[p.id] || {}).paid || 0)); }, 0) +
+      cycles.reduce(function (a, c) { return a + c.due; }, 0);
     return {
       clients: Object.keys(vis).length, leads: Crm.visibleClients_(ctx).filter(function (c) { return c.category === 'lead'; }).length,
       ongoing: projects.filter(function (p) { return p.status === 'ongoing'; }).length, review: projects.filter(function (p) { return p.needsReview; }).length,
-      collected: paid, contract: contract, remaining: fixedRemaining, due: due, overdue: due.filter(function (d) { return d.overdue; }).length,
+      collected: paid, contract: contract, remaining: fixedRemaining, due: due, overdue: due.filter(function (d) { return d.overdue; }).length, cycles: cycles,
       openProposals: Crm.rows_('Proposals').filter(function (x) { return vis[x.clientId] && x.status === 'negotiation'; }).length
     };
   },
@@ -448,9 +494,11 @@ var Crm = {
       var cur = p.id ? Crm.project_(ctx, p.id) : null;
       var c = Crm.editableClient_(ctx, cur ? (p.clientId || cur.clientId) : p.clientId);
       var billing = Crm.enum_(p.billing, CRM.BILLING, 'نوع الفوترة', cur ? cur.billing : 'fixed');
+      var cycle = billing === 'open' ? Crm.enum_(p.billingCycle, CRM.CYCLE, 'دورة الفوترة', '') : '';
       var rec = {
         name: requireText(p.name, 'اسم المشروع', 160), clientId: c.id, type: optionalText(p.type, 60), billing: billing,
         contractValue: billing === 'fixed' ? parseMoney_(p.contractValue, 'قيمة العقد', { max: 10000000 }) : 0,
+        billingCycle: cycle, cycleAmount: cycle ? parseMoney_(p.cycleAmount, 'قيمة الدورة', { max: 10000000 }) : 0,
         startDate: optionalDate_(p.startDate, 'تاريخ البداية'), endDate: optionalDate_(p.endDate, 'تاريخ النهاية'),
         status: Crm.enum_(p.status, CRM.P_STATUS, 'حالة المشروع', 'ongoing'), notes: optionalText(p.notes, 2000), updatedAt: nowIso()
       };
@@ -465,7 +513,7 @@ var Crm = {
       if (cur) {
         if (Crm.rows_('Projects').some(function (x) { return x.id !== cur.id && x.name === rec.name; })) throw appError('يوجد مشروع آخر بالاسم نفسه.');
         saved = Db.update('crm', 'Projects', cur.id, rec);
-        Audit.log(ctx.user, 'crm', 'project.update', 'Project', cur.id, { name: rec.name, billing: billing, contract: kwd_(rec.contractValue) });
+        Audit.log(ctx.user, 'crm', 'project.update', 'Project', cur.id, { name: rec.name, billing: billing, contract: kwd_(rec.contractValue), cycle: cycle ? CRM.CYCLE[cycle] + ' ' + kwd_(rec.cycleAmount) : '' });
       } else {
         if (Crm.rows_('Projects').some(function (x) { return x.name === rec.name; })) throw appError('يوجد مشروع بالاسم نفسه.');
         saved = Db.insert('crm', 'Projects', Object.assign(rec, { needsReview: false, reviewNote: '', proposalId: optionalText(p.proposalId, 40), createdBy: ctx.user.id, createdAt: nowIso() }));
@@ -650,29 +698,68 @@ var Crm = {
   },
 
   // ───────── التقارير ─────────
-  report: function (ctx, p) {
-    p = p || {};
-    var from = p.from || '0000', to = p.to || '9999', m = Crm.maps_(), vis = Crm.visibleClientIds_(ctx);
+  /** مجاميع فترة: المحصّل والعروض والأنشطة (للمقارنة بالفترة السابقة) */
+  periodStats_: function (m, vis, from, to) {
     var pays = Crm.rows_('Payments').filter(function (x) { var pr = m.projects[x.projectId]; return pr && vis[pr.clientId] && x.status === 'paid' && x.date >= from && x.date <= to; });
-    var byClient = {}, byMonth = {};
-    pays.forEach(function (x) {
-      var pr = m.projects[x.projectId];
-      byClient[pr.clientId] = (byClient[pr.clientId] || 0) + x.amount;
-      var mo = (x.date || '').slice(0, 7);
-      byMonth[mo] = (byMonth[mo] || 0) + x.amount;
-    });
     var props = Crm.rows_('Proposals').filter(function (x) { return vis[x.clientId] && (x.issueDate || '') >= from && (x.issueDate || '') <= to; });
     var acts = Crm.rows_('Activities').filter(function (a) { return vis[a.clientId] && (a.at || '').slice(0, 10) >= from && (a.at || '').slice(0, 10) <= to; });
+    var newClients = Crm.rows_('Clients').filter(function (c) { return vis[c.id] && (c.createdAt || '').slice(0, 10) >= from && (c.createdAt || '').slice(0, 10) <= to; }).length;
+    return { pays: pays, props: props, acts: acts, collected: pays.reduce(function (a, x) { return a + x.amount; }, 0),
+      proposals: props.length, accepted: props.filter(function (x) { return x.status === 'accepted'; }).length, activities: acts.length, newClients: newClients };
+  },
+
+  /** تقرير الفترة: المحصّل بالمقارنة مع الفترة السابقة، المستحقات المتأخرة، التحصيل بالعميل والشهر، العروض، نشاط الفريق، والمشاريع */
+  report: function (ctx, p) {
+    p = p || {};
+    var today = localDate_();
+    var from = p.from && isDate_(p.from) ? p.from : today.slice(0, 4) + '-01-01';
+    var to = p.to && isDate_(p.to) ? p.to : today;
+    if (to < from) { var t = from; from = to; to = t; }
+    var m = Crm.maps_(), vis = Crm.visibleClientIds_(ctx);
+    var cur = Crm.periodStats_(m, vis, from, to);
+    var len = daysBetween_(from, to) + 1;
+    var prev = Crm.periodStats_(m, vis, addDays_(from, -len), addDays_(from, -1));
+    var byClient = {}, byMonth = {};
+    cur.pays.forEach(function (x) {
+      var pr = m.projects[x.projectId];
+      var c = byClient[pr.clientId] = byClient[pr.clientId] || { amount: 0, projects: {} };
+      c.amount += x.amount; c.projects[pr.id] = true;
+      var mo = x.date.slice(0, 7);
+      byMonth[mo] = (byMonth[mo] || 0) + x.amount;
+    });
+    // كل الأشهر بين البداية والنهاية حتى يكون الرسم متصلاً
+    var months = [];
+    for (var mo = from.slice(0, 7); mo <= to.slice(0, 7) && months.length < 36; mo = Crm.addMonths_(mo + '-01', 1).slice(0, 7)) months.push({ month: mo, amount: byMonth[mo] || 0 });
     var byUser = {};
-    acts.forEach(function (a) { var k = a.userId || ''; var u = byUser[k] = byUser[k] || { userName: Crm.userName_(m, k) || '—', total: 0, types: {} }; u.total++; u.types[a.type] = (u.types[a.type] || 0) + 1; });
+    cur.acts.forEach(function (a) { var k = a.userId || ''; var u = byUser[k] = byUser[k] || { userName: Crm.userName_(m, k) || '—', total: 0, types: {} }; u.total++; u.types[a.type] = (u.types[a.type] || 0) + 1; });
+    // المستحقات الآن (لا تتقيد بالفترة): دفعات مجدولة متأخرة ودورات اشتراك لم تُحصَّل
+    var receivables = [];
+    Crm.rows_('Payments').forEach(function (x) {
+      var pr = m.projects[x.projectId];
+      if (!pr || !vis[pr.clientId] || x.status !== 'scheduled') return;
+      receivables.push({ kind: 'payment', id: x.id, projectId: pr.id, projectName: pr.name, clientName: (m.clients[pr.clientId] || {}).name || '', amount: x.amount, date: x.date, daysLate: x.date && x.date < today ? daysBetween_(x.date, today) : 0 });
+    });
+    Crm.rows_('Projects').forEach(function (pr) {
+      if (!vis[pr.clientId] || (pr.status !== 'ongoing' && pr.status !== 'on_hold')) return;
+      var cs = Crm.cycleState_(pr, m, today);
+      if (!cs || cs.future || cs.due <= 0) return;
+      receivables.push({ kind: 'cycle', id: pr.id, projectId: pr.id, projectName: pr.name, clientName: (m.clients[pr.clientId] || {}).name || '', amount: cs.due, date: cs.end, daysLate: cs.end < today ? daysBetween_(cs.end, today) : 0 });
+    });
+    receivables.sort(function (a, b) { return (b.daysLate - a.daysLate) || (a.date || '').localeCompare(b.date || ''); });
+    var pct = function (a, b) { return b ? Math.round((a - b) * 100 / b) : (a ? 100 : 0); };
     return {
-      collected: pays.reduce(function (a, x) { return a + x.amount; }, 0),
-      byClient: Object.keys(byClient).map(function (id) { return { clientId: id, clientName: (m.clients[id] || {}).name || '', amount: byClient[id] }; }).sort(function (a, b) { return b.amount - a.amount; }),
-      byMonth: Object.keys(byMonth).sort().map(function (k) { return { month: k, amount: byMonth[k] }; }),
+      from: from, to: to, previousFrom: addDays_(from, -len), previousTo: addDays_(from, -1),
+      collected: cur.collected, collectedChange: pct(cur.collected, prev.collected), previousCollected: prev.collected,
+      newClients: cur.newClients, newClientsChange: pct(cur.newClients, prev.newClients),
+      receivables: { total: receivables.reduce(function (a, r) { return a + r.amount; }, 0), overdue: receivables.filter(function (r) { return r.daysLate > 0; }).reduce(function (a, r) { return a + r.amount; }, 0), items: receivables },
+      byClient: Object.keys(byClient).map(function (id) { return { clientId: id, clientName: (m.clients[id] || {}).name || '', amount: byClient[id].amount, projects: Object.keys(byClient[id].projects).length, percent: cur.collected ? Math.round(byClient[id].amount * 100 / cur.collected) : 0 }; }).sort(function (a, b) { return b.amount - a.amount; }),
+      byMonth: months,
       projects: Crm.rows_('Projects').filter(function (x) { return vis[x.clientId]; }).map(function (x) { return Crm.projectView_(x, m); }),
-      proposals: { total: props.length, accepted: props.filter(function (x) { return x.status === 'accepted'; }).length, rejected: props.filter(function (x) { return x.status === 'rejected'; }).length,
-        value: props.reduce(function (a, x) { return a + x.value; }, 0), acceptedValue: props.filter(function (x) { return x.status === 'accepted'; }).reduce(function (a, x) { return a + x.value; }, 0) },
-      activities: Object.keys(byUser).map(function (k) { return byUser[k]; }).sort(function (a, b) { return b.total - a.total; })
+      proposals: { total: cur.proposals, accepted: cur.accepted, rejected: cur.props.filter(function (x) { return x.status === 'rejected'; }).length,
+        value: cur.props.reduce(function (a, x) { return a + x.value; }, 0), acceptedValue: cur.props.filter(function (x) { return x.status === 'accepted'; }).reduce(function (a, x) { return a + x.value; }, 0),
+        previousTotal: prev.proposals, previousAccepted: prev.accepted },
+      activities: Object.keys(byUser).map(function (k) { return byUser[k]; }).sort(function (a, b) { return b.total - a.total; }),
+      activitiesTotal: cur.activities, activitiesChange: pct(cur.activities, prev.activities)
     };
   },
 
@@ -702,6 +789,21 @@ var Crm = {
           userId: uid, kind: 'event', module: 'crm', title: late ? 'دفعة متأخرة التحصيل' : 'دفعة يحين موعدها قريباً',
           detail: pr.name + (c ? ' · ' + c.name : '') + ' · ' + kwd_(x.amount) + ' · ' + dmy_(x.date), link: '/crm/projects/' + pr.id,
           refKey: 'crm.pay:' + x.id + ':' + (late ? 'late' : 'soon') + ':' + x.date
+        });
+      });
+    });
+    // الاشتراكات: مستحق الدورة الحالية عند بدايتها، وتأخره عند انتهائها بلا تحصيل كامل
+    Crm.rows_('Projects').forEach(function (p) {
+      if (p.status !== 'ongoing' && p.status !== 'on_hold') return;
+      var cs = Crm.cycleState_(p, m, today);
+      if (!cs || cs.future || cs.due <= 0) return;
+      var c = m.clients[p.clientId], late = addDays_(cs.end, -CRM.DUE_DAYS) <= today;
+      var to = staff.concat(c && c.assignedTo ? [c.assignedTo] : []).filter(function (id, i, a) { return a.indexOf(id) === i; });
+      to.forEach(function (uid) {
+        items.push({
+          userId: uid, kind: 'event', module: 'crm', title: late ? 'اشتراك لم يُحصَّل ودورته تنتهي قريباً' : 'اشتراك مستحق لدورة جديدة',
+          detail: p.name + (c ? ' · ' + c.name : '') + ' · ' + kwd_(cs.due) + ' · ' + CRM.CYCLE[p.billingCycle] + ' حتى ' + dmy_(cs.end), link: '/crm/projects/' + p.id,
+          refKey: 'crm.cycle:' + p.id + ':' + cs.start + ':' + (late ? 'late' : 'start')
         });
       });
     });

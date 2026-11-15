@@ -16,6 +16,8 @@ export interface ProjectView {
   startDate: string; endDate: string; status: 'ongoing' | 'on_hold' | 'completed' | 'cancelled'; statusLabel: string; parentId: string; parentName: string;
   needsReview: boolean; reviewNote: string; notes: string; paid: number; scheduled: number; overdue: number; nextDue: string; paymentsCount: number;
   remaining: number; overCollected: boolean; percent: number; spent: number; createdAt: string;
+  billingCycle: '' | 'monthly' | 'quarterly' | 'yearly'; billingCycleLabel: string; cycleAmount: number;
+  cycle: { start: string; end: string; paid: number; due: number; future: boolean } | null;
 }
 
 export interface PaymentView {
@@ -40,7 +42,7 @@ export interface LinkView { id: string; title: string; url: string; hasFile: boo
 export interface CrmLookups {
   me: string; isManager: boolean; isAccountant: boolean; hasTeam: boolean; today: string; drive: boolean; people: { id: string; name: string }[];
   stages: Stage[]; clientTypes: Opt[]; categories: Opt[]; statuses: Opt[]; projectStatuses: Opt[]; billing: Opt[]; payKinds: Opt[]; payMethods: Opt[];
-  proposalStatuses: Opt[]; activityTypes: Opt[]; projectTypes: string[];
+  proposalStatuses: Opt[]; activityTypes: Opt[]; cycles: Opt[]; projectTypes: string[];
 }
 
 export interface ClientDetail {
@@ -56,10 +58,16 @@ export interface ProjectDetail {
 export interface CrmHome {
   clients: number; leads: number; ongoing: number; review: number; collected: number; contract: number; remaining: number;
   due: PaymentView[]; overdue: number; openProposals: number;
+  cycles: { projectId: string; projectName: string; clientName: string; due: number; end: string; late: boolean }[];
 }
 
+export interface Receivable { kind: 'payment' | 'cycle'; id: string; projectId: string; projectName: string; clientName: string; amount: number; date: string; daysLate: number }
 export interface CrmReport {
-  collected: number; byClient: { clientId: string; clientName: string; amount: number }[]; byMonth: { month: string; amount: number }[];
-  projects: ProjectView[]; proposals: { total: number; accepted: number; rejected: number; value: number; acceptedValue: number };
-  activities: { userName: string; total: number; types: Record<string, number> }[];
+  from: string; to: string; previousFrom: string; previousTo: string;
+  collected: number; collectedChange: number; previousCollected: number; newClients: number; newClientsChange: number;
+  receivables: { total: number; overdue: number; items: Receivable[] };
+  byClient: { clientId: string; clientName: string; amount: number; projects: number; percent: number }[]; byMonth: { month: string; amount: number }[];
+  projects: ProjectView[];
+  proposals: { total: number; accepted: number; rejected: number; value: number; acceptedValue: number; previousTotal: number; previousAccepted: number };
+  activities: { userName: string; total: number; types: Record<string, number> }[]; activitiesTotal: number; activitiesChange: number;
 }

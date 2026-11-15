@@ -1380,6 +1380,24 @@ const EN: Record<string, string> = {
   'أُعيدت مهمتك للعمل': 'Your task was sent back to work',
   'أُلغيت مهمة': 'A task was cancelled',
   // ───── العملاء ─────
+  'حُذف النشاط': 'Activity deleted',
+  'الأنشطة.csv': 'activities.csv',
+  'التاريخ والوقت': 'Date and time',
+  'مهمة المتابعة': 'Follow-up task',
+  'بحث بالعميل أو الموظف أو الموضوع': 'Search by client, employee or subject',
+  'تحديث': 'Refresh',
+  'تصدير': 'Export',
+  'تسجيل نشاط': 'Log activity',
+  'كل الأنواع': 'All types',
+  'كل العملاء': 'All clients',
+  'كل المشاريع': 'All projects',
+  'لا نتائج تطابق التصفية': 'No results match the filters',
+  'لا أنشطة بعد': 'No activities yet',
+  'سجّل كل اجتماع أو مكالمة أو زيارة ليبقى تاريخ العلاقة مع العميل في مكان واحد.': 'Log every meeting, call or visit so the client relationship history stays in one place.',
+  'العميل / جهة الاتصال': 'Client / contact',
+  '{0} من {1} نشاط': '{0} of {1} activities',
+  'حذف النشاط': 'Delete activity',
+  'مهمة المتابعة {0} لا تُحذف.': 'Follow-up task {0} is not deleted.',
   'اشتراكات مستحقة للدورة الحالية': 'Subscriptions due this period',
   'لا اشتراكات مستحقة': 'No subscriptions due',
   'حتى {0}': 'until {0}',
@@ -1692,6 +1710,7 @@ const EN: Record<string, string> = {
  * الترتيب مهم: الأخص قبل الأعم.
  */
 export const EN_PATTERNS: Record<string, string> = {
+  '{0} دقيقة': '{0} min',
   '{0} عميل محتمل': '{0} prospective clients',
   '{0} تحتاج مراجعة': '{0} need review',
   'المتبقي على العقود الثابتة {0}': 'Remaining on fixed contracts {0}',
@@ -1766,7 +1785,6 @@ export const EN_PATTERNS: Record<string, string> = {
   'تسجيل حضور {0} لمستخدم ليس موظفاً، لم يُنقل.': 'Attendance record {0} belongs to a non-employee user; not migrated.',
   'تسجيل حضور {0} بلا وقت حضور، لم يُنقل.': 'Attendance record {0} has no clock-in time; not migrated.',
   'اسم {0}': '{0} name',
-  '{0} دقيقة': '{0} min',
   '{0} غير موجود.': '{0} not found.',
   // العهد
   '{0} غير صحيح (ثلاث خانات عشرية كحد أقصى).': '{0} is invalid (max three decimal places).',

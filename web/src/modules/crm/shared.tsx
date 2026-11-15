@@ -240,13 +240,13 @@ export function ActivityDialog({ open, onClose, clientId, contacts: contactsIn, 
   const pick = !clientId && !activity;
   const [selClient, setSelClient] = useState('');
   const clients = useClientOptions(pick);
-  const detail = useClientPick(pick ? selClient : '');
+  const detail = useClientPick(pick ? selClient : (!contactsIn && activity ? activity.clientId : ''));
   const contacts = contactsIn || detail.data?.contacts || [];
   const projects = projectsIn || detail.data?.projects || [];
   const now = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   const [f, setF] = useState(() => ({
     type: activity?.type || 'meeting', title: activity?.title || '', description: activity?.description || '', at: activity?.at ? new Date(activity.at).toISOString().slice(0, 16) : now,
-    durationMin: activity?.durationMin ? String(activity.durationMin) : '', location: activity?.location || '', contactId: '', projectId: activity?.projectId || '',
+    durationMin: activity?.durationMin ? String(activity.durationMin) : '', location: activity?.location || '', contactId: activity?.contactId || '', projectId: activity?.projectId || '',
     userId: activity?.userId || L?.me || '', followUpDate: activity?.followUpDate || '', notes: activity?.notes || ''
   }));
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });

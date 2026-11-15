@@ -32,9 +32,9 @@ export interface ProposalView {
 }
 
 export interface ActivityView {
-  id: string; type: string; typeLabel: string; clientId: string; clientName: string; contactName: string; projectId: string; projectName: string;
+  id: string; type: string; typeLabel: string; clientId: string; clientName: string; contactId: string; contactName: string; projectId: string; projectName: string;
   userId: string; userName: string; title: string; description: string; at: string; durationMin: number; location: string; notes: string;
-  followUpDate: string; followUpTaskId: string;
+  followUpDate: string; followUpTaskId: string; followUpTask: { number: string; title: string; status: string } | null;
 }
 
 export interface LinkView { id: string; title: string; url: string; hasFile: boolean; mimeType: string; category: string; byName: string; createdAt: string }

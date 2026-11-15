@@ -8,6 +8,7 @@ import { Button } from '../../ui/Button';
 import { DataTable, SearchBox, Segmented, TabNav } from '../../ui/Controls';
 import { Select, TextInput } from '../../ui/Field';
 import { ReasonDialog } from '../../ui/Decide';
+import { Dialog } from '../../ui/Overlay';
 import { Icon } from '../../ui/Icon';
 import { cx } from '../../ui/cx';
 import { downloadCsv } from '../attendance/shared';
@@ -294,19 +295,78 @@ export function ActivityList({ items }: { items: ActivityView[] }) {
   );
 }
 
+const ACT_TONE: Record<string, 'info' | 'ok' | 'warn' | 'neutral'> = { meeting: 'info', call: 'ok', visit: 'warn', follow_up: 'neutral', whatsapp: 'ok', email: 'neutral' };
+
 export function ActivitiesPage() {
   const lk = useCrmLookups();
-  const [type, setType] = useState('');
+  const [f, setF] = useState({ q: '', type: '', clientId: '', userId: '', projectId: '' });
   const [adding, setAdding] = useState(false);
-  const q = useApi<ActivityView[]>('crm.activities', type ? { type } : {});
+  const [editing, setEditing] = useState<ActivityView | null>(null);
+  const [deleting, setDeleting] = useState<ActivityView | null>(null);
+  const q = useApi<ActivityView[]>('crm.activities', {});
+  const del = useAction('crm.activity.remove', { invalidate: CRM_KEYS, success: tr("حُذف النشاط"), onSuccess: () => setDeleting(null) });
+  const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
+  const all = q.data || [];
+  const uniq = (key: 'clientId' | 'userId' | 'projectId', label: 'clientName' | 'userName' | 'projectName') =>
+    [...new Map(all.filter((a) => a[key]).map((a) => [a[key], a[label]])).entries()].sort((x, y) => x[1].localeCompare(y[1], 'ar')).map(([value, text]) => ({ value, label: text }));
+  const rows = useMemo(() => {
+    const s = f.q.trim().toLowerCase();
+    return all.filter((a) => (!f.type || a.type === f.type) && (!f.clientId || a.clientId === f.clientId) && (!f.userId || a.userId === f.userId) && (!f.projectId || a.projectId === f.projectId) &&
+      (!s || [a.clientName, a.contactName, a.userName, a.projectName, a.title, a.description, a.followUpTask?.title].filter(Boolean).join(' ').toLowerCase().includes(s)));
+  }, [all, f]);
+  const exportCsv = () => downloadCsv(tr("الأنشطة.csv"), [
+    [tr("النوع"), tr("العميل"), tr("جهة الاتصال"), tr("المشروع"), tr("الموظف"), tr("التاريخ والوقت"), tr("المدة (دقيقة)"), tr("الموضوع"), tr("التفاصيل"), tr("مهمة المتابعة")],
+    ...rows.map((a) => [a.typeLabel, a.clientName, a.contactName, a.projectName, a.userName, formatDateTime(a.at), a.durationMin || '', a.title, a.description, a.followUpTask ? a.followUpTask.number + ' ' + a.followUpTask.title : ''])
+  ]);
+  const can = !!lk.data;
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-end gap-3">
-        <Select label={tr("النوع")} className="w-44" value={type} onChange={(e) => setType(e.target.value)} options={[{ value: '', label: tr("الكل") }, ...(lk.data?.activityTypes || []).map((t) => ({ value: t.id, label: t.label }))]} />
-        <Button variant="primary" icon="plus" className="ms-auto" onClick={() => setAdding(true)}>{tr("نشاط جديد")}</Button>
+      <div className="no-print flex flex-wrap items-center gap-2">
+        <div className="min-w-[220px] flex-1"><SearchBox id="act-q" value={f.q} onChange={(v) => setF({ ...f, q: v })} placeholder={tr("بحث بالعميل أو الموظف أو الموضوع")} /></div>
+        <Button icon="refresh" aria-label={tr("تحديث")} onClick={() => q.refetch()} loading={q.isFetching && !q.isPending} />
+        <Button icon="download" onClick={exportCsv} disabled={!rows.length}>{tr("تصدير")}</Button>
+        <Button variant="primary" icon="plus" onClick={() => setAdding(true)}>{tr("تسجيل نشاط")}</Button>
       </div>
-      <Card padded={false}>{q.isError ? <ErrorBox message={(q.error as Error).message} /> : !q.data ? <Loader /> : <ActivityList items={q.data} />}</Card>
+      <div className="no-print grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Select label={tr("النوع")} className="[&>label]:sr-only" value={f.type} onChange={set('type')} options={[{ value: '', label: tr("كل الأنواع") }, ...(lk.data?.activityTypes || []).map((t) => ({ value: t.id, label: t.label }))]} />
+        <Select label={tr("العميل")} className="[&>label]:sr-only" value={f.clientId} onChange={set('clientId')} options={[{ value: '', label: tr("كل العملاء") }, ...uniq('clientId', 'clientName')]} />
+        <Select label={tr("الموظف")} className="[&>label]:sr-only" value={f.userId} onChange={set('userId')} options={[{ value: '', label: tr("كل الموظفين") }, ...uniq('userId', 'userName')]} />
+        <Select label={tr("المشروع")} className="[&>label]:sr-only" value={f.projectId} onChange={set('projectId')} options={[{ value: '', label: tr("كل المشاريع") }, ...uniq('projectId', 'projectName')]} />
+      </div>
+      <Card padded={false} className="print-table">
+        {q.isError ? <ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} /> : !q.data ? <Loader /> : rows.length === 0 ? (
+          <EmptyState title={all.length ? tr("لا نتائج تطابق التصفية") : tr("لا أنشطة بعد")} body={all.length ? undefined : tr("سجّل كل اجتماع أو مكالمة أو زيارة ليبقى تاريخ العلاقة مع العميل في مكان واحد.")} />
+        ) : (
+          <DataTable head={[tr("النوع"), tr("العميل / جهة الاتصال"), tr("المشروع"), tr("المهمة"), tr("الموظف"), tr("التاريخ والوقت"), tr("المدة"), '']} minWidth={900}>
+            {rows.map((a) => (
+              <tr key={a.id} className="border-t border-line">
+                <td className="px-4 py-3"><Badge tone={ACT_TONE[a.type] || 'neutral'}>{a.typeLabel}</Badge></td>
+                <td className="px-4 py-3">
+                  <Link to={'/crm/clients/' + a.clientId} className="font-medium text-accent-fg no-underline hover:underline">{a.clientName}</Link>
+                  {a.contactName && <span className="text-[12px] text-muted"> ({a.contactName})</span>}
+                  {a.title && <div className="text-[12px] text-muted">{a.title}</div>}
+                </td>
+                <td className="px-4 py-3 text-[13px]">{a.projectId ? <Link to={'/crm/projects/' + a.projectId} className="text-fg no-underline hover:underline">{a.projectName}</Link> : '—'}</td>
+                <td className="px-4 py-3 text-[13px]">{a.followUpTask ? <Link to={'/tasks/' + a.followUpTaskId} className="text-accent-fg no-underline hover:underline" title={a.followUpTask.title}>{a.followUpTask.number}</Link> : '—'}</td>
+                <td className="px-4 py-3 text-[13px]">{a.userName}</td>
+                <td className="px-4 py-3 num whitespace-nowrap text-[13px]">{formatDateTime(a.at)}</td>
+                <td className="px-4 py-3 num text-[13px]">{a.durationMin ? tr("{0} دقيقة", a.durationMin) : '—'}</td>
+                <td className="px-2 py-3 whitespace-nowrap">
+                  {can && <Button size="sm" variant="ghost" icon="edit" aria-label={tr("تعديل")} onClick={() => setEditing(a)} />}
+                  {can && <Button size="sm" variant="ghost" icon="trash" aria-label={tr("حذف")} className="text-bad" onClick={() => setDeleting(a)} />}
+                </td>
+              </tr>
+            ))}
+          </DataTable>
+        )}
+      </Card>
+      <p className="m-0 text-[12px] text-muted">{tr("{0} من {1} نشاط", rows.length, all.length)}</p>
       {adding && <ActivityDialog open onClose={() => setAdding(false)} />}
+      {editing && <ActivityDialog open onClose={() => setEditing(null)} activity={editing} />}
+      <Dialog open={!!deleting} onClose={() => setDeleting(null)} title={tr("حذف النشاط")}
+        footer={<><Button variant="danger" className="flex-1" loading={del.isPending} onClick={() => del.mutate({ id: deleting!.id })}>{tr("حذف نهائياً")}</Button><Button variant="ghost" onClick={() => setDeleting(null)}>{tr("تراجع")}</Button></>}>
+        {deleting && <p className="m-0">{deleting.typeLabel} · {deleting.clientName} · {formatDateTime(deleting.at)}{deleting.followUpTask ? ' — ' + tr("مهمة المتابعة {0} لا تُحذف.", deleting.followUpTask.number) : ''}</p>}
+      </Dialog>
     </div>
   );
 }

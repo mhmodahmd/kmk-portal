@@ -179,7 +179,8 @@ var Crm = {
     }
     return {
       users: indexBy_(Db.view('core', 'Users')), clients: indexBy_(Crm.rows_('Clients')), projects: indexBy_(Crm.rows_('Projects')),
-      stages: indexBy_(Crm.rows_('Stages')), contacts: indexBy_(Crm.rows_('Contacts')), pays: pays, spent: spent, paidList: paidList, today: localDate_()
+      stages: indexBy_(Crm.rows_('Stages')), contacts: indexBy_(Crm.rows_('Contacts')), pays: pays, spent: spent, paidList: paidList, today: localDate_(),
+      tasks: Crm.enabled_('tasks') ? indexBy_(Db.view('tasks', 'Tasks')) : {}
     };
   },
   userName_: function (m, id) { var u = id && m.users[id]; return u ? u.fullName : ''; },
@@ -245,10 +246,11 @@ var Crm = {
   activityView_: function (a, m) {
     var c = m.clients[a.clientId], ct = a.contactId && m.contacts[a.contactId], p = a.projectId && m.projects[a.projectId];
     return {
-      id: a.id, type: a.type, typeLabel: CRM.ACT[a.type] || a.type, clientId: a.clientId, clientName: c ? c.name : '', contactName: ct ? ct.name : '',
+      id: a.id, type: a.type, typeLabel: CRM.ACT[a.type] || a.type, clientId: a.clientId, clientName: c ? c.name : '', contactId: a.contactId || '', contactName: ct ? ct.name : '',
       projectId: a.projectId || '', projectName: p ? p.name : '', userId: a.userId || '', userName: Crm.userName_(m, a.userId), title: a.title || '',
       description: a.description || '', at: a.at || '', durationMin: a.durationMin || 0, location: a.location || '', notes: a.notes || '',
-      followUpDate: a.followUpDate || '', followUpTaskId: a.followUpTaskId || ''
+      followUpDate: a.followUpDate || '', followUpTaskId: a.followUpTaskId || '',
+      followUpTask: a.followUpTaskId && m.tasks && m.tasks[a.followUpTaskId] ? { number: m.tasks[a.followUpTaskId].number, title: m.tasks[a.followUpTaskId].title, status: m.tasks[a.followUpTaskId].status } : null
     };
   },
 

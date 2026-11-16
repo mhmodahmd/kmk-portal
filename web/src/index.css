@@ -168,6 +168,8 @@
   main { max-width: none !important; padding: 0 !important; }
   section { border: 0 !important; box-shadow: none !important; }
   tr { page-break-inside: avoid; }
+  /* صفحة جديدة لكل مرفق في «طباعة مع المرفقات» */
+  .print-page { break-before: page; page-break-before: always; border-top: 0 !important; }
   /* الجداول: بلا تمرير أو عرض أدنى، بحدود واضحة، ورأس يتكرر في كل صفحة */
   .print-table, .print-table > div { overflow: visible !important; }
   .print-table table { min-width: 0 !important; width: 100% !important; border-collapse: collapse; }

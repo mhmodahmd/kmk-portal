@@ -1,10 +1,13 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { tr } from '../../lib/i18n';
 import { useApi } from '../../lib/useApi';
 import { formatDateTime } from '../../lib/format';
 import { ErrorBox, Loader } from '../../ui/Display';
 import { Button } from '../../ui/Button';
+import { cx } from '../../ui/cx';
 import { dateLabel, kwd } from './shared';
+import { loadAttachmentPages, type AttachmentPage } from './attachmentPages';
 import type { SignBox, StatementDoc, VoucherDoc } from './types';
 
 /** ترويسة المطبوعات */
@@ -104,17 +107,42 @@ export function StatementDocument({ doc }: { doc: StatementDoc }) {
   );
 }
 
-function PrintFrame({ children, title }: { children: React.ReactNode; title: string }) {
+function PrintFrame({ children, title, extra }: { children: React.ReactNode; title: string; extra?: React.ReactNode }) {
   const nav = useNavigate();
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2 no-print">
         <Button icon="chevron" onClick={() => nav(-1)}>{tr("رجوع")}</Button>
         <span className="font-semibold">{title}</span>
-        <Button variant="primary" icon="printer" className="ms-auto" onClick={() => window.print()}>{tr("طباعة أو حفظ PDF")}</Button>
+        <span className="ms-auto flex flex-wrap items-center gap-2">
+          {extra}
+          <Button variant="primary" icon="printer" onClick={() => window.print()}>{tr("طباعة أو حفظ PDF")}</Button>
+        </span>
       </div>
       <div className="mx-auto w-full max-w-[820px] overflow-hidden rounded-xl border border-line print:border-0">{children}</div>
     </div>
+  );
+}
+
+/** صفحة لكل مرفق بعد الكشف: رأس يعرّف البند ثم الصورة (أو صفحات PDF) بحجم الورقة */
+function AttachmentPages({ pages }: { pages: AttachmentPage[] }) {
+  return (
+    <>
+      {pages.map((p) => (
+        <section key={p.key} className="kmk-doc print-page flex flex-col gap-3 border-t border-line bg-white p-6 text-[12px] text-black">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-print-line pb-2">
+            <span className="font-bold">{p.no ? tr("مرفق البند {0}", p.no) : tr("مرفق مقبوض")}</span>
+            <span className="num">{dateLabel(p.expense.date)}</span>
+            <span className="min-w-0 flex-1">{p.expense.description}{p.expense.project ? ' — ' + p.expense.project : ''}</span>
+            <span className="num ltr font-semibold">{kwd(p.expense.amount)}</span>
+            <span className="w-full text-[11px] text-muted ltr text-right">{p.fileName}</span>
+          </div>
+          {p.error ? <p className="m-0 rounded border border-print-line px-3 py-2 text-muted">{p.error}</p> : p.images.map((src, i) => (
+            <img key={i} src={src} alt={tr("مرفق البند {0}", p.no) + (p.images.length > 1 ? ` · ${i + 1}` : '')} className={cx('mx-auto max-h-[235mm] max-w-full object-contain', i > 0 && 'print-page')} />
+          ))}
+        </section>
+      ))}
+    </>
   );
 }
 
@@ -129,7 +157,34 @@ export function VoucherPrintPage() {
 export function StatementPrintPage() {
   const { id = '' } = useParams();
   const q = useApi<StatementDoc>('cus.statement', { id });
+  // «مع المرفقات»: تُجلب كل مرفقات البنود وتُضاف صفحةً لكل مرفق بعد الكشف، ثم يُفتح حوار الطباعة
+  const [pages, setPages] = useState<AttachmentPage[] | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const total = (q.data?.expenses || []).reduce((a, e) => a + e.attachments.length, 0);
+  const withAttachments = async () => {
+    if (!q.data) return;
+    setProgress({ done: 0, total });
+    try {
+      const out = await loadAttachmentPages(q.data.expenses, (done, all) => setProgress({ done, total: all }));
+      setPages(out);
+      setTimeout(() => window.print(), 300);
+    } finally { setProgress(null); }
+  };
   if (q.isError) return <ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} />;
   if (!q.data) return <Loader />;
-  return <PrintFrame title={tr("كشف تسوية {0}", q.data.custody.id)}><StatementDocument doc={q.data} /></PrintFrame>;
+  const failed = (pages || []).filter((p) => p.error).length;
+  return (
+    <PrintFrame title={tr("كشف تسوية {0}", q.data.custody.id)}
+      extra={total > 0 && (pages
+        ? <>
+          {failed > 0 && <span className="text-[13px] text-warn">{tr("{0} مرفقاً تعذّر جلبه", failed)}</span>}
+          <Button icon="x" onClick={() => setPages(null)}>{tr("بلا مرفقات")}</Button>
+        </>
+        : <Button icon="file" loading={!!progress} onClick={withAttachments}>
+          {progress ? tr("جارٍ تجهيز المرفقات {0}/{1}", progress.done, progress.total) : tr("طباعة مع المرفقات ({0})", total)}
+        </Button>)}>
+      <StatementDocument doc={q.data} />
+      {pages && <AttachmentPages pages={pages} />}
+    </PrintFrame>
+  );
 }

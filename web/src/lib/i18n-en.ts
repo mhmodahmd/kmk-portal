@@ -1718,6 +1718,12 @@ const EN: Record<string, string> = {
   'ملفات النسخة': 'Backup files',
   '{0} نُسخت · {1} مكرّرة': '{0} copied · {1} already existed',
   'المشغّلات الزمنية': 'Scheduled triggers',
+  // طباعة كشف العهدة مع المرفقات (0.9.8)
+  'صورة HEIC لا يعرضها المتصفح للطباعة؛ افتحها من صفحة العهدة.': 'HEIC images cannot be rendered for printing; open it from the custody page.',
+  'الملف من النظام السابق أو غير متاح للبوابة؛ افتحه من رابطه في صفحة العهدة.': 'The file is from the legacy system or unavailable to the portal; open it from its link on the custody page.',
+  'تعذّر جلب الملف.': 'Could not fetch the file.', 'مرفق البند {0}': 'Attachment of entry {0}', 'مرفق مقبوض': 'Receipt attachment',
+  '{0} مرفقاً تعذّر جلبه': '{0} attachment(s) could not be fetched', 'بلا مرفقات': 'Without attachments',
+  'جارٍ تجهيز المرفقات {0}/{1}': 'Preparing attachments {0}/{1}', 'طباعة مع المرفقات ({0})': 'Print with attachments ({0})',
   // المهام الخاصة والربط (0.9.6)
   'مهمة خاصة': 'Private task',
   'لا يراها غيرك: لا مديرك ولا مدير المهام ولا مدير النظام. تُسند إليك بلا متابعين وتُنجز بلا مراجعة.': 'Visible only to you: not your manager, the task manager or the system admin. Assigned to you, no watchers, completed without review.',

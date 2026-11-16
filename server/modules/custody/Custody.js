@@ -821,10 +821,12 @@ var Custody = {
     var reviewed = !!c.reviewedBy && (c.status === 'signing' || c.status === 'closed');
     var emp = m.emps[c.employeeId];
     var link = c.closeMgrSignId ? m.links[c.closeMgrSignId] : null;
+    var atts = indexBy_(Custody.rows_('Attachments').filter(function (a) { return a.custodyId === c.id; }));
     return {
       company: Settings.company_(),
       custody: Custody.view_(c, m),
-      expenses: Custody.expensesOf_(c.id).map(function (e) { return Custody.expenseView_(e, m, {}); }),
+      // المرفقات تُدرج ليتمكن الكشف المطبوع من ضمّها (طباعة مع المرفقات)
+      expenses: Custody.expensesOf_(c.id).map(function (e) { return Custody.expenseView_(e, m, atts); }),
       vouchers: Custody.rows_('Vouchers').filter(function (v) { return v.custodyId === c.id; }).map(function (v) { return Vouchers.view_(v, m); }),
       signs: {
         holder: { name: Custody.empName_(m, c.employeeId), image: requested && emp ? Custody.signatureOf_(emp.userId) : '' },

@@ -1,12 +1,15 @@
 /** أنواع وحدة المهام */
 export type TaskStatus = 'todo' | 'doing' | 'review' | 'done' | 'cancelled';
 export type Priority = 'urgent' | 'high' | 'normal' | 'low';
+/** ما يمكن ربط المهمة به من الحوار (المشروع له حقله الخاص projectId) */
+export type LinkType = 'client' | 'custody' | 'employee';
 
 export interface TaskView {
   id: string; number: string; title: string; description: string; status: TaskStatus; statusLabel: string;
   priority: Priority; priorityLabel: string; assigneeId: string; assigneeName: string; watchers: { id: string; name: string }[];
   dueDate: string; startDate: string; completedAt: string; overdue: boolean; projectId: string; projectName: string;
-  linkedType: '' | 'custody' | 'employee'; linkedTypeLabel: string; linkedId: string; linkedLabel: string;
+  linkedType: '' | 'custody' | 'employee' | 'client' | 'project'; linkedTypeLabel: string; linkedId: string; linkedLabel: string;
+  private: boolean;
   parentId: string; parentTitle: string; parentNumber: string; recurrence: { freq: 'weekly' | 'monthly' } | null; recurrenceLabel: string;
   sortOrder: number; createdBy: string; createdByName: string; createdAt: string; updatedAt: string;
   checklistDone: number; checklistTotal: number; commentsCount: number; filesCount: number; subtasksCount: number;
@@ -26,5 +29,7 @@ export interface Person { id: string; name: string; jobTitle: string }
 export interface TaskLookups {
   me: string; people: Person[]; everyone: Person[]; projects: { id: string; name: string }[];
   statuses: { id: TaskStatus; label: string }[]; priorities: { id: Priority; label: string }[]; freqs: { id: string; label: string }[];
+  /** خيارات الربط حسب أدوار المستخدم */
+  links: Record<LinkType, { id: string; name: string }[]>;
   isManager: boolean; hasTeam: boolean; drive: boolean; today: string;
 }

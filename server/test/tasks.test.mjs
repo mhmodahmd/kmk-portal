@@ -90,3 +90,44 @@ test('tasks: weekly recurrence (managers only), checklist, subtasks, files, dele
   eq(c.fail('tsk.get', { id: sub.id }, c.T.huda).code, 'NOT_FOUND', 'subtasks removed with parent');
   truthy(c.ok('audit.list', {}, c.A).rows.some((r) => r.action === 'task.delete'));
 });
+
+test('tasks: a private task is seen by its creator only; self-assigned, no watchers, no review; creator deletes it', () => {
+  const c = setup();
+  c.makeMgr('huda');
+  const t = c.ok('tsk.save', { title: 'ملاحظاتي', private: true, assigneeId: c.uid.ahmad, watchers: [c.uid.ahmad], dueDate: SUN }, c.T.sara);
+  eq([t.private, t.assigneeName, t.watchers.length], [true, 'سارة', 0], 'private forces self-assignment without watchers');
+  eq(c.fail('tsk.get', { id: t.id }, c.T.huda).code, 'NOT_FOUND', 'the task manager cannot see it');
+  eq(c.fail('tsk.get', { id: t.id }, c.A).code, 'NOT_FOUND', 'nor the super admin');
+  eq(c.ok('tsk.list', { view: 'all' }, c.T.huda).some((x) => x.id === t.id), false);
+  eq(c.ok('tsk.list', { view: 'mine' }, c.T.sara).filter((x) => x.private).length, 1);
+  eq(c.ok('tsk.status', { id: t.id, status: 'done' }, c.T.sara).status, 'done', 'done directly, no review');
+  // الفرعية من خاصة تكون خاصة
+  const sub = c.ok('tsk.save', { title: 'فرعية', parentId: t.id }, c.T.sara);
+  eq(sub.private, true);
+  // غير المنشئ لا يجعل مهمة خاصة
+  const pub = c.ok('tsk.save', { title: 'عامة', assigneeId: c.uid.ahmad }, c.T.sara);
+  eq(c.fail('tsk.save', { id: pub.id, private: true, title: 'عامة' }, c.T.huda).code, 'FORBIDDEN');
+  // سجل العمليات لا يحمل عنوان المهمة الخاصة
+  truthy(c.ok('audit.list', { module: 'tasks' }, c.A).rows.every((r) => !(r.details && r.details.title === 'ملاحظاتي')));
+  // منشئ الخاصة يحذفها، وغير المدير لا يحذف العامة
+  eq(c.fail('tsk.remove', { id: pub.id }, c.T.sara).code, 'FORBIDDEN');
+  c.ok('tsk.remove', { id: t.id }, c.T.sara);
+  eq(c.fail('tsk.get', { id: sub.id }, c.T.sara).code, 'NOT_FOUND', 'subtask deleted with it');
+});
+
+test('tasks: link options follow the user roles, and links are validated', () => {
+  const c = setup();
+  const client = c.ok('crm.client.save', { name: 'شركة الأفق', type: 'company', category: 'current' }, c.A);
+  const none = c.ok('tsk.lookups', {}, c.T.sara).links;
+  eq([none.client.length, none.custody.length], [0, 0], 'no crm or custody role: no client or custody options');
+  eq(none.employee.map((e) => e.name).sort(), ['أحمد', 'سارة'].sort(), 'a manager links to herself and her team');
+  const users = c.ok('users.list', {}, c.A).users;
+  c.ok('users.setRoles', { id: users.find((u) => u.username === 'sara').id, roles: { crm: 'sales' } }, c.A);
+  eq(c.ok('tsk.lookups', {}, c.T.sara).links.client.map((x) => x.name), ['شركة الأفق']);
+  truthy(c.ok('tsk.lookups', {}, c.A).links.employee.length >= 3, 'hr sees everyone');
+  const t = c.ok('tsk.save', { title: 'متابعة العقد', linkedType: 'client', linkedId: client.id }, c.T.sara);
+  eq([t.linkedTypeLabel, t.linkedLabel], ['عميل', 'شركة الأفق']);
+  eq(c.ok('tsk.list', { view: 'any', linkedType: 'client', linkedId: client.id }, c.T.sara).length, 1);
+  eq(c.fail('tsk.save', { title: 'x', linkedType: 'client', linkedId: 'nope' }, c.T.sara).code, 'NOT_FOUND');
+  eq(c.fail('tsk.save', { title: 'x', linkedType: 'invoice', linkedId: '1' }, c.T.sara).ok, undefined);
+});

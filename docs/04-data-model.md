@@ -97,7 +97,7 @@
 
 | الجدول | الأعمدة الرئيسية |
 |---|---|
-| **Tasks** | number (`T-0001`), title, description, status (`todo`/`doing`/`review`/`done`/`cancelled`), priority (`low`/`normal`/`high`/`urgent`), assigneeId (userId), watchers (json: userIds), dueDate, startDate, completedAt, projectId (مشاريع العهد), linkedType (`custody`/`employee`), linkedId, parentId (مستوى واحد), recurrence (json: `{freq: weekly|monthly}`), nextTaskId, sortOrder, createdBy, updatedBy |
+| **Tasks** | number (`T-0001`), title, description, status (`todo`/`doing`/`review`/`done`/`cancelled`), priority (`low`/`normal`/`high`/`urgent`), assigneeId (userId), watchers (json: userIds), dueDate, startDate, completedAt, projectId (مشاريع العملاء أو العهد), linkedType (`client`/`project`/`custody`/`employee`), linkedId, parentId (مستوى واحد), recurrence (json: `{freq: weekly|monthly}`), nextTaskId, sortOrder, createdBy, updatedBy, private (0.9.6: خاصة لمنشئها فقط؛ يضيفه `ensureSchema_` تلقائياً) |
 | **TaskChecklist** | taskId, text, done, sortOrder, doneBy, doneAt |
 | **TaskComments** | taskId, kind (`comment` أو `event` لسجل النشاط), body, mentions (json: userIds يصبحون متابعين) |
 | **TaskFiles** | taskId, fileName, driveFileId, mimeType, fileSize, uploadedBy (على Drive في «بوابة KMK — الملفات/المهام/YYYY-MM») |

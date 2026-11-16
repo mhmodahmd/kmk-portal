@@ -5,7 +5,7 @@ import { tr, trServer } from '../../lib/i18n';
 import { api, ApiError } from '../../lib/api';
 import { useAction, useApi } from '../../lib/useApi';
 import { dmy, formatDateTime, relativeTime } from '../../lib/format';
-import { Avatar, Card, CardHeader, EmptyState, ErrorBox, Loader, DangerZone } from '../../ui/Display';
+import { Avatar, Badge, Card, CardHeader, EmptyState, ErrorBox, Loader, DangerZone } from '../../ui/Display';
 import { Button } from '../../ui/Button';
 import { Facts } from '../../ui/Controls';
 import { Textarea } from '../../ui/Field';
@@ -67,7 +67,7 @@ export default function TaskDetailPage() {
     finally { setUploading(false); }
   };
   const view = (fid: string) => openFile('tsk.file.content', { id: fid }).catch((e) => toast(e instanceof ApiError ? e.message : tr("تعذّر فتح الملف."), 'bad'));
-  const linkTo = t.linkedType === 'custody' ? '/custody/' + t.linkedId : '';
+  const linkTo = t.linkedType === 'custody' ? '/custody/' + t.linkedId : t.linkedType === 'client' ? '/crm/clients/' + t.linkedId : t.linkedType === 'project' ? '/crm/projects/' + t.linkedId : '';
 
   return (
     <div className="flex flex-col gap-4">
@@ -76,6 +76,7 @@ export default function TaskDetailPage() {
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <span className="flex flex-wrap items-center gap-2 text-[13px] text-muted">
               <span className="num">{t.number}</span><StatusBadge t={t} /><PriorityMark t={t} />
+              {t.private && <Badge><Icon name="lock" size={12} className="me-1 inline align-[-1px]" />{tr("خاصة: لا يراها غيرك")}</Badge>}
               {t.recurrenceLabel && <span className="inline-flex items-center gap-1"><Icon name="refresh" size={14} />{tr("تتكرر: {0}", t.recurrenceLabel)}</span>}
             </span>
             <h2 className="m-0 text-[20px] font-bold leading-snug">{t.title}</h2>
@@ -196,7 +197,8 @@ export default function TaskDetailPage() {
       {editing && (
         <TaskDialog open onClose={() => setEditing(false)} onSaved={() => undefined}
           initial={{ id: t.id, title: t.title, description: t.description, assigneeId: t.assigneeId, dueDate: t.dueDate, startDate: t.startDate, priority: t.priority,
-            projectId: t.projectId, linkedType: t.linkedType, linkedId: t.linkedId, linkedLabel: t.linkedLabel, watchers: t.watchers.map((w) => w.id), recurrence: t.recurrence?.freq || '' }} />
+            projectId: t.projectId, linkedType: t.linkedType, linkedId: t.linkedId, linkedLabel: t.linkedLabel, watchers: t.watchers.map((w) => w.id), recurrence: t.recurrence?.freq || '',
+            private: t.private, createdBy: t.createdBy }} />
       )}
       {sub && <TaskDialog open onClose={() => setSub(false)} onSaved={() => undefined} initial={{ parentId: t.id, projectId: t.projectId }} />}
       <ReasonDialog open={cancel} onClose={() => setCancel(false)} title={tr("إلغاء المهمة")} label={tr("سبب الإلغاء")} confirmLabel={tr("إلغاء المهمة")} danger

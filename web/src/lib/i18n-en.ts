@@ -1718,6 +1718,12 @@ const EN: Record<string, string> = {
   'ملفات النسخة': 'Backup files',
   '{0} نُسخت · {1} مكرّرة': '{0} copied · {1} already existed',
   'المشغّلات الزمنية': 'Scheduled triggers',
+  // المهام الخاصة والربط (0.9.6)
+  'مهمة خاصة': 'Private task',
+  'لا يراها غيرك: لا مديرك ولا مدير المهام ولا مدير النظام. تُسند إليك بلا متابعين وتُنجز بلا مراجعة.': 'Visible only to you: not your manager, the task manager or the system admin. Assigned to you, no watchers, completed without review.',
+  'مرتبطة بـ': 'Linked to', 'بلا ربط': 'Not linked', 'تظهر المهمة في صفحة العميل أو العهدة أو الموظف المرتبط': 'The task appears on the linked client, custody or employee page',
+  'خاصة: لا يراها غيرك': 'Private: visible only to you',
+  'المهمة الخاصة يضبطها منشئها فقط.': 'Only the creator can make a task private.', 'جعلها خاصة': 'made it private', 'جعلها عامة': 'made it public', 'يحذف المهام مدير المهام.': 'Only the task manager deletes tasks.',
   'غير متاحة (تحتاج موافقة المالك بعد النشر)': 'Unavailable (needs the owner\'s approval after deployment)',
   'ناقصة: {0}': 'Missing: {0}',
   'مركّبة ({0})': 'Installed ({0})',

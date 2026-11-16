@@ -5,11 +5,11 @@ import { useAction, useApi } from '../../lib/useApi';
 import { dmy } from '../../lib/format';
 import { Badge, ListRow } from '../../ui/Display';
 import { Button } from '../../ui/Button';
-import { Select, TextInput, Textarea } from '../../ui/Field';
+import { Checkbox, Select, TextInput, Textarea } from '../../ui/Field';
 import { Dialog } from '../../ui/Overlay';
 import { Icon } from '../../ui/Icon';
 import { cx } from '../../ui/cx';
-import type { Priority, TaskLookups, TaskStatus, TaskView } from './types';
+import type { LinkType, Priority, TaskLookups, TaskStatus, TaskView } from './types';
 
 /** «اليوم» بمعنى Today (المفتاح العام «اليوم» يُترجم Day في جداول الحضور) */
 export const TODAY = IS_EN ? 'Today' : 'اليوم';
@@ -47,10 +47,12 @@ export function TaskRow({ t, today, showAssignee, onToggle }: { t: TaskView; tod
     </button>
   ) : <span className="h-6 w-6 shrink-0" />;
   return (
-    <ListRow className="py-3" leading={toggle} to={'/tasks/' + t.id} title={t.title} titleClassName={closed ? 'text-muted line-through decoration-1' : undefined}
+    <ListRow className="py-3" leading={toggle} to={'/tasks/' + t.id} titleClassName={closed ? 'text-muted line-through decoration-1' : undefined}
+      title={<>{t.private && <Icon name="lock" size={13} className="me-1 inline align-[-1px] text-muted" />}{t.title}</>}
       sub={
         <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px]">
           <span className="num">{t.number}</span>
+          {t.linkedLabel && <span>{t.linkedTypeLabel}: {t.linkedLabel}</span>}
           {t.parentNumber && <span>{tr("فرعية من {0}", t.parentNumber)}</span>}
           {showAssignee && <span className="inline-flex items-center gap-1"><Icon name="user" size={13} />{t.assigneeName}</span>}
           {t.projectName && <span>{t.projectName}</span>}
@@ -80,7 +82,10 @@ export function useToggleDone() {
 export interface TaskDraft {
   id?: string; title?: string; description?: string; assigneeId?: string; dueDate?: string; startDate?: string; priority?: Priority;
   projectId?: string; linkedType?: string; linkedId?: string; linkedLabel?: string; parentId?: string; watchers?: string[]; recurrence?: string;
+  private?: boolean; createdBy?: string;
 }
+
+const LINK_LABELS: Record<LinkType, string> = { client: tr("عميل"), custody: tr("عهدة"), employee: tr("موظف") };
 
 /** إنشاء مهمة أو تعديلها */
 export function TaskDialog({ open, onClose, initial, onSaved }: { open: boolean; onClose: () => void; initial: TaskDraft; onSaved?: (t: TaskView) => void }) {
@@ -97,17 +102,27 @@ export function TaskDialog({ open, onClose, initial, onSaved }: { open: boolean;
   });
   const L = lk.data;
   const me = L?.me || '';
+  const isPrivate = !!f.private;
+  // «خاصة» يضبطها منشئ المهمة فقط (أو عند الإنشاء)
+  const canPrivate = !editing || initial.createdBy === me;
   const save = () => {
     setError('');
     act.mutate({
-      id: f.id, title: f.title, description: f.description, assigneeId: f.assigneeId || me, dueDate: f.dueDate, startDate: f.startDate,
-      priority: f.priority, projectId: f.projectId, linkedType: f.linkedType, linkedId: f.linkedId, parentId: f.parentId,
-      watchers: f.watchers || [], ...(L?.isManager ? { recurrence: f.recurrence ? { freq: f.recurrence } : null } : {}),
+      id: f.id, title: f.title, description: f.description, assigneeId: isPrivate ? me : f.assigneeId || me, dueDate: f.dueDate, startDate: f.startDate,
+      priority: f.priority, projectId: f.projectId, linkedType: f.linkedId ? f.linkedType : '', linkedId: f.linkedId || '', parentId: f.parentId, private: isPrivate,
+      watchers: isPrivate ? [] : f.watchers || [], ...(L?.isManager ? { recurrence: f.recurrence ? { freq: f.recurrence } : null } : {}),
       ...(editing ? {} : { checklist: checks.split('\n').map((s) => s.trim()).filter(Boolean) })
     }, { onError: (e) => setError(e.message) });
   };
   const people = L?.people || [];
   const watchers = f.watchers || [];
+  // أنواع الربط المتاحة للمستخدم + النوع الحالي للمهمة إن لم يكن ضمن خياراته
+  const linkTypes = (Object.keys(LINK_LABELS) as LinkType[]).filter((k) => (L?.links[k] || []).length || f.linkedType === k);
+  const linkOptions = (() => {
+    const list = (L?.links[f.linkedType as LinkType] || []).map((x) => ({ value: x.id, label: x.name }));
+    if (f.linkedId && !list.some((x) => x.value === f.linkedId)) list.unshift({ value: f.linkedId, label: f.linkedLabel || f.linkedId });
+    return [{ value: '', label: tr("اختر") }, ...list];
+  })();
   return (
     <Dialog open={open} onClose={onClose} wide title={editing ? tr("تعديل المهمة") : f.parentId ? tr("مهمة فرعية جديدة") : tr("مهمة جديدة")}
       onSubmit={save} footer={<><Button type="submit" variant="primary" className="flex-1" loading={act.isPending}>{editing ? tr("حفظ") : tr("إنشاء المهمة")}</Button>
@@ -115,9 +130,13 @@ export function TaskDialog({ open, onClose, initial, onSaved }: { open: boolean;
       <div className="flex flex-col gap-3">
         <TextInput label={tr("العنوان")} required value={f.title || ''} onChange={(e) => set('title', e.target.value)} maxLength={160} autoFocus />
         <Textarea label={tr("الوصف (اختياري)")} value={f.description || ''} onChange={(e) => set('description', e.target.value)} maxLength={4000} />
+        {canPrivate && (
+          <Checkbox label={tr("مهمة خاصة")} description={tr("لا يراها غيرك: لا مديرك ولا مدير المهام ولا مدير النظام. تُسند إليك بلا متابعين وتُنجز بلا مراجعة.")}
+            checked={isPrivate} onChange={(v) => setF((x) => ({ ...x, private: v }))} />
+        )}
         <div className="grid gap-3 sm:grid-cols-2">
-          <Select label={tr("المسؤول")} value={f.assigneeId || me} onChange={(e) => set('assigneeId', e.target.value)}
-            options={people.map((p) => ({ value: p.id, label: p.id === me ? tr("{0} (أنا)", p.name) : p.name }))} />
+          {!isPrivate && <Select label={tr("المسؤول")} value={f.assigneeId || me} onChange={(e) => set('assigneeId', e.target.value)}
+            options={people.map((p) => ({ value: p.id, label: p.id === me ? tr("{0} (أنا)", p.name) : p.name }))} />}
           <Select label={tr("الأولوية")} value={f.priority || 'normal'} onChange={(e) => set('priority', e.target.value)}
             options={(L?.priorities || []).map((p) => ({ value: p.id, label: p.label }))} />
           <TextInput label={tr("الموعد")} type="date" ltr value={f.dueDate || ''} onChange={(e) => set('dueDate', e.target.value)} />
@@ -132,13 +151,18 @@ export function TaskDialog({ open, onClose, initial, onSaved }: { open: boolean;
               options={[{ value: '', label: tr("لا تتكرر") }, ...(L?.freqs || []).map((p) => ({ value: p.id, label: p.label }))]} />
           )}
         </div>
-        {f.linkedType && f.linkedLabel && (
-          <div className="flex items-center gap-2 rounded-lg bg-chip px-3 py-2 text-[13px]">
-            <Icon name={f.linkedType === 'custody' ? 'wallet' : 'user'} size={16} />{tr("مرتبطة بـ: {0}", f.linkedLabel)}
-            <button type="button" className="ms-auto text-muted hover:text-bad cursor-pointer" aria-label={tr("إزالة الربط")} onClick={() => setF((x) => ({ ...x, linkedType: '', linkedId: '', linkedLabel: '' }))}><Icon name="x" size={14} /></button>
+        {(linkTypes.length > 0 || f.linkedType) && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Select label={tr("مرتبطة بـ")} value={f.linkedType || ''} onChange={(e) => setF((x) => ({ ...x, linkedType: e.target.value, linkedId: '', linkedLabel: '' }))}
+              options={[{ value: '', label: tr("بلا ربط") }, ...linkTypes.map((k) => ({ value: k, label: LINK_LABELS[k] }))]}
+              hint={tr("تظهر المهمة في صفحة العميل أو العهدة أو الموظف المرتبط")} />
+            {f.linkedType && (
+              <Select label={LINK_LABELS[f.linkedType as LinkType] || tr("العنصر")} required value={f.linkedId || ''} options={linkOptions}
+                onChange={(e) => { const o = linkOptions.find((x) => x.value === e.target.value); setF((x) => ({ ...x, linkedId: e.target.value, linkedLabel: o?.label || '' })); }} />
+            )}
           </div>
         )}
-        <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+        {!isPrivate && <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
           <legend className="mb-1.5 text-[13px] font-medium">{tr("المتابعون")}</legend>
           <div className="flex flex-wrap gap-1.5">
             {(L?.everyone || []).filter((p) => p.id !== (f.assigneeId || me)).map((p) => {
@@ -149,7 +173,7 @@ export function TaskDialog({ open, onClose, initial, onSaved }: { open: boolean;
               );
             })}
           </div>
-        </fieldset>
+        </fieldset>}
         {!editing && <Textarea label={tr("القائمة الفرعية (بند في كل سطر، اختياري)")} value={checks} onChange={(e) => setChecks(e.target.value)} className="[&_textarea]:min-h-[64px]" />}
         {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
       </div>

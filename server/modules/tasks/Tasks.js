@@ -8,14 +8,18 @@
  * - الأدوار (docs/05): كل مستخدم «عضو» تلقائياً (defaultRole). العضو يُسند لنفسه ولفريقه ويرى ما يخصه وفريقه،
  *   و«مدير المهام» يُسند للجميع ويرى الكل ويضبط التكرار ويحذف.
  * - التكرار (أسبوعي/شهري): عند إنجاز المهمة تُنشأ التالية تلقائياً بموعد جديد وقائمتها الفرعية غير مؤشّرة.
- * - الربط: بمشروع (قائمة مشاريع العهد) وبعهدة أو موظف (linkedType/linkedId)، ومهام فرعية بمستوى واحد (parentId).
+ * - الربط: بمشروع (projectId) وبعميل أو عهدة أو موظف (linkedType/linkedId) — خيارات الربط في lookups.links حسب أدوار المستخدم،
+ *   ومهام فرعية بمستوى واحد (parentId).
+ * - المهمة الخاصة (private): لا يراها إلا منشئها (ولا مدير المهام ولا مدير النظام)، مسندة إليه دائماً وبلا متابعين،
+ *   وتُنجز مباشرة بلا مراجعة، ويحذفها منشئها. الفرعية من خاصة تكون خاصة.
  */
 var TSK_SCHEMA = {
   Tasks: [
     ['id', 'text'], ['number', 'text'], ['title', 'text'], ['description', 'text'], ['status', 'text'], ['priority', 'text'],
     ['assigneeId', 'text'], ['watchers', 'json'], ['dueDate', 'date'], ['startDate', 'date'], ['completedAt', 'ts'],
     ['projectId', 'text'], ['linkedType', 'text'], ['linkedId', 'text'], ['parentId', 'text'], ['recurrence', 'json'],
-    ['nextTaskId', 'text'], ['sortOrder', 'num'], ['reviewAt', 'ts'], ['createdBy', 'text'], ['createdAt', 'ts'], ['updatedBy', 'text'], ['updatedAt', 'ts']
+    ['nextTaskId', 'text'], ['sortOrder', 'num'], ['reviewAt', 'ts'], ['createdBy', 'text'], ['createdAt', 'ts'], ['updatedBy', 'text'], ['updatedAt', 'ts'],
+    ['private', 'bool']
   ],
   TaskChecklist: [['id', 'text'], ['taskId', 'text'], ['text', 'text'], ['done', 'bool'], ['sortOrder', 'num'], ['doneBy', 'text'], ['doneAt', 'ts']],
   TaskComments: [['id', 'text'], ['taskId', 'text'], ['kind', 'text'], ['body', 'text'], ['mentions', 'json'], ['createdBy', 'text'], ['createdAt', 'ts']],
@@ -54,9 +58,13 @@ var Tasks = {
 
   canSee_: function (ctx, t) {
     var u = ctx.user.id;
+    if (t.private) return t.createdBy === u; // الخاصة لمنشئها فقط، حتى عن مدير المهام ومدير النظام
     return Tasks.isMgr_(ctx) || t.assigneeId === u || t.createdBy === u || (t.watchers || []).indexOf(u) >= 0 ||
       Tasks.team_(ctx).indexOf(t.assigneeId) >= 0;
   },
+
+  /** يحذف المهمة مدير المهام، ومنشئ المهمة الخاصة */
+  canRemove_: function (ctx, t) { return Tasks.isMgr_(ctx) || (!!t.private && t.createdBy === ctx.user.id); },
 
   /** من أسندها، أو مدير المسؤول، أو مدير المهام: يعدّل ويعتمد ويلغي */
   canManage_: function (ctx, t) {
@@ -141,6 +149,7 @@ var Tasks = {
       overdue: !!t.dueDate && t.dueDate < today && TSK.OPEN.indexOf(t.status) >= 0,
       projectId: t.projectId || '', projectName: proj ? proj.name : '',
       linkedType: t.linkedType || '', linkedTypeLabel: TSK.LINKS[t.linkedType] || '', linkedId: t.linkedId || '', linkedLabel: Tasks.linkLabel_(m, t.linkedType, t.linkedId),
+      private: !!t.private,
       parentId: t.parentId || '', parentTitle: parent ? parent.title : '', parentNumber: parent ? parent.number : '',
       recurrence: rec, recurrenceLabel: rec ? TSK.FREQ[rec.freq] || '' : '',
       sortOrder: t.sortOrder || 0, createdBy: t.createdBy, createdByName: Tasks.userName_(m, t.createdBy), createdAt: t.createdAt, updatedAt: t.updatedAt,
@@ -165,6 +174,27 @@ var Tasks = {
     Db.insert('tasks', 'TaskComments', { taskId: taskId, kind: 'event', body: body, mentions: [], createdBy: ctx.user.id, createdAt: nowIso() });
   },
 
+  /** خيارات الربط حسب أدوار المستخدم: العملاء لمن له دور في العملاء، العهد للمحاسب (أو عهد الموظف نفسه)، والموظفون للموارد البشرية (أو فريقه ونفسه) */
+  linkOptions_: function (ctx) {
+    var out = { client: [], custody: [], employee: [] };
+    var byName = function (a, b) { return a.name.localeCompare(b.name, 'ar'); };
+    if ((moduleDef_('crm') || {}).enabled && Permissions.has(ctx, 'crm')) {
+      out.client = Db.view('crm', 'Clients').filter(function (c) { return c.status === 'active'; }).map(function (c) { return { id: c.id, name: c.name }; }).sort(byName);
+    }
+    var me = Staff.ofCtx_(ctx), emps = indexBy_(Staff.all_());
+    if ((moduleDef_('custody') || {}).enabled && Permissions.has(ctx, 'custody')) {
+      var staff = Permissions.has(ctx, 'custody', ['accountant']);
+      out.custody = Db.view('custody', 'Custodies').filter(function (c) { return staff || (me && c.employeeId === me.id); })
+        .map(function (c) { var e = emps[c.employeeId]; return { id: c.id, name: c.id + ' · ' + (e ? e.fullName : c.periodLabel || '') }; })
+        .sort(function (a, b) { return b.id.localeCompare(a.id); });
+    }
+    var hr = Permissions.has(ctx, 'hr', ['hr']) || Permissions.has(ctx, 'attendance', ['hr']);
+    var team = me ? Staff.teamIds_(me.id) : [];
+    out.employee = Staff.all_().filter(function (e) { return e.status !== 'terminated' && (hr || (me && (e.id === me.id || team.indexOf(e.id) >= 0))); })
+      .map(function (e) { return { id: e.id, name: e.fullName }; }).sort(byName);
+    return out;
+  },
+
   // ───────── القراءة ─────────
   lookups: function (ctx) {
     var mgr = Tasks.isMgr_(ctx), team = Tasks.team_(ctx), users = Tasks.activeUsers_(), emps = indexBy_(Staff.all_());
@@ -181,6 +211,7 @@ var Tasks = {
       statuses: TSK.ORDER.map(function (k) { return { id: k, label: TSK.STATUS[k] }; }),
       priorities: Object.keys(TSK.PRIORITY).map(function (k) { return { id: k, label: TSK.PRIORITY[k] }; }),
       freqs: Object.keys(TSK.FREQ).map(function (k) { return { id: k, label: TSK.FREQ[k] }; }),
+      links: Tasks.linkOptions_(ctx),
       isManager: mgr, hasTeam: team.length > 0, drive: Files.available_(), today: localDate_()
     };
   },
@@ -231,7 +262,7 @@ var Tasks = {
           uploadedByName: Tasks.userName_(m, f.uploadedBy), uploadedAt: f.uploadedAt, canDelete: f.uploadedBy === ctx.user.id || Tasks.canManage_(ctx, t) };
       }),
       subtasks: subs.map(function (x) { return Tasks.view_(x, m, ctx); }),
-      can: { work: Tasks.canWork_(ctx, t), manage: Tasks.canManage_(ctx, t), remove: Tasks.isMgr_(ctx), recur: Tasks.isMgr_(ctx), comment: true }
+      can: { work: Tasks.canWork_(ctx, t), manage: Tasks.canManage_(ctx, t), remove: Tasks.canRemove_(ctx, t), recur: Tasks.isMgr_(ctx), comment: true }
     };
   },
 
@@ -257,7 +288,14 @@ var Tasks = {
         updatedBy: ctx.user.id, updatedAt: nowIso()
       };
       if (rec.startDate && rec.dueDate && rec.startDate > rec.dueDate) throw appError('تاريخ البدء بعد الموعد.');
-      var assignee = String(p.assigneeId || (cur ? cur.assigneeId : ctx.user.id));
+      // الخاصة: يضبطها منشئها فقط، مسندة إليه، وبلا متابعين؛ والفرعية من خاصة خاصة
+      var creator = cur ? cur.createdBy : ctx.user.id;
+      var priv = p.private !== undefined ? bool_(p.private) : (cur ? !!cur.private : false);
+      var parentRow = !cur && p.parentId ? Tasks.visible_(ctx, p.parentId) : null;
+      if (parentRow && parentRow.private) priv = true;
+      if (priv !== (cur ? !!cur.private : false) && creator !== ctx.user.id) throw appError('المهمة الخاصة يضبطها منشئها فقط.', 'FORBIDDEN');
+      rec.private = priv;
+      var assignee = priv ? creator : String(p.assigneeId || (cur ? cur.assigneeId : ctx.user.id));
       Tasks.assertAssignable_(ctx, assignee, cur ? cur.assigneeId : '');
       rec.assigneeId = assignee;
       if (p.projectId) {
@@ -279,7 +317,7 @@ var Tasks = {
         rec.linkedType = p.linkedType; rec.linkedId = lid;
       }
       var users = indexBy_(Tasks.activeUsers_());
-      var watchers = (Array.isArray(p.watchers) ? p.watchers : (cur ? cur.watchers || [] : [])).map(String)
+      var watchers = priv ? [] : (Array.isArray(p.watchers) ? p.watchers : (cur ? cur.watchers || [] : [])).map(String)
         .filter(function (id, i, a) { return users[id] && id !== assignee && a.indexOf(id) === i; });
       if (watchers.length > TSK.MAX_WATCHERS) throw appError('المتابعون ' + TSK.MAX_WATCHERS + ' كحد أقصى.');
       rec.watchers = watchers;
@@ -297,6 +335,7 @@ var Tasks = {
         if (cur.assigneeId !== assignee) changes.push('أسندها إلى ' + Tasks.userName_({ users: users }, assignee));
         if ((cur.dueDate || '') !== rec.dueDate) changes.push(rec.dueDate ? 'غيّر الموعد إلى ' + dmy_(rec.dueDate) : 'أزال الموعد');
         if ((cur.priority || 'normal') !== rec.priority) changes.push('الأولوية: ' + TSK.PRIORITY[rec.priority]);
+        if (!!cur.private !== priv) changes.push(priv ? 'جعلها خاصة' : 'جعلها عامة');
         saved = Db.update('tasks', 'Tasks', cur.id, rec);
         if (changes.length) Tasks.event_(ctx, cur.id, changes.join(' · '));
         Audit.log(ctx.user, 'tasks', 'task.update', 'Task', cur.id, {
@@ -305,8 +344,8 @@ var Tasks = {
         });
       } else {
         var parent = '';
-        if (p.parentId) {
-          var par = Tasks.visible_(ctx, p.parentId);
+        if (parentRow) {
+          var par = parentRow;
           if (par.parentId) throw appError('المهام الفرعية بمستوى واحد فقط.');
           if (!Tasks.canWork_(ctx, par)) throw appError('لا يمكنك إضافة مهام فرعية لهذه المهمة.', 'FORBIDDEN');
           parent = par.id;
@@ -320,7 +359,8 @@ var Tasks = {
           var s = optionalText(text, 200);
           if (s) Db.insert('tasks', 'TaskChecklist', { taskId: saved.id, text: s, done: false, sortOrder: i + 1, doneBy: '', doneAt: '' });
         });
-        Audit.log(ctx.user, 'tasks', 'task.create', 'Task', saved.id, { number: saved.number, title: saved.title, assignee: assignee });
+        // عنوان المهمة الخاصة لا يُسجَّل في سجل العمليات
+        Audit.log(ctx.user, 'tasks', 'task.create', 'Task', saved.id, { number: saved.number, title: priv ? '' : saved.title, assignee: assignee, private: priv });
       }
       return Tasks.view_(saved, Tasks.maps_(), ctx);
     });
@@ -373,7 +413,7 @@ var Tasks = {
     var n = Db.insert('tasks', 'Tasks', {
       number: Db.nextSerial('T', 4), title: t.title, description: t.description, status: 'todo', priority: t.priority,
       assigneeId: t.assigneeId, watchers: t.watchers || [], dueDate: due, startDate: shift !== null ? addDays_(due, -shift) : '',
-      completedAt: '', projectId: t.projectId, linkedType: t.linkedType, linkedId: t.linkedId, parentId: t.parentId,
+      completedAt: '', projectId: t.projectId, linkedType: t.linkedType, linkedId: t.linkedId, parentId: t.parentId, private: !!t.private,
       recurrence: t.recurrence, nextTaskId: '', sortOrder: Date.now(), createdBy: t.createdBy, createdAt: nowIso(), updatedBy: ctx.user.id, updatedAt: nowIso()
     });
     Tasks.rows_('TaskChecklist').filter(function (c) { return c.taskId === t.id; }).forEach(function (c) {
@@ -387,6 +427,7 @@ var Tasks = {
   remove: function (ctx, p) {
     return withLock(function () {
       var t = Tasks.visible_(ctx, p && p.id);
+      if (!Tasks.canRemove_(ctx, t)) throw appError('يحذف المهام مدير المهام.', 'FORBIDDEN');
       var ids = [t.id].concat(Tasks.rows_('Tasks').filter(function (x) { return x.parentId === t.id; }).map(function (x) { return x.id; }));
       ids.forEach(function (id) {
         Tasks.rows_('TaskChecklist').filter(function (c) { return c.taskId === id; }).forEach(function (c) { Db.remove('tasks', 'TaskChecklist', c.id); });
@@ -394,7 +435,7 @@ var Tasks = {
         Tasks.rows_('TaskFiles').filter(function (f) { return f.taskId === id; }).forEach(function (f) { Files.trash_(f.driveFileId); Db.remove('tasks', 'TaskFiles', f.id); });
         Db.remove('tasks', 'Tasks', id);
       });
-      Audit.log(ctx.user, 'tasks', 'task.delete', 'Task', t.id, { number: t.number, title: t.title, subtasks: ids.length - 1 });
+      Audit.log(ctx.user, 'tasks', 'task.delete', 'Task', t.id, { number: t.number, title: t.private ? '' : t.title, subtasks: ids.length - 1 });
       return true;
     });
   },
@@ -557,14 +598,14 @@ var Tasks = {
   },
 
   routes_: function () {
-    var any = { module: 'tasks' }, mgr = { module: 'tasks', roles: ['manager'] };
+    var any = { module: 'tasks' };
     return {
       'tsk.lookups': { perm: any, fn: Tasks.lookups },
       'tsk.list': { perm: any, fn: Tasks.list },
       'tsk.get': { perm: any, fn: Tasks.get },
       'tsk.save': { perm: any, fn: Tasks.save },
       'tsk.status': { perm: any, fn: Tasks.status },
-      'tsk.remove': { perm: mgr, fn: Tasks.remove },
+      'tsk.remove': { perm: any, fn: Tasks.remove }, // التحقق داخلها: مدير المهام أو منشئ المهمة الخاصة
       'tsk.check.save': { perm: any, fn: Tasks.checkSave },
       'tsk.check.remove': { perm: any, fn: Tasks.checkRemove },
       'tsk.comment.add': { perm: any, fn: Tasks.comment },

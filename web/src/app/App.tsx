@@ -64,6 +64,12 @@ const CrmReportsPage = lazy(() => import('../modules/crm/CrmPages').then((m) => 
 const ClientPage = lazy(() => import('../modules/crm/DetailPages').then((m) => ({ default: m.ClientPage })));
 const CrmProjectPage = lazy(() => import('../modules/crm/DetailPages').then((m) => ({ default: m.ProjectPage })));
 
+const CorLayout = lazy(() => import('../modules/correspondence/CorPages').then((m) => ({ default: m.CorLayout })));
+const LettersPage = lazy(() => import('../modules/correspondence/CorPages').then((m) => ({ default: m.LettersPage })));
+const CorReportPage = lazy(() => import('../modules/correspondence/CorPages').then((m) => ({ default: m.CorReportPage })));
+const CorSettingsPage = lazy(() => import('../modules/correspondence/CorSettingsPage'));
+const LetterDetailPage = lazy(() => import('../modules/correspondence/LetterDetailPage'));
+
 const SOON: Record<string, { label: string; phase: number }> = {
   finance: { label: tr("المالية"), phase: 5 }
 };
@@ -98,6 +104,8 @@ export default function App() {
   const cusStaff = admin || roles.custody === 'accountant';
   const tasks = admin || !!roles.tasks;
   const crm = admin || !!roles.crm;
+  const cor = admin || !!roles.correspondence;
+  const corMgr = admin || roles.correspondence === 'manager';
   return (
     <HashRouter>
       {updateRequired && <UpdateBanner />}
@@ -165,6 +173,16 @@ export default function App() {
                 <Route path="proposals" element={<ProposalsPage />} />
                 <Route path="activities" element={<ActivitiesPage />} />
                 <Route path="reports" element={<CrmReportsPage />} />
+              </Route>
+            )}
+            {cor && (
+              <Route path="/correspondence" element={<CorLayout />}>
+                <Route index element={<LettersPage view="in" />} />
+                <Route path="out" element={<LettersPage view="out" />} />
+                <Route path="archive" element={<LettersPage view="archive" />} />
+                <Route path="report" element={<CorReportPage />} />
+                {corMgr && <Route path="settings" element={<CorSettingsPage />} />}
+                <Route path=":id" element={<LetterDetailPage />} />
               </Route>
             )}
             {admin && <Route path="/settings/users" element={<UsersPage />} />}

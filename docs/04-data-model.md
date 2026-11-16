@@ -28,7 +28,7 @@
 
 - **Users** للدخول فقط. **Employees** هو الملف الوظيفي. يمكن وجود مستخدم ليس موظفاً (محاسب خارجي مثلاً).
 - كل وحدة تشير إلى الموظف بـ `employeeId`، وإلى المشروع بـ `projectId`.
-- الربط العام بين أي كيانين بالحقلين `linkedType` + `linkedId` (مثل مهمة مرتبطة بعميل).
+- الربط العام بين أي كيانين بالحقلين `linkedType` + `linkedId` (مثل مهمة مرتبطة بعميل، أو خطاب مرتبط بمهمة).
 
 ## 2. النواة — `KMK-Core`
 
@@ -101,6 +101,17 @@
 | **TaskChecklist** | taskId, text, done, sortOrder, doneBy, doneAt |
 | **TaskComments** | taskId, kind (`comment` أو `event` لسجل النشاط), body, mentions (json: userIds يصبحون متابعين) |
 | **TaskFiles** | taskId, fileName, driveFileId, mimeType, fileSize, uploadedBy (على Drive في «بوابة KMK — الملفات/المهام/YYYY-MM») |
+
+## 6ب. المراسلات — `KMK-Correspondence` 🆕 (0.9.7)
+
+> قاعدة بيانات مستقلة (`DB_CORRESPONDENCE` في Script Properties) تُنشأ تلقائياً عند أول استخدام مع جداولها، وتُزرع التصنيفات الافتراضية عند أول قراءة.
+
+| الجدول | الأعمدة الرئيسية |
+|---|---|
+| **Letters** | number (`IN-2026-0001` / `OUT-2026-0001` تسلسلي بسنة تاريخ الخطاب عبر `Db.nextSerial`), direction (`in`/`out`), subject, summary, party (اسم الجهة؛ يُملأ من العميل إن اختير), clientId (عميل من `KMK-CRM`), date, receivedAt, sentAt, refNo (رقم مرجع الجهة), channel (`mail`/`hand`/`whatsapp`/`email`/`fax`), category (من جدول Categories), status (`draft`/`sent`/`received`/`replied`/`archived`), replyToId (الأصل الذي يُجاب عليه؛ تسجيل الرد يجعل الأصل `replied`), dueDate (موعد الرد المطلوب), assigneeId (userId المسؤول عن المتابعة), linkedType (`client`/`project`/`custody`/`employee`/`task`), linkedId, projectId (مشاريع العملاء؛ يملأ clientId إن كان فارغاً), tags (json), archivedAt, createdBy, createdAt, updatedBy, updatedAt |
+| **LetterFiles** | letterId, fileName, driveFileId, mimeType, fileSize, uploadedBy (على Drive في «بوابة KMK — الملفات/المراسلات/YYYY») |
+| **LetterLog** | letterId, kind (`create`/`update`/`send`/`receive`/`reply`/`archive`/`restore`/`forward`/`file`), body (نص عربي يُترجم في الواجهة), byId, at |
+| **Categories** | name, active, sortOrder (إعادة التسمية تُطبَّق على الخطابات المسجلة) |
 
 ## 7. العملاء — `KMK-CRM` 🆕
 

@@ -42,6 +42,8 @@ const PATHS = {
   chevronDown: 'M6 9l6 6 6-6',
   file: 'M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6',
   filter: 'M4 6h16M7 12h10M10 18h4',
+  mail: 'M3 6h18v12H3zM3 7l9 6 9-6',
+  archive: 'M3 5h18v4H3zM5 9v10h14V9M10 13h4',
   sliders: 'M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4',
   fingerprint: 'M6.5 5.5A8 8 0 0 1 20 11v1M4 9.5A8 8 0 0 0 4 12v1M8 12a4 4 0 0 1 8 0v1.5a13 13 0 0 1-1 5M12 12v2a10 10 0 0 1-2.2 6.3M8.2 16.5A12 12 0 0 1 7 20M19.5 15.5a17 17 0 0 1-.7 3.5M9.5 4.2A8 8 0 0 1 12 4'
 } as const;

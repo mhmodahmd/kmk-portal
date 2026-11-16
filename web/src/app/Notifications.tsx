@@ -104,7 +104,7 @@ export function NotificationBell() {
               <button key={n.id} type="button" onClick={() => openItem(n)}
                 className={cx('flex w-full items-start gap-3 border-b border-line px-4 py-3 text-start last:border-b-0 cursor-pointer hover:bg-chip/50', !n.read && 'bg-accent-soft/40')}>
                 <span className={cx('mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full', n.kind === 'approval' ? 'bg-warn-bg text-warn' : 'bg-chip text-muted')}>
-                  <Icon name={n.kind === 'approval' ? 'inbox' : n.module === 'tasks' ? 'tasks' : n.module === 'custody' ? 'wallet' : n.module === 'attendance' ? 'clock' : 'bell'} size={16} />
+                  <Icon name={n.kind === 'approval' ? 'inbox' : n.module === 'tasks' ? 'tasks' : n.module === 'correspondence' ? 'mail' : n.module === 'custody' ? 'wallet' : n.module === 'attendance' ? 'clock' : 'bell'} size={16} />
                 </span>
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className={cx('leading-snug', !n.read ? 'font-semibold' : 'text-muted')}>{n.title}</span>

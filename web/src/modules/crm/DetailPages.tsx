@@ -14,6 +14,8 @@ import { cx } from '../../ui/cx';
 import { openFile } from '../custody/files';
 import { QuickTaskButton, TaskRow } from '../tasks/shared';
 import type { TaskView } from '../tasks/types';
+import { useAuth } from '../../app/auth';
+import { LinkedLetters } from '../correspondence/shared';
 import { ActivityList } from './CrmPages';
 import {
   ActivityDialog, CRM_KEYS, ClientDialog, CollectBar, ContactDialog, LinkDialog, Money, PaymentDialog, ProjectBadge, ProjectDialog, ProposalBadge,
@@ -105,6 +107,8 @@ export function ClientPage() {
   const nav = useNavigate();
   const q = useApi<ClientDetail>('crm.client', { id });
   const tasks = useApi<TaskView[]>('tsk.list', { view: 'any', linkedType: 'client', linkedId: id, old: true });
+  const auth = useAuth();
+  const hasCor = !!auth.user?.isSuperAdmin || !!auth.roles.correspondence;
   const [dlg, setDlg] = useState<'' | 'edit' | 'contact' | 'project' | 'proposal' | 'activity' | 'link'>('');
   const [contact, setContact] = useState<ContactView | null>(null);
   const [pay, setPay] = useState<PaymentView | null>(null);
@@ -166,6 +170,7 @@ export function ClientPage() {
             <CardHeader title={tr("المهام")} />
             {taskList.length === 0 ? <p className="m-0 px-5 pb-4 text-[13px] text-muted">{tr("لا مهام مرتبطة.")}</p> : taskList.map((t) => <TaskRow key={t.id} t={t} showAssignee />)}
           </Card>
+          {hasCor && <LinkedLetters filter={{ clientId: c.id }} draft={{ clientId: c.id, party: c.name }} />}
         </div>
         <div className="flex flex-col gap-4">
           <Card padded={false}>
@@ -207,6 +212,8 @@ export function ProjectPage() {
   const nav = useNavigate();
   const q = useApi<ProjectDetail>('crm.project', { id });
   const tasks = useApi<TaskView[]>('tsk.list', { view: 'any', projectId: id, old: true });
+  const auth = useAuth();
+  const hasCor = !!auth.user?.isSuperAdmin || !!auth.roles.correspondence;
   const [dlg, setDlg] = useState<'' | 'edit' | 'pay' | 'link'>('');
   const [pay, setPay] = useState<PaymentView | null>(null);
   const [removing, setRemoving] = useState(false);
@@ -262,6 +269,7 @@ export function ProjectPage() {
             <CardHeader title={tr("المهام")} />
             {(tasks.data || []).length === 0 ? <p className="m-0 px-5 pb-4 text-[13px] text-muted">{tr("لا مهام مرتبطة.")}</p> : tasks.data!.map((t) => <TaskRow key={t.id} t={t} showAssignee />)}
           </Card>
+          {hasCor && <LinkedLetters filter={{ projectId: p.id }} draft={{ projectId: p.id, clientId: p.clientId, party: p.clientName }} />}
           {subprojects.length > 0 && (
             <Card padded={false}>
               <CardHeader title={tr("مشاريع فرعية")} />

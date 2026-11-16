@@ -8,8 +8,8 @@ import { Badge, Card, CardHeader, EmptyState, ErrorBox, Skeleton, StatTile } fro
 import { Icon, type IconName } from '../../ui/Icon';
 import { cx } from '../../ui/cx';
 
-const MODULE_ICONS: Record<string, IconName> = { attendance: 'clock', hr: 'users', custody: 'wallet', tasks: 'tasks', crm: 'crm', finance: 'finance' };
-const PHASE: Record<string, number> = { attendance: 1, hr: 1, custody: 2, tasks: 3, crm: 4, finance: 5 };
+const MODULE_ICONS: Record<string, IconName> = { attendance: 'clock', hr: 'users', custody: 'wallet', tasks: 'tasks', crm: 'crm', correspondence: 'mail', finance: 'finance' };
+const PHASE: Record<string, number> = { attendance: 1, hr: 1, custody: 2, tasks: 3, crm: 4, correspondence: 4, finance: 5 };
 
 export default function HomePage() {
   const { user } = useAuth();
@@ -18,7 +18,7 @@ export default function HomePage() {
   const s = q.data;
   const card = (kind: string) => s?.cards.find((c) => c.kind === kind);
   const today = card('att.today'), board = card('att.board'), leave = card('hr.leave'), docs = card('hr.docs');
-  const cusMine = card('cus.mine'), cusStaff = card('cus.staff'), tasks = card('tsk.mine'), crm = card('crm.home');
+  const cusMine = card('cus.mine'), cusStaff = card('cus.staff'), tasks = card('tsk.mine'), crm = card('crm.home'), cor = card('cor.home');
 
   return (
     <div className="flex flex-col gap-5">
@@ -52,6 +52,10 @@ export default function HomePage() {
                 value={crm.overdue || crm.due.length || crm.review} icon="crm"
                 foot={<Link to={crm.overdue || crm.due.length ? '/crm/payments' : '/crm/projects?review=1'} className="text-accent-fg no-underline">{crm.review && (crm.overdue || crm.due.length) ? tr("و{0} مشاريع تحتاج مراجعة", crm.review) : tr("فتح العملاء")}</Link>} />
             )}
+            {cor && cor.open > 0 && (
+              <StatTile label={cor.scope === 'all' ? tr("مراسلات بانتظار الرد") : tr("مراسلاتي بانتظار الرد")} value={cor.open} icon="mail"
+                foot={<Link to="/correspondence" className={cx('no-underline', cor.overdue ? 'font-semibold text-bad' : 'text-accent-fg')}>{cor.overdue ? tr("{0} متأخرة عن موعد الرد", cor.overdue) : cor.dueSoon ? tr("{0} يحين موعدها قريباً", cor.dueSoon) : cor.drafts ? tr("{0} مسودة لم تُرسل", cor.drafts) : tr("فتح المراسلات")}</Link>} />
+            )}
             {docs && <StatTile label={tr("مستندات تنتهي خلال 30 يوماً")} value={docs.count} icon="file" foot={<Link to="/hr/employees" className="text-accent-fg no-underline">{docs.employees} {tr("موظف في الدليل")}</Link>} />}
             {s.setup && !docs && <StatTile label={tr("مستخدمو البوابة")} value={s.setup.usersCount} icon="users" foot={<Link to="/settings/users" className="text-accent-fg no-underline">{tr("إدارة المستخدمين والأدوار")}</Link>} />}
           </>
@@ -60,6 +64,7 @@ export default function HomePage() {
 
       {board && <BoardCard c={board} />}
       {tasks && tasks.items.length > 0 && <TasksCard c={tasks} />}
+      {cor && cor.items.length > 0 && <LettersCard c={cor} />}
       {docs && docs.items.length > 0 && <DocsCard c={docs} />}
       {s?.setup && <SetupChecklist setup={s.setup} />}
 
@@ -188,6 +193,22 @@ function SetupChecklist({ setup }: { setup: NonNullable<ReturnType<typeof useSum
 function kwdText(f: number) {
   const a = Math.abs(Math.round(f || 0));
   return (f < 0 ? '-' : '') + Math.floor(a / 1000).toLocaleString('en-US') + '.' + String(a % 1000).padStart(3, '0') + ' ' + tr("د.ك");
+}
+
+/** خطابات لها موعد رد: الأقرب أولاً */
+function LettersCard({ c }: { c: HomeCard }) {
+  return (
+    <Card padded={false}>
+      <CardHeader title={tr("مراسلات لها موعد رد")} action={<Link to="/correspondence" className="text-[13px] font-semibold text-accent-fg no-underline">{tr("كل المراسلات")}</Link>} />
+      {c.items.map((l: { id: string; number: string; subject: string; party: string; direction: string; dueDate: string; overdue: boolean }) => (
+        <Link key={l.id} to={'/correspondence/' + l.id} className="flex items-center gap-3 border-t border-line px-5 py-3 text-fg no-underline hover:bg-chip/40">
+          <Icon name={l.direction === 'in' ? 'login' : 'logoutArrow'} size={18} className={cx('shrink-0', l.direction === 'in' ? 'text-ok' : 'text-accent-fg')} />
+          <span className="flex min-w-0 flex-1 flex-col"><span className="truncate font-medium">{l.subject}</span><span className="text-[12px] text-muted"><span className="num">{l.number}</span> · {l.party}</span></span>
+          {l.dueDate && <span className={cx('text-[12px] num', l.overdue ? 'font-semibold text-bad' : 'text-muted')}>{dmy(l.dueDate)}</span>}
+        </Link>
+      ))}
+    </Card>
+  );
 }
 
 function TasksCard({ c }: { c: HomeCard }) {

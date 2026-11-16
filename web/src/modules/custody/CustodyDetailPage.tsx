@@ -4,7 +4,7 @@ import { tr } from '../../lib/i18n';
 import { ApiError } from '../../lib/api';
 import { useAction, useApi } from '../../lib/useApi';
 import { formatDateTime } from '../../lib/format';
-import { Badge, Card, CardHeader, EmptyState, ErrorBox, Loader } from '../../ui/Display';
+import { Badge, Card, CardHeader, EmptyState, ErrorBox, Loader, DangerZone } from '../../ui/Display';
 import { Button } from '../../ui/Button';
 import { DataTable } from '../../ui/Controls';
 import { Checkbox, Select, TextInput, Textarea } from '../../ui/Field';
@@ -66,7 +66,6 @@ export default function CustodyDetailPage() {
           <div className="ms-auto flex flex-wrap gap-2 no-print">
             <Link to={'/custody/print/statement/' + c.id} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 font-medium text-fg no-underline hover:border-line-strong"><Icon name="printer" size={16} />{tr("كشف التسوية")}</Link>
             <QuickTaskButton variant="secondary" draft={{ linkedType: 'custody', linkedId: c.id, linkedLabel: c.id + ' · ' + c.employeeName }} />
-            {can.delete && <Button size="sm" variant="danger-outline" icon="trash" onClick={() => setRemoving(true)}>{tr("حذف")}</Button>}
           </div>
         </div>
         <span className="text-muted">{c.employeeName} · {tr("فُتحت {0}", dateLabel(c.openDate))}{c.previousCustodyId ? ' · ' + tr("تلي {0}", c.previousCustodyId) : ''}</span>
@@ -177,6 +176,7 @@ export default function CustodyDetailPage() {
         </div>
       </div>
 
+      {can.delete && <DangerZone label={tr("حذف العهدة نهائياً")} onClick={() => setRemoving(true)} />}
       <ExpenseDialog open={!!editing} onClose={() => setEditing(null)} custodyId={c.id} expense={editing === 'new' ? null : editing} />
       <ReasonDialog open={!!deleting} onClose={() => setDeleting(null)} title={tr("حذف بند")} label={tr("سبب الحذف (للسجل)")} confirmLabel={tr("حذف")} danger
         onConfirm={(reason) => del.mutateAsync({ id: deleting!.id, reason })}>

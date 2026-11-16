@@ -1738,13 +1738,41 @@ const EN: Record<string, string> = {
   'الصيغة غير صحيحة.': 'Invalid format.',
   '{0} أحرف على الأقل.': 'At least {0} characters.',
   'القيمة غير صحيحة.': 'Invalid value.',
-};
+  // الدفعة 5: سجل العمليات والتصدير والحذف
+  'تصدير CSV (Excel)': 'Export CSV (Excel)',
+  'تعديل الإعدادات': 'Settings updated', 'تفعيل الدخول بالبصمة': 'Biometric sign-in enabled', 'إزالة جهاز البصمة': 'Biometric device removed',
+  'اعتماد تصحيح بصمة': 'Clock-in correction approved', 'رفض تصحيح بصمة': 'Clock-in correction rejected', 'حذف تسجيل حضور': 'Attendance record deleted', 'إعادة ضبط جهاز بصمة': 'Clock-in device reset', 'تحديد موقع فرع': 'Branch location set',
+  'حفظ ملف موظف': 'Employee file saved', 'إنشاء حساب لموظف': 'Employee account created', 'ربط موظف بحساب': 'Employee linked to account', 'فك ربط موظف': 'Employee unlinked',
+  'تسجيل إجازة': 'Leave recorded', 'اعتماد إجازة': 'Leave approved', 'رفض إجازة': 'Leave rejected', 'إلغاء طلب إجازة': 'Leave request cancelled', 'إلغاء إجازة معتمدة': 'Approved leave cancelled', 'تسوية رصيد إجازة': 'Leave balance adjusted',
+  'اعتماد عمل إضافي': 'Overtime approved', 'رفض عمل إضافي': 'Overtime rejected', 'إلغاء عمل إضافي': 'Overtime cancelled',
+  'حفظ عطلة': 'Holiday saved', 'حذف عطلة': 'Holiday deleted', 'حفظ قسم': 'Department saved', 'حفظ فرع': 'Branch saved', 'حفظ وردية': 'Shift saved', 'حفظ نوع إجازة': 'Leave type saved',
+  'تأكيد استلام عهدة': 'Custody receipt confirmed', 'طلب إقفال عهدة': 'Custody close requested', 'اعتماد إقفال عهدة': 'Custody close approved', 'رفض إقفال عهدة': 'Custody close rejected', 'حذف عهدة': 'Custody deleted',
+  'حفظ بند': 'Entry saved', 'ملاحظة على بند': 'Note on entry', 'إرفاق ملف': 'File attached', 'حذف مرفق': 'Attachment deleted',
+  'رفض طلب عهدة': 'Custody request rejected', 'إلغاء طلب عهدة': 'Custody request cancelled',
+  'اعتماد سند': 'Voucher approved', 'رفض طلب سند': 'Voucher request rejected', 'إلغاء سند': 'Voucher cancelled', 'توقيع الإدارة على سند': 'Voucher signed by management', 'رفع سند موقّع': 'Signed voucher uploaded', 'توقيع الإدارة على كشف': 'Statement signed by management', 'رفع كشف موقّع': 'Signed statement uploaded', 'إرسال رابط توقيع': 'Signing link sent', 'حفظ قائمة': 'List saved',
+  'إنشاء مهمة': 'Task created', 'تعديل مهمة': 'Task edited', 'تغيير حالة مهمة': 'Task status changed', 'تعليق على مهمة': 'Task comment', 'حذف مهمة': 'Task deleted', 'إرفاق ملف بمهمة': 'File attached to task',
+  'إنشاء عميل': 'Client created', 'تعديل عميل': 'Client edited', 'نقل مرحلة عميل': 'Client stage moved', 'حذف عميل': 'Client deleted', 'إنشاء مشروع': 'Project created', 'تعديل مشروع': 'Project edited', 'حذف مشروع': 'Project deleted', 'حذف دفعة': 'Payment deleted',
+  'قبول عرض سعر': 'Proposal accepted', 'رفض عرض سعر': 'Proposal rejected', 'عرض سعر قيد التفاوض': 'Proposal in negotiation', 'عرض سعر مسودة': 'Proposal draft', 'حذف عرض سعر': 'Proposal deleted',
+  'نسخة احتياطية يدوية': 'Manual backup', 'نقل بيانات الحضور السابق': 'Legacy attendance migration', 'نقل بيانات العهد السابق': 'Legacy custody migration', 'نقل بيانات العملاء السابق': 'Legacy CRM migration',
+  'النواة': 'Core', 'العهد': 'Custody', ' (مؤجلة)': ' (postponed)',
+  'تعديل تسجيل حضور': 'Attendance record edited', 'إضافة موظف': 'Employee added', 'تعديل ملف موظف': 'Employee file edited',
+  'إضافة قسم': 'Department added', 'تعديل قسم': 'Department edited', 'إضافة فرع': 'Branch added', 'تعديل فرع': 'Branch edited', 'إضافة وردية': 'Shift added', 'تعديل وردية': 'Shift edited', 'إضافة نوع إجازة': 'Leave type added', 'تعديل نوع إجازة': 'Leave type edited',
+  'تصحيح بند': 'Entry corrected', 'حذف التوقيع': 'Signature deleted', 'توقيع المدير عبر الرابط': 'Manager signed via link', 'رفض المدير عبر الرابط': 'Manager rejected via link',
+  'تحصيل دفعة': 'Payment collected', 'جدولة دفعة': 'Payment scheduled', 'تعديل دفعة': 'Payment edited', 'تعديل نشاط': 'Activity edited', 'إنشاء عرض سعر': 'Proposal created', 'تعديل عرض سعر': 'Proposal edited', 'ابحث باسم المستخدم أو الإجراء أو المعرّف': 'Search by user, action or ID', 'الوحدة': 'Module',
+  'حذف العميل نهائياً': 'Delete client permanently', 'حذف المشروع نهائياً': 'Delete project permanently', };
 
 /**
  * رسائل الخادم التي فيها متغيرات: {0} {1} مكان الأجزاء المتغيرة (وتُترجم هي أيضاً إن كانت تسميات).
  * الترتيب مهم: الأخص قبل الأعم.
  */
 export const EN_PATTERNS: Record<string, string> = {
+  '{0} غير صحيح.': '{0} is invalid.',
+  '{0}سبب الرفض: {1}': '{0}Rejection reason: {1}',
+  '{0} · {2} · {3} حتى {4}': '{0} · {2} · {3} until {4}',
+  'كانت مسندة إلى {0} · ': 'Was assigned to {0} · ',
+  ' (كانت مسندة إلى {0})': ' (was assigned to {0})',
+  ' (كانت مسندة إلى {0} · مؤجلة)': ' (was assigned to {0} · postponed)',
+  'الحساب المحدد لـ {0} غير موجود في البوابة، فنُسب لحساب الافتراضي.': 'The account chosen for {0} does not exist in the portal, so the default account was used.',
   'محتوى الملف لا يطابق نوعه المعلن ({0}).': 'The file content does not match its declared type ({0}).',
   '{0} دقيقة': '{0} min',
   '{0} عميل محتمل': '{0} prospective clients',

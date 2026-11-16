@@ -88,8 +88,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-20 sm:bottom-6 z-[60] flex flex-col items-center gap-2 px-4">
         {items.map((t) => (
-          <div key={t.id} className="kmk-in pointer-events-auto flex max-w-md items-center gap-2.5 rounded-xl bg-[#232323] px-4 py-3 text-white shadow-lg dark:bg-[#E8E8E8] dark:text-[#151515]">
-            <Icon name={t.tone === 'ok' ? 'check' : 'alert'} size={18} className={t.tone === 'ok' ? 'text-[#4ADE80] dark:text-[#16803C]' : 'text-[#F87171] dark:text-[#B91C1C]'} strokeWidth={2.2} />
+          <div key={t.id} className="kmk-in pointer-events-auto flex max-w-md items-center gap-2.5 rounded-xl bg-toast px-4 py-3 text-toast-fg shadow-lg">
+            <Icon name={t.tone === 'ok' ? 'check' : 'alert'} size={18} className={t.tone === 'ok' ? 'text-toast-ok' : 'text-toast-bad'} strokeWidth={2.2} />
             <span>{t.message}</span>
           </div>
         ))}

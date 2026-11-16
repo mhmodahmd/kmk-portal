@@ -338,7 +338,7 @@ export function ActivitiesPage() {
       <div className="no-print flex flex-wrap items-center gap-2">
         <div className="min-w-[220px] flex-1"><SearchBox id="act-q" value={f.q} onChange={(v) => setF({ ...f, q: v })} placeholder={tr("بحث بالعميل أو الموظف أو الموضوع")} /></div>
         <Button icon="refresh" aria-label={tr("تحديث")} onClick={() => q.refetch()} loading={q.isFetching && !q.isPending} />
-        <Button icon="download" onClick={exportCsv} disabled={!rows.length}>{tr("تصدير")}</Button>
+        <Button icon="download" onClick={exportCsv} disabled={!rows.length}>{tr("تصدير CSV (Excel)")}</Button>
         <Button variant="primary" icon="plus" onClick={() => setAdding(true)}>{tr("تسجيل نشاط")}</Button>
       </div>
       <div className="no-print grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -461,7 +461,7 @@ export function ReportsPage() {
           <TextInput label={tr("إلى")} type="date" ltr value={custom.to} onChange={(e) => setCustom({ ...custom, to: e.target.value })} className="w-40" />
         </>}
         <span className="ms-auto" />
-        <Button icon="download" onClick={exportProjects} disabled={!r}>{tr("تصدير CSV")}</Button>
+        <Button icon="download" onClick={exportProjects} disabled={!r}>{tr("تصدير CSV (Excel)")}</Button>
         <Button icon="printer" onClick={() => window.print()} disabled={!r}>{tr("طباعة")}</Button>
       </div>
       <div className="print-only"><h2 className="m-0">{tr("تقرير العملاء · {0}", periodLabel)}</h2></div>

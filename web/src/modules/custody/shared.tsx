@@ -299,7 +299,7 @@ export function SignActions({ kind, id, info, onDone }: { kind: 'voucher' | 'sta
       {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2 text-bad">{error}</div>}
       <Dialog open={!!link} onClose={() => setLink(null)} title={tr("رابط توقيع المدير")}
         footer={<>
-          <a href={link?.wa} target="_blank" rel="noreferrer" className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-[#25D366] px-4 font-semibold text-white no-underline">{tr("إرسال عبر واتساب")}</a>
+          <a href={link?.wa} target="_blank" rel="noreferrer" className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-whatsapp px-4 font-semibold text-white no-underline">{tr("إرسال عبر واتساب")}</a>
           <Button onClick={async () => { try { await navigator.clipboard.writeText(link?.text || ''); toast(tr("تم النسخ")); } catch { /* لا حافظة */ } }}>{tr("نسخ")}</Button>
         </>}>
         <div className="flex flex-col gap-2">

@@ -40,7 +40,7 @@ function useClock(serverNow?: string) {
 }
 
 export default function PunchPage() {
-  const q = useApi<AttToday>('att.today', {}, { refetchInterval: 60_000, retry: (n, e) => !(e instanceof ApiError && e.code === 'NO_EMPLOYEE') && n < 2 });
+  const q = useApi<AttToday>('att.today', {}, { refetchInterval: 60_000, refetchIntervalInBackground: false, retry: (n, e) => !(e instanceof ApiError && e.code === 'NO_EMPLOYEE') && n < 2 });
   const t = q.data;
   const now = useClock(t?.serverNow);
   const [locating, setLocating] = useState(false);

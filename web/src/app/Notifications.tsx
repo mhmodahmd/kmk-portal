@@ -27,9 +27,9 @@ export async function setBrowserAlerts(on: boolean) {
   return p === 'granted';
 }
 
-/** الإشعارات: تُحدَّث كل دقيقة وعند العودة للصفحة */
+/** الإشعارات: كل دقيقتين والتبويب ظاهر (refetchIntervalInBackground=false افتراضياً فيتوقف الاستطلاع عند إخفائه)، وفوراً عند العودة */
 export function useNotifications() {
-  return useQuery({ queryKey: ['notify.list'], queryFn: () => api<NotificationList>('notify.list', { limit: 40 }), refetchInterval: 60_000, staleTime: 20_000 });
+  return useQuery({ queryKey: ['notify.list'], queryFn: () => api<NotificationList>('notify.list', { limit: 40 }), refetchInterval: 120_000, refetchIntervalInBackground: false, staleTime: 20_000 });
 }
 
 /** تنبيه المتصفح للإشعارات الجديدة التي وصلت والصفحة في الخلفية */

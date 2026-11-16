@@ -32,7 +32,7 @@ export default function ReportPage() {
       <div className="no-print flex flex-wrap items-center gap-3">
         <MonthPicker value={month} onChange={setMonth} max={kwMonth()} />
         <span className="flex-1" />
-        <Button icon="download" onClick={exportCsv} disabled={!d?.rows.length}>{tr("تصدير Excel")}</Button>
+        <Button icon="download" onClick={exportCsv} disabled={!d?.rows.length}>{tr("تصدير CSV (Excel)")}</Button>
         <Button icon="printer" onClick={() => window.print()} disabled={!d?.rows.length}>{tr("طباعة")}</Button>
       </div>
       <div className="print-only">
@@ -88,7 +88,7 @@ export function EmployeeReportPage() {
         <Link to={`/attendance/report?month=${month}`} className="inline-flex items-center gap-1 text-accent-fg no-underline"><Icon name="chevron" size={18} className="rotate-180" />{tr("كل الموظفين")}</Link>
         <MonthPicker value={month} onChange={(m) => setSp({ month: m }, { replace: true })} max={kwMonth()} />
         <span className="flex-1" />
-        <Button icon="download" onClick={exportCsv} disabled={!r}>{tr("تصدير Excel")}</Button>
+        <Button icon="download" onClick={exportCsv} disabled={!r}>{tr("تصدير CSV (Excel)")}</Button>
         <Button icon="printer" onClick={() => window.print()} disabled={!r}>{tr("طباعة")}</Button>
       </div>
       {q.isError && <ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} />}

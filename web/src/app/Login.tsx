@@ -19,27 +19,27 @@ function BrandPanel() {
       const tip = r < 5 ? r : 9 - r;
       const on = c === tip || c === tip + 1;
       const red = (c === tip + 4 || c === tip + 5) && r > 1 && r < 8;
-      cells.push(<span key={r * 10 + c} className="rounded-[4px]" style={{ width: 22, height: 22, background: on ? '#FFFFFF' : red ? '#D30B0B' : '#2E2E2E' }} />);
+      cells.push(<span key={r * 10 + c} className="rounded-[4px]" style={{ width: 22, height: 22, background: on ? 'var(--c-logo-white)' : red ? 'var(--c-logo-red)' : 'var(--c-side-active)' }} />);
     }
   }
   return (
-    <div className="hidden lg:flex flex-1 basis-[560px] flex-col justify-between bg-[#232323] p-14 text-white">
+    <div className="hidden lg:flex flex-1 basis-[560px] flex-col justify-between bg-side p-14 text-white">
       <img src={BASE + 'logo-on-dark.png'} alt="" className="h-[30px] w-auto self-start" />
       <div className="flex flex-col gap-9">
         <div aria-hidden="true" className="ltr grid self-start gap-1" style={{ gridTemplateColumns: 'repeat(10, 22px)' }}>{cells}</div>
         <div className="flex max-w-[460px] flex-col gap-3">
           <h2 className="m-0 text-[30px] font-bold leading-snug">{tr("كل أعمال الشركة في مكان واحد")}</h2>
-          <p className="m-0 text-[16px] leading-loose text-[#C9CBD0]">{tr("الحضور والموارد البشرية والعهد والمهام والعملاء والمالية، بحساب واحد ومن أي جهاز.")}</p>
+          <p className="m-0 text-[16px] leading-loose text-side-fg">{tr("الحضور والموارد البشرية والعهد والمهام والعملاء والمالية، بحساب واحد ومن أي جهاز.")}</p>
         </div>
       </div>
-      <span className="text-[13px] text-[#9A9DA3]">{tr("شركة كي ام كي لتصميم المواقع الإلكترونية")}</span>
+      <span className="text-[13px] text-side-muted">{tr("شركة كي ام كي لتصميم المواقع الإلكترونية")}</span>
     </div>
   );
 }
 
 function MobileBrand() {
   return (
-    <div className="lg:hidden bg-[#232323] px-6 pt-12 pb-7">
+    <div className="lg:hidden bg-side px-6 pt-12 pb-7">
       <img src={BASE + 'logo-on-dark.png'} alt="KMK" className="h-7 w-auto" />
     </div>
   );

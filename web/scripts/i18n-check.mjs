@@ -28,13 +28,36 @@ function uiKeys() {
   return keys;
 }
 
-/** نصوص الخادم: الثابتة كما هي، والمركّبة بـ + قوالب {0} */
+/**
+ * نصوص الخادم: الثابتة كما هي، والمركّبة بـ + قوالب {0}.
+ * ما لا يُعرض للمستخدم (تفقيط، أسماء ملفات، قوالب بريد، سجلات المحرر) يُستثنى بتعليق:
+ * «// i18n:line» في نهاية السطر، أو «// i18n:off» … «// i18n:on» حول كتلة.
+ */
+function ignoredRanges(text) {
+  const ranges = [];
+  let off = -1;
+  const lines = text.split('\n');
+  let pos = 0;
+  for (const line of lines) {
+    if (line.includes('i18n:off')) off = pos;
+    else if (line.includes('i18n:on') && off >= 0) { ranges.push([off, pos + line.length]); off = -1; }
+    else if (line.includes('i18n:line')) ranges.push([pos, pos + line.length]);
+    pos += line.length + 1;
+  }
+  if (off >= 0) ranges.push([off, text.length]);
+  return ranges;
+}
+
 function serverKeys() {
   const exact = new Set(), patterns = new Set();
   const dirs = ['core', 'modules'].map((d) => path.join(WEB, '..', 'server', d));
   for (const f of dirs.flatMap(walk).filter((x) => x.endsWith('.js') && !x.includes('Vectors'))) {
-    const sf = ts.createSourceFile(f, fs.readFileSync(f, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+    const text = fs.readFileSync(f, 'utf8');
+    const ignored = ignoredRanges(text);
+    const sf = ts.createSourceFile(f, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+    const skip = (n) => { const p = n.getStart(sf); return ignored.some(([a, b]) => p >= a && p <= b); };
     const visit = (n) => {
+      if (skip(n)) return;
       if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.PlusToken && !(ts.isBinaryExpression(n.parent) && n.parent.operatorToken.kind === ts.SyntaxKind.PlusToken)) {
         const parts = [];
         const flat = (x) => {

@@ -36,6 +36,7 @@ export function MyTasksPage() {
   const q = useApi<TaskView[]>('tsk.list', { view: 'mine' });
   const lk = useTaskLookups();
   const toggle = useToggleDone();
+  const [allDone, setAllDone] = useState(false);
   const today = lk.data?.today || '';
   if (q.isError) return <ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} />;
   if (!q.data) return <Loader />;
@@ -48,13 +49,14 @@ export function MyTasksPage() {
     { key: 'review', title: tr("بانتظار مراجعة"), rows: q.data.filter((t) => t.status === 'review') },
     { key: 'done', title: tr("المنجزة مؤخراً"), rows: q.data.filter((t) => t.status === 'done') }
   ].filter((g) => g.rows.length);
+  const DONE_LIMIT = 10;
   if (!groups.length) return <Card><EmptyState title={tr("لا مهام لديك")} body={tr("المهام التي تُسند إليك تظهر هنا مرتبة حسب موعدها.")} /></Card>;
   return (
     <div className="flex flex-col gap-4">
       {groups.map((g) => (
         <Card key={g.key} padded={false}>
-          <CardHeader title={`${g.title} · ${g.rows.length}`} />
-          {g.rows.map((t) => <TaskRow key={t.id} t={t} today={today} onToggle={toggle} />)}
+          <CardHeader title={`${g.title} · ${g.rows.length}`} action={g.key === 'done' && g.rows.length > DONE_LIMIT ? <Button size="sm" variant="ghost" onClick={() => setAllDone(!allDone)}>{allDone ? tr("أقل") : tr("عرض الكل")}</Button> : undefined} />
+          {(g.key === 'done' && !allDone ? g.rows.slice(0, DONE_LIMIT) : g.rows).map((t) => <TaskRow key={t.id} t={t} today={today} onToggle={toggle} />)}
         </Card>
       ))}
     </div>

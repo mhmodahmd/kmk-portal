@@ -20,7 +20,7 @@ var MAIL_BATCH = 20;
 /** شغّلها من المحرر مرة واحدة (حساب المالك) لمنح صلاحية إرسال البريد. */
 function authorizeMail() {
   var left = MailApp.getRemainingDailyQuota();
-  Logger.log('البريد جاهز. المتبقي اليوم: ' + left);
+  Logger.log('البريد جاهز. المتبقي اليوم: ' + left); // i18n:line
   return left;
 }
 
@@ -101,6 +101,7 @@ var Notify = {
   sendOne_: function (n) {
     var url = APP.WEB_URL + '#' + (n.link || '/');
     var esc = function (s) { return String(s || '').replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+    // i18n:off — قالب البريد عربي (العنوان والتفصيل مترجمان في الواجهة فقط)
     MailApp.sendEmail({
       to: n.to, name: APP.NAME, subject: n.title + ' — ' + APP.NAME,
       body: n.title + '\n' + (n.detail || '') + '\n\n' + url,
@@ -110,6 +111,7 @@ var Notify = {
         '<a href="' + esc(url) + '" style="display:inline-block;background:#2f6bff;color:#fff;text-decoration:none;padding:9px 18px;border-radius:8px">فتح في البوابة</a>' +
         '<p style="margin:18px 0 0;font-size:12px;color:#888">' + esc(n.actorName ? 'بواسطة ' + n.actorName + ' · ' : '') + 'لإيقاف هذه الرسائل: «ملفي» ← الإشعارات.</p></div>'
     });
+    // i18n:on
   },
 
   /** احتياط إن لم يُركَّب المشغّل الزمني: استطلاع الإشعارات يصرف ما تأخر في الطابور أكثر من دقيقة */

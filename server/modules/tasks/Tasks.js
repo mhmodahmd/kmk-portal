@@ -460,7 +460,7 @@ var Tasks = {
     var t = Tasks.visible_(ctx, p.taskId);
     if (!Tasks.canWork_(ctx, t)) throw appError('لا يمكنك إرفاق ملفات بهذه المهمة.', 'FORBIDDEN');
     var up = Files.decode_(p);
-    var name = t.number + '_' + Files.safeName_(p.fileName || ('مرفق.' + up.ext));
+    var name = t.number + '_' + Files.safeName_(p.fileName || ('مرفق.' + up.ext)); // i18n:line
     var f = Files.save_(Files.folder_('', ['المهام', t.createdAt.slice(0, 7)]), up, name);
     var row = Db.insert('tasks', 'TaskFiles', { taskId: t.id, fileName: name, driveFileId: f.id, mimeType: up.mime, fileSize: f.size, uploadedBy: ctx.user.id, uploadedAt: nowIso() });
     Tasks.event_(ctx, t.id, 'أرفق ' + name);

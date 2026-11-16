@@ -230,7 +230,7 @@ var Migration = {
     var rep = { dryRun: dry, created: {}, updated: {}, unchanged: {}, warnings: [] };
     var tick = function (kind, table) { rep[kind][table] = (rep[kind][table] || 0) + 1; };
     var now = nowIso(), by = 'نقل من النظام السابق';
-    var F = function (v) { return Math.round(Number(String(v == null ? '' : v).replace(/[,٬]/g, '').replace('٫', '.')) * 1000) || 0; };
+    var F = function (v) { return Math.round(Number(String(v == null ? '' : v).replace(/[,٬]/g, '').replace('٫', '.')) * 1000) || 0; }; // i18n:line
     var B = function (v) { return String(v).toUpperCase() === 'TRUE' || String(v) === '1' || v === true; };
     var upsert = function (dbKey, table, list, allowUpdate) {
       var have = indexBy_(Db.view(dbKey, table)), fresh = [];

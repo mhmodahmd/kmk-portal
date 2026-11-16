@@ -39,18 +39,14 @@
 | **Employees** | empNo, fullName, userId, departmentId, branchId, managerId (ref:Employees), shiftId (ref:Shifts، الوردية الحالية؛ سجل الورديات EmployeeShifts مؤجل)، jobTitle, hireDate, status (`active`/`leave`/`terminated`), phone, email, nationality, birthDate, civilId, civilIdExpiry, residencyNo, residencyExpiry, passportNo, passportExpiry, contractType, contractEnd, address, emergencyName, emergencyPhone, notes |
 | **Departments** | name, managerId, active |
 | **Branches** | name, address, lat, lng, geoRadius, active |
-| **Projects** | code, name, type (`project`/`debt`/`internal`), customerId, active, sortOrder |
 | **Settings** | key, value (json) |
-| **Lists** | listName, name, active, sortOrder (التصنيفات وأنواع المستندات وغيرها) |
-| **Files** | module, entityType, entityId, fileName, driveFileId, mimeType, size, uploadedBy |
-| **Signatures** | userId, data |
-| **SignLinks** | kind, targetId, tokenHash, managerName, expiresAt, status, actedAt, signatureFileId, rejectReason |
-| **Notifications** | userId, module, type, title, body, link, readAt |
 | **AuditLog** | ts, userId, module, action, entity, entityId, details (json: قبل/بعد) |
 | **Serials** | key (`NTH-2026`, `PV-2026`…), last |
 | **Passkeys** 🆕 | userId, employeeId, credId, rpId, alg (-7 أو -257), publicKey (المفتاح العام فقط), signCount, backup (متزامن عبر iCloud/Google), label, status (`active`/`revoked`), createdAt, lastUsedAt, revokedAt, revokedBy, revokeReason |
 | **Notifications** 🆕 | userId, kind (`approval` بانتظار قرارك / `event`), module, title (جملة ثابتة تُترجم), detail, link, refKey (يمنع التكرار لنفس المرحلة), read, actorName, createdAt, emailedAt · تُحذف بعد 60 يوماً |
 | **NotifyState** 🆕 | id = userId، readUntil («تعليم الكل كمقروء»)، email (تفضيل البريد) |
+
+> **ما بقي في الوحدات ولم ينتقل إلى النواة (الواقع في 0.9.x):** `Projects` قائمة في العهد (`Categories · DocTypes · Projects`) وسجل كامل في العملاء؛ الملفات ثلاثة جداول `Attachments` (عهد) و`Links` (عملاء) و`TaskFiles` (مهام)؛ `Signatures` و`SignLinks` في العهد. الدمج في جداول نواة موحّدة مؤجل إلى بناء المالية.
 | **MailQueue** 🆕 0.9.3 | to, title, detail, link, actorName, createdAt, attempts · رسائل بريد بانتظار الإرسال، يصرفها المشغّل `processMailQueue` كل دقيقة ويحذف المرسَل (ثلاث محاولات ثم تُهمل) |
 
 > مفاتيح الدخول بالبصمة (WebAuthn): مفتاح نشط واحد لكل مستخدم، للدخول وللبصمة في الحضور معاً. الخادم يتحقق من التوقيع بنفسه (`core/WebAuthn.js`) ولا تصله أي بيانات حيوية. الموظف يغيّر جهازه عبر الموارد البشرية، ومن ليس موظفاً يزيله من «ملفي».

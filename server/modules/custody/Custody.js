@@ -405,9 +405,11 @@ var Custody = {
         totalReceipts: 0, totalSpent: 0, remaining: amount + carried, notes: notes, previousCustodyId: prev ? prev.id : '',
         isImported: false, createdBy: ctx.user.id, createdAt: now, disburseStage: 'awaiting_signature', carryMode: mode
       });
+      // i18n:off — بيان السند يُخزَّن ويُطبع بالعربية
       var reason = 'صرف عهدة نثرية رقم ' + c.id + ' (' + label + ')' +
         (mode === 'include' ? ' — تكملة لمبلغ ' + kwd_(target) + ' بعد احتساب رصيد مرحّل ' + kwd_(carried) : '') +
         (request && request.reason ? ' — سبب الطلب: ' + request.reason : '');
+      // i18n:on
       var pv = Vouchers.create_(ctx, {
         type: 'payment', date: openDate, custodyId: c.id, partyName: emp.fullName, amount: amount, reason: reason,
         paymentMethod: method, chequeNo: chequeNo, requestedBy: request ? request.createdBy : '', requestedAt: request ? request.createdAt : ''
@@ -586,7 +588,7 @@ var Custody = {
         voucher = Vouchers.create_(ctx, {
           type: c.remaining > 0 ? 'receipt' : 'payment', date: localDate_(), custodyId: c.id, partyName: emp ? emp.fullName : '',
           amount: Math.abs(c.remaining),
-          reason: (c.remaining > 0 ? 'رد الرصيد المتبقي من العهدة رقم ' : 'تعويض تجاوز مبلغ العهدة رقم ') + c.id + ' (' + c.periodLabel + ')',
+          reason: (c.remaining > 0 ? 'رد الرصيد المتبقي من العهدة رقم ' : 'تعويض تجاوز مبلغ العهدة رقم ') + c.id + ' (' + c.periodLabel + ')', // i18n:line
           paymentMethod: pay, chequeNo: pay === 'cheque' ? chequeNo : ''
         });
       }
@@ -632,7 +634,7 @@ var Custody = {
   // ───────── الملفات على Drive ─────────
   folderOf_: function (c) {
     var emp = Db.get('core', 'Employees', c.employeeId);
-    var folder = Files.folder_(c.driveFolderId, ['العهد', c.id + ' — ' + (emp ? emp.fullName : '')]);
+    var folder = Files.folder_(c.driveFolderId, ['العهد', c.id + ' — ' + (emp ? emp.fullName : '')]); // i18n:line
     if (folder.getId() !== c.driveFolderId) Db.update('custody', 'Custodies', c.id, { driveFolderId: folder.getId() });
     return folder;
   },
@@ -646,7 +648,7 @@ var Custody = {
     Custody.assertEditable_(ctx, c);
     var up = Files.decode_(p);
     var no = Custody.expensesOf_(c.id).map(function (x) { return x.id; }).indexOf(e.id) + 1;
-    var name = c.id + '_' + no + '_' + Files.safeName_(p.fileName || ('مرفق.' + up.ext));
+    var name = c.id + '_' + no + '_' + Files.safeName_(p.fileName || ('مرفق.' + up.ext)); // i18n:line
     var f = Files.save_(Custody.folderOf_(c), up, name);
     var a = Db.insert('custody', 'Attachments', {
       custodyId: c.id, expenseId: e.id, fileName: name, driveFileId: f.id, url: f.url, mimeType: up.mime,
@@ -692,7 +694,7 @@ var Custody = {
       var vc = v.custodyId ? Db.get('custody', 'Custodies', v.custodyId) : null;
       if (vc && Custody.isOwner_(ctx, vc)) throw appError('لا يمكنك رفع توقيع سند يخص عهدتك.', 'FORBIDDEN');
       var folder = vc ? Custody.folderOf_(vc) : Files.folder_('', ['السندات']);
-      var f = Files.save_(folder, up, v.number + '_موقّع.' + up.ext);
+      var f = Files.save_(folder, up, v.number + '_موقّع.' + up.ext); // i18n:line
       Files.trash_(v.signedFileId);
       Db.update('custody', 'Vouchers', v.id, { signedFileId: f.id, signedAt: v.signedAt || now, signedBy: v.signedAt ? v.signedBy : ctx.user.id });
       Custody.advanceOpen_(vc, v.id);
@@ -702,7 +704,7 @@ var Custody = {
     var c = Custody.getOrThrow_(p.id);
     if (Custody.isOwner_(ctx, c)) throw appError('لا يمكنك رفع كشف عهدتك الموقّع.', 'FORBIDDEN');
     if (c.status !== 'signing' && c.status !== 'closed') throw appError('العهدة لم يعتمد المحاسب إقفالها بعد.');
-    var file = Files.save_(Custody.folderOf_(c), up, c.id + '_كشف_التسوية_موقّع.' + up.ext);
+    var file = Files.save_(Custody.folderOf_(c), up, c.id + '_كشف_التسوية_موقّع.' + up.ext); // i18n:line
     Files.trash_(c.closeSignedFileId);
     var patch = { closeSignedFileId: file.id };
     if (c.status === 'signing') { patch.status = 'closed'; patch.closeSignedAt = now; patch.closeSignedBy = ctx.user.id; }
@@ -718,11 +720,11 @@ var Custody = {
       var v = Db.get('custody', 'Vouchers', p.id);
       if (!v || !Vouchers.canSee_(ctx, v, Vouchers.mine_(ctx))) throw appError('السند غير موجود.', 'NOT_FOUND');
       if (!v.signedFileId) throw appError('لا توجد نسخة موقّعة لهذا السند.');
-      return Files.content_(v.signedFileId, v.number + '_موقّع');
+      return Files.content_(v.signedFileId, v.number + '_موقّع'); // i18n:line
     }
     var c = Custody.visible_(ctx, p.id);
     if (!c.closeSignedFileId) throw appError('لا يوجد كشف موقّع لهذه العهدة.');
-    return Files.content_(c.closeSignedFileId, c.id + '_كشف_التسوية_موقّع');
+    return Files.content_(c.closeSignedFileId, c.id + '_كشف_التسوية_موقّع'); // i18n:line
   },
 
   /** صورة توقيع المدير: المحفوظة، أو (للروابط المنقولة) من ملفها على Drive وتُحفظ بعد أول قراءة */
@@ -1090,6 +1092,7 @@ var Requests = {
 };
 
 // ───────── السندات ─────────
+// i18n:off — التفقيط عربي بطبيعته (يُطبع على السندات)
 var TAFQEET = {
   ONES: ['', 'واحد', 'اثنان', 'ثلاثة', 'أربعة', 'خمسة', 'ستة', 'سبعة', 'ثمانية', 'تسعة'],
   TEENS: ['عشرة', 'أحد عشر', 'اثنا عشر', 'ثلاثة عشر', 'أربعة عشر', 'خمسة عشر', 'ستة عشر', 'سبعة عشر', 'ثمانية عشر', 'تسعة عشر'],
@@ -1136,6 +1139,7 @@ var Vouchers = {
     if (r) parts.push(Vouchers.words_(r) + ' فلس');
     return parts.join(' و') + ' لا غير';
   },
+  // i18n:on
 
   prefix_: function (type) { return type === 'payment' ? 'PV' : 'RV'; },
 

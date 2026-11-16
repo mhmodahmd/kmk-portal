@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { cx } from './cx';
 import { Icon, type IconName } from './Icon';
+import { Button } from './Button';
 import { initial } from '../lib/format';
 
 export function Card({ children, className, padded = true, as: Tag = 'section' }: { children: ReactNode; className?: string; padded?: boolean; as?: 'section' | 'div' | 'aside' }) {
@@ -43,7 +44,7 @@ export function Badge({ tone = 'neutral', children }: { tone?: Tone; children: R
 export function Avatar({ name, size = 36, dark }: { name: string; size?: number; dark?: boolean }) {
   return (
     <span aria-hidden="true" style={{ width: size, height: size, fontSize: size * 0.4 }}
-      className={cx('inline-flex shrink-0 items-center justify-center rounded-full font-semibold', dark ? 'bg-[#3A3A3A] text-white' : 'bg-chip text-fg')}>
+      className={cx('inline-flex shrink-0 items-center justify-center rounded-full font-semibold', dark ? 'bg-side-avatar text-white' : 'bg-chip text-fg')}>
       {initial(name)}
     </span>
   );
@@ -82,6 +83,15 @@ export function ListRow({ leading, title, sub, note, badge, actions, to, onClick
         : <span className={body}>{text}</span>}
       {badge}
       {actions && <span className="flex flex-wrap items-center gap-2">{actions}</span>}
+    </div>
+  );
+}
+
+/** منطقة الحذف النهائي: أسفل صفحة التفاصيل بعيداً عن أزرار الإجراء الأساسية */
+export function DangerZone({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <div className="no-print flex justify-end border-t border-line pt-3">
+      <Button size="sm" variant="danger-outline" icon="trash" onClick={onClick}>{label}</Button>
     </div>
   );
 }

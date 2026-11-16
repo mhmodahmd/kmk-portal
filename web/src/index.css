@@ -31,6 +31,19 @@
   --c-bad-bg: #FDECEC;
   --c-bad-solid: #B91C1C;
   --c-overlay: rgba(15, 17, 20, 0.45);
+  /* ثوابت لا تتبع الوضع: لوحة الدخول الداكنة، حبر التوقيع، واتساب، المطبوعات */
+  --c-logo-white: #FFFFFF;
+  --c-logo-red: #D30B0B;
+  --c-side-avatar: #3A3A3A;
+  --c-ink: #0B1F3A;
+  --c-whatsapp: #25D366;
+  --c-print-head: #F1F1F1;
+  --c-print-line: #CCCCCC;
+  /* التنبيه المؤقت معكوس عن الخلفية ليبرز */
+  --c-toast-bg: #232323;
+  --c-toast-fg: #FFFFFF;
+  --c-toast-ok: #4ADE80;
+  --c-toast-bad: #F87171;
   color-scheme: light;
 }
 
@@ -62,6 +75,10 @@
   --c-bad-bg: #3A1414;
   --c-bad-solid: #C62828;
   --c-overlay: rgba(0, 0, 0, 0.6);
+  --c-toast-bg: #E8E8E8;
+  --c-toast-fg: #151515;
+  --c-toast-ok: #16803C;
+  --c-toast-bad: #B91C1C;
   color-scheme: dark;
 }
 
@@ -94,6 +111,14 @@
   --color-bad-bg: var(--c-bad-bg);
   --color-bad-solid: var(--c-bad-solid);
   --color-overlay: var(--c-overlay);
+  --color-side-avatar: var(--c-side-avatar);
+  --color-whatsapp: var(--c-whatsapp);
+  --color-print-head: var(--c-print-head);
+  --color-print-line: var(--c-print-line);
+  --color-toast: var(--c-toast-bg);
+  --color-toast-fg: var(--c-toast-fg);
+  --color-toast-ok: var(--c-toast-ok);
+  --color-toast-bad: var(--c-toast-bad);
 }
 
 /* داخل طبقة base حتى لا تتغلب على أصناف Tailwind (القواعد خارج الطبقات تغلب أي طبقة) */

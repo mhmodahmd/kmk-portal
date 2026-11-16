@@ -14,7 +14,7 @@ export default function BoardPage() {
   const [date, setDate] = useState(kwDate());
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
-  const q = useApi<Board>('att.board', { date }, { refetchInterval: date === kwDate() ? 60_000 : false, placeholderData: (p) => p });
+  const q = useApi<Board>('att.board', { date }, { refetchInterval: date === kwDate() ? 60_000 : false, refetchIntervalInBackground: false, placeholderData: (p) => p });
   const b = q.data;
   const rows = useMemo(() => (b?.rows || []).filter((r) =>
     (filter === 'all' || (filter === 'late' ? r.late > 0 : r.status === filter)) && (!search || r.name.includes(search))), [b, filter, search]);

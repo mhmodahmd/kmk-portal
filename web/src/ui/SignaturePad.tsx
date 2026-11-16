@@ -18,7 +18,7 @@ export function SignaturePad({ onChange, height = 170 }: { onChange: (data: stri
     cv.height = height * ratio;
     const ctx = cv.getContext('2d')!;
     ctx.scale(ratio, ratio);
-    ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#0b1f3a';
+    ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--c-ink').trim() || '#0B1F3A';
   }, [height]);
 
   const point = (e: React.PointerEvent) => { const r = ref.current!.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };

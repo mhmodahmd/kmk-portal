@@ -17,7 +17,7 @@ var FILES_OK_;
 /** يشغّله مالك المشروع مرة واحدة من المحرر لمنح صلاحية Drive */
 function authorizeDrive() {
   var root = Files.root_();
-  Logger.log('Drive جاهز: ' + root.getName() + ' — ' + root.getUrl());
+  Logger.log('Drive جاهز: ' + root.getName() + ' — ' + root.getUrl()); // i18n:line
   return root.getUrl();
 }
 
@@ -37,7 +37,7 @@ var Files = {
     if (cfg.rootId) {
       try { var f = DriveApp.getFolderById(cfg.rootId); if (!f.isTrashed()) return f; } catch (e) { /* يُنشأ من جديد */ }
     }
-    var folder = DriveApp.createFolder('بوابة KMK — الملفات');
+    var folder = DriveApp.createFolder('بوابة KMK — الملفات'); // i18n:line
     Settings.set_('files', { rootId: folder.getId() }, null);
     return folder;
   },
@@ -59,12 +59,12 @@ var Files = {
   },
 
   safeName_: function (name) {
-    var s = String(name || 'ملف').replace(/[\\\/:*?"<>|\u0000-\u001f]/g, '_').replace(/\s+/g, ' ').trim();
+    var s = String(name || 'ملف').replace(/[\\\/:*?"<>|\u0000-\u001f]/g, '_').replace(/\s+/g, ' ').trim(); // i18n:line
     if (s.length > 80) {
       var dot = s.lastIndexOf('.'), ext = dot > 0 && s.length - dot <= 6 ? s.slice(dot) : '';
       s = s.slice(0, 80 - ext.length) + ext;
     }
-    return s || 'ملف';
+    return s || 'ملف'; // i18n:line
   },
 
   /** يتحقق من ملف مرفوع (base64) ويعيد { mime, bytes, ext } */

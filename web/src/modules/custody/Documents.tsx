@@ -76,22 +76,22 @@ export function StatementDocument({ doc }: { doc: StatementDoc }) {
         <span>{tr("مقبوضات إضافية:")} <b className="num ltr inline-block">{kwd(c.totalReceipts)}</b></span>
       </div>
       <table className="w-full border-collapse text-start">
-        <thead><tr className="bg-[#f1f1f1]">{['#', tr("التاريخ"), tr("البيان"), tr("التصنيف"), tr("المستند"), tr("المبلغ")].map((h) => <th key={h} className="border border-[#ccc] px-2 py-1.5 text-start">{h}</th>)}</tr></thead>
+        <thead><tr className="bg-print-head">{['#', tr("التاريخ"), tr("البيان"), tr("التصنيف"), tr("المستند"), tr("المبلغ")].map((h) => <th key={h} className="border border-print-line px-2 py-1.5 text-start">{h}</th>)}</tr></thead>
         <tbody>
           {doc.expenses.map((e) => (
             <tr key={e.id}>
-              <td className="border border-[#ccc] px-2 py-1 num">{e.entryType === 'expense' ? ++n : '+'}</td>
-              <td className="border border-[#ccc] px-2 py-1 num whitespace-nowrap">{dateLabel(e.date)}</td>
-              <td className="border border-[#ccc] px-2 py-1">{e.description}{e.project ? ' — ' + e.project : ''}</td>
-              <td className="border border-[#ccc] px-2 py-1">{e.entryType === 'receipt' ? e.entryLabel : e.category}</td>
-              <td className="border border-[#ccc] px-2 py-1">{e.docType || (e.noAttachmentReason ? tr("بلا مرفق") : '')}</td>
-              <td className="border border-[#ccc] px-2 py-1 num ltr text-right whitespace-nowrap">{kwd(e.entryType === 'receipt' ? e.amount : e.amount, false)}</td>
+              <td className="border border-print-line px-2 py-1 num">{e.entryType === 'expense' ? ++n : '+'}</td>
+              <td className="border border-print-line px-2 py-1 num whitespace-nowrap">{dateLabel(e.date)}</td>
+              <td className="border border-print-line px-2 py-1">{e.description}{e.project ? ' — ' + e.project : ''}</td>
+              <td className="border border-print-line px-2 py-1">{e.entryType === 'receipt' ? e.entryLabel : e.category}</td>
+              <td className="border border-print-line px-2 py-1">{e.docType || (e.noAttachmentReason ? tr("بلا مرفق") : '')}</td>
+              <td className="border border-print-line px-2 py-1 num ltr text-right whitespace-nowrap">{kwd(e.entryType === 'receipt' ? e.amount : e.amount, false)}</td>
             </tr>
           ))}
         </tbody>
         <tfoot>
-          <tr><td colSpan={5} className="border border-[#ccc] px-2 py-1.5 font-bold">{tr("إجمالي المصروفات")}</td><td className="border border-[#ccc] px-2 py-1.5 font-bold num ltr text-right">{kwd(c.totalSpent, false)}</td></tr>
-          <tr><td colSpan={5} className="border border-[#ccc] px-2 py-1.5 font-bold">{tr("الرصيد المتبقي")}</td><td className="border border-[#ccc] px-2 py-1.5 font-bold num ltr text-right">{kwd(c.remaining, false)}</td></tr>
+          <tr><td colSpan={5} className="border border-print-line px-2 py-1.5 font-bold">{tr("إجمالي المصروفات")}</td><td className="border border-print-line px-2 py-1.5 font-bold num ltr text-right">{kwd(c.totalSpent, false)}</td></tr>
+          <tr><td colSpan={5} className="border border-print-line px-2 py-1.5 font-bold">{tr("الرصيد المتبقي")}</td><td className="border border-print-line px-2 py-1.5 font-bold num ltr text-right">{kwd(c.remaining, false)}</td></tr>
         </tfoot>
       </table>
       {c.settlementLabel && <span>{tr("طريقة التسوية: {0}", c.settlementLabel)}{doc.vouchers.find((v) => v.id === c.settlementVoucherId) ? ' — ' + doc.vouchers.find((v) => v.id === c.settlementVoucherId)!.number : ''}</span>}

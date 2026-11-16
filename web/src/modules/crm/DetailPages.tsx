@@ -4,7 +4,7 @@ import { tr } from '../../lib/i18n';
 import { ApiError } from '../../lib/api';
 import { useAction, useApi } from '../../lib/useApi';
 import { dmy } from '../../lib/format';
-import { Badge, Card, CardHeader, ErrorBox, Loader } from '../../ui/Display';
+import { Badge, Card, CardHeader, ErrorBox, Loader, DangerZone } from '../../ui/Display';
 import { Button } from '../../ui/Button';
 import { Facts } from '../../ui/Controls';
 import { ReasonDialog } from '../../ui/Decide';
@@ -127,7 +127,6 @@ export function ClientPage() {
             {can.edit && <Button variant="primary" icon="plus" onClick={() => setDlg('activity')}>{tr("نشاط")}</Button>}
             <QuickTaskButton variant="secondary" size="md" draft={{ linkedType: 'client', linkedId: c.id, linkedLabel: c.name }} />
             {can.edit && <Button variant="ghost" icon="edit" onClick={() => setDlg('edit')}>{tr("تعديل")}</Button>}
-            {can.remove && <Button variant="ghost" icon="trash" aria-label={tr("حذف")} onClick={() => setRemoving(true)} />}
           </div>
         </div>
         <Facts cols={3} items={[
@@ -186,6 +185,7 @@ export function ClientPage() {
         </div>
       </div>
 
+      {can.remove && <DangerZone label={tr("حذف العميل نهائياً")} onClick={() => setRemoving(true)} />}
       {dlg === 'edit' && <ClientDialog open onClose={() => setDlg('')} client={c} />}
       {dlg === 'contact' && <ContactDialog open onClose={() => setDlg('')} clientId={c.id} contact={contact} />}
       {dlg === 'project' && <ProjectDialog open onClose={() => setDlg('')} clientId={c.id} onSaved={(p) => nav('/crm/projects/' + p.id)} />}
@@ -233,7 +233,6 @@ export function ProjectPage() {
             {can.pay && <Button variant="primary" icon="plus" onClick={() => { setPay(null); setDlg('pay'); }}>{tr("دفعة")}</Button>}
             <QuickTaskButton variant="secondary" size="md" draft={{ projectId: p.id, linkedType: 'client', linkedId: p.clientId, linkedLabel: p.clientName }} />
             {can.edit && <Button variant="ghost" icon="edit" onClick={() => setDlg('edit')}>{tr("تعديل")}</Button>}
-            {can.remove && <Button variant="ghost" icon="trash" aria-label={tr("حذف")} onClick={() => setRemoving(true)} />}
           </div>
         </div>
         <Facts cols={3} items={[
@@ -276,6 +275,7 @@ export function ProjectPage() {
           <Links items={links} canEdit={can.edit} onAdd={() => setDlg('link')} />
         </div>
       </div>
+      {can.remove && <DangerZone label={tr("حذف المشروع نهائياً")} onClick={() => setRemoving(true)} />}
       {dlg === 'edit' && <ProjectDialog open onClose={() => setDlg('')} project={p} />}
       {dlg === 'pay' && <PaymentDialog open onClose={() => setDlg('')} projectId={p.id} payment={pay} defaultAmount={!pay && p.cycle ? p.cycle.due : 0} />}
       {dlg === 'link' && <LinkDialog open onClose={() => setDlg('')} ownerType="project" ownerId={p.id} />}

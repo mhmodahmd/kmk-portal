@@ -5,7 +5,7 @@ import { tr, trServer } from '../../lib/i18n';
 import { api, ApiError } from '../../lib/api';
 import { useAction, useApi } from '../../lib/useApi';
 import { dmy, formatDateTime, relativeTime } from '../../lib/format';
-import { Avatar, Card, CardHeader, EmptyState, ErrorBox, Loader } from '../../ui/Display';
+import { Avatar, Card, CardHeader, EmptyState, ErrorBox, Loader, DangerZone } from '../../ui/Display';
 import { Button } from '../../ui/Button';
 import { Facts } from '../../ui/Controls';
 import { Textarea } from '../../ui/Field';
@@ -88,7 +88,6 @@ export default function TaskDetailPage() {
             ))}
             {(can.manage || t.mine) && <Button variant="ghost" icon="edit" onClick={() => setEditing(true)}>{tr("تعديل")}</Button>}
             {can.manage && t.status !== 'cancelled' && t.status !== 'done' && <Button variant="ghost" onClick={() => setCancel(true)}>{tr("إلغاء المهمة")}</Button>}
-            {can.remove && <Button variant="ghost" icon="trash" onClick={() => setRemoving(true)} aria-label={tr("حذف")} />}
           </div>
         </div>
         {t.status === 'review' && t.mine && !can.manage && <div className="rounded-lg bg-warn-bg px-3 py-2.5 text-warn">{tr("أرسلتها للمراجعة. تُعتمد من {0}.", t.createdByName)}</div>}
@@ -193,6 +192,7 @@ export default function TaskDetailPage() {
         </Card>
       </div>
 
+      {can.remove && <DangerZone label={tr("حذف المهمة نهائياً")} onClick={() => setRemoving(true)} />}
       {editing && (
         <TaskDialog open onClose={() => setEditing(false)} onSaved={() => undefined}
           initial={{ id: t.id, title: t.title, description: t.description, assigneeId: t.assigneeId, dueDate: t.dueDate, startDate: t.startDate, priority: t.priority,

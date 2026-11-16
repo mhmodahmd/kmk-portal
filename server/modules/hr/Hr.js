@@ -307,6 +307,63 @@ var Hr = {
     };
   },
 
+  /** لوحة الموارد البشرية (للموارد البشرية والمديرين ضمن فريقهم): القوى العاملة، الطلبات المعلقة، المستندات، الإجازات، التعيينات */
+  dashboard: function (ctx) {
+    var scope = Staff.scope_(ctx, 'hr', ['hr']);
+    if (!scope.all && !scope.ids.length) throw appError('هذه الشاشة للمديرين والموارد البشرية.', 'FORBIDDEN');
+    var today = localDate_(), year = today.slice(0, 4), month = today.slice(0, 7), maps = Staff.maps_(), types = indexBy_(Hr.types_());
+    var emps = Staff.all_().filter(function (e) { return Staff.inScope_(scope, e.id); }), inScope = indexBy_(emps);
+    var current = emps.filter(function (e) { return e.status !== 'terminated'; });
+    var leaves = Db.view('hr', 'LeaveRequests').filter(function (r) { return inScope[r.employeeId]; });
+    var ots = Db.view('hr', 'OvertimeRequests').filter(function (o) { return inScope[o.employeeId]; });
+    var approved = leaves.filter(function (r) { return r.status === 'approved'; });
+    var onLeaveToday = approved.filter(function (r) { return r.from <= today && r.to >= today; });
+    var since90 = addDays_(today, -90), soon = addDays_(today, 14);
+    var expiring = Staff.expiring_(60).filter(function (x) { return inScope[x.employeeId]; });
+    var count = function (list, fn) {
+      var o = {};
+      list.forEach(function (x) { var k = fn(x); if (k) o[k] = (o[k] || 0) + 1; });
+      return Object.keys(o).map(function (k) { return { key: k, count: o[k] }; }).sort(function (a, b) { return b.count - a.count; });
+    };
+    var hiresByMonth = [];
+    for (var i = 11; i >= 0; i--) {
+      var y = Number(month.slice(0, 4)), mo = Number(month.slice(5, 7)) - i;
+      while (mo < 1) { mo += 12; y--; }
+      var key = y + '-' + String(mo).padStart(2, '0');
+      hiresByMonth.push({ month: key, hires: emps.filter(function (e) { return (e.hireDate || '').slice(0, 7) === key; }).length });
+    }
+    var leaveDaysByType = {};
+    approved.forEach(function (r) { if ((r.from || '').slice(0, 4) === year) leaveDaysByType[r.typeId] = (leaveDaysByType[r.typeId] || 0) + (r.days || 0); });
+    return {
+      today: today, scope: scope.all ? 'all' : 'team',
+      kpis: {
+        headcount: current.length, onLeaveToday: onLeaveToday.length,
+        newHires90: current.filter(function (e) { return e.hireDate && e.hireDate >= since90; }).length,
+        newHiresYear: emps.filter(function (e) { return (e.hireDate || '').slice(0, 4) === year; }).length,
+        terminated: emps.filter(function (e) { return e.status === 'terminated'; }).length,
+        pendingLeaves: leaves.filter(function (r) { return LEAVE_OPEN.indexOf(r.status) >= 0; }).length,
+        pendingManager: leaves.filter(function (r) { return r.status === 'pending_manager'; }).length,
+        pendingOvertime: ots.filter(function (o) { return o.status === 'pending'; }).length,
+        expiring30: expiring.filter(function (x) { return x.daysLeft <= 30; }).length, expiring60: expiring.length,
+        expired: expiring.filter(function (x) { return x.daysLeft < 0; }).length,
+        leaveDaysYear: approved.filter(function (r) { return (r.from || '').slice(0, 4) === year; }).reduce(function (a, r) { return a + (r.days || 0); }, 0),
+        overtimeMinMonth: ots.filter(function (o) { return o.status === 'approved' && (o.date || '').slice(0, 7) === month; }).reduce(function (a, o) { return a + (o.minutes || 0); }, 0),
+        withoutAccount: current.filter(function (e) { return !e.userId; }).length
+      },
+      byStatus: Object.keys(EMP_STATUS).map(function (k) { return { status: k, label: EMP_STATUS[k], count: emps.filter(function (e) { return (e.status || 'active') === k; }).length }; }),
+      byDepartment: count(current, function (e) { return e.departmentId && maps.depts[e.departmentId] ? maps.depts[e.departmentId].name : 'بلا قسم'; }).map(function (x) { return { department: x.key, count: x.count }; }),
+      byBranch: count(current, function (e) { return e.branchId && maps.branches[e.branchId] ? maps.branches[e.branchId].name : ''; }).map(function (x) { return { branch: x.key, count: x.count }; }),
+      byNationality: count(current, function (e) { return e.nationality || ''; }).slice(0, 6).map(function (x) { return { nationality: x.key, count: x.count }; }),
+      byContract: count(current, function (e) { return e.contractType || ''; }).map(function (x) { return { contract: x.key, count: x.count }; }),
+      leaveByType: Object.keys(leaveDaysByType).map(function (k) { return { type: (types[k] || {}).name || k, days: leaveDaysByType[k] }; }).sort(function (a, b) { return b.days - a.days; }),
+      hiresByMonth: hiresByMonth,
+      onLeaveToday: Hr.leaveViews_(onLeaveToday).slice(0, 8),
+      upcomingLeaves: Hr.leaveViews_(approved.filter(function (r) { return r.from > today && r.from <= soon; })).sort(function (a, b) { return a.from.localeCompare(b.from); }).slice(0, 8),
+      pendingLeaves: Hr.leaveViews_(leaves.filter(function (r) { return LEAVE_OPEN.indexOf(r.status) >= 0; })).slice(0, 8),
+      expiring: expiring.slice(0, 8)
+    };
+  },
+
   leaveRequest: function (ctx, p) {
     var emp = Staff.requireOfCtx_(ctx);
     return Hr.createLeave_(ctx, emp, p, false);
@@ -736,6 +793,7 @@ var Hr = {
     var any = { module: 'hr' }, hr = { module: 'hr', roles: ['hr'] };
     return {
       'hr.me': { perm: any, fn: Hr.me },
+      'hr.dashboard': { perm: any, fn: Hr.dashboard }, // التحقق داخلها: الموارد البشرية أو مدير له فريق
       'hr.leave.request': { perm: any, fn: Hr.leaveRequest },
       'hr.leave.cancel': { perm: any, fn: Hr.leaveCancel },
       'hr.leave.decide': { perm: any, fn: Hr.leaveDecide },

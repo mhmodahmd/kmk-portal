@@ -342,6 +342,56 @@ var Custody = {
     return out;
   },
 
+  /** لوحة العهد (للمحاسب): العهد المفتوحة وأرصدتها، ما ينتظر إجراءً، الصرف الشهري، التصنيفات والمشاريع، وأصحاب العهد */
+  dashboard: function (ctx) {
+    if (!Custody.isStaff_(ctx)) throw appError('هذه الشاشة للمحاسب.', 'FORBIDDEN');
+    var h = Custody.home(ctx), s = h.staff, m = Custody.maps_(), today = localDate_(), month = today.slice(0, 7), year = today.slice(0, 4);
+    var all = Custody.rows_('Custodies'), exps = Custody.rows_('Expenses').filter(function (e) { return e.entryType === 'expense'; });
+    var vouchers = Custody.rows_('Vouchers').filter(function (v) { return v.status === 'active'; });
+    var prevMonth = (function () { var y = Number(month.slice(0, 4)), mo = Number(month.slice(5, 7)) - 1; if (mo < 1) { mo = 12; y--; } return y + '-' + String(mo).padStart(2, '0'); })();
+    var sumIn = function (list, mo) { return list.filter(function (e) { return (e.date || '').slice(0, 7) === mo; }).reduce(function (a, e) { return a + e.amount; }, 0); };
+    var spendByMonth = [];
+    for (var i = 11; i >= 0; i--) {
+      var y = Number(month.slice(0, 4)), mo = Number(month.slice(5, 7)) - i;
+      while (mo < 1) { mo += 12; y--; }
+      var key = y + '-' + String(mo).padStart(2, '0');
+      spendByMonth.push({ month: key, spent: sumIn(exps, key), count: exps.filter(function (e) { return (e.date || '').slice(0, 7) === key; }).length });
+    }
+    var group = function (list, fn) {
+      var o = {};
+      list.forEach(function (e) { var k = fn(e) || ''; var x = o[k] = o[k] || { amount: 0, count: 0 }; x.amount += e.amount; x.count++; });
+      return Object.keys(o).map(function (k) { return { key: k, amount: o[k].amount, count: o[k].count }; }).sort(function (a, b) { return b.amount - a.amount; });
+    };
+    var yearExps = exps.filter(function (e) { return (e.date || '').slice(0, 4) === year; });
+    var closedYear = all.filter(function (c) { return c.status === 'closed' && (c.reviewDate || '').slice(0, 4) === year; });
+    var closeDays = closedYear.filter(function (c) { return c.openDate && c.reviewDate; }).map(function (c) { return daysBetween_(c.openDate, c.reviewDate.slice(0, 10)); });
+    var openViews = all.filter(function (c) { return CUS.ACTIVE.indexOf(c.status) >= 0; }).map(function (c) { return Custody.view_(c, m); })
+      .sort(function (a, b) { return b.percent - a.percent; });
+    var monthVouchers = vouchers.filter(function (v) { return (v.date || '').slice(0, 7) === month; });
+    return {
+      today: today, month: month, alertPercent: Custody.settings_().alertPercent,
+      kpis: {
+        openCount: s.openCount, openBalance: s.openBalance, activeCount: openViews.length,
+        pendingActions: s.pendingClose.length + s.pendingRequests.length + s.voucherRequests.length + s.awaitingOpenSign.length + s.awaitingCloseSign.length,
+        pendingClose: s.pendingClose.length, pendingRequests: s.pendingRequests.length, voucherRequests: s.voucherRequests.length,
+        awaitingSign: s.awaitingOpenSign.length + s.awaitingCloseSign.length,
+        monthSpent: s.monthSpent, prevMonthSpent: sumIn(exps, prevMonth), yearSpent: yearExps.reduce(function (a, e) { return a + e.amount; }, 0),
+        monthEntries: exps.filter(function (e) { return (e.date || '').slice(0, 7) === month; }).length,
+        noAttachment: yearExps.filter(function (e) { return !(e.attachmentIds || []).length; }).length,
+        closedYear: closedYear.length, avgCloseDays: closeDays.length ? Math.round(closeDays.reduce(function (a, b) { return a + b; }, 0) / closeDays.length) : null,
+        alerts: openViews.filter(function (v) { return v.alert || v.overspent; }).length,
+        monthVouchers: monthVouchers.length, monthVouchersAmount: monthVouchers.reduce(function (a, v) { return a + v.amount; }, 0),
+        holders: Staff.current_().length
+      },
+      spendByMonth: spendByMonth,
+      byCategory: group(yearExps, function (e) { return e.category; }).slice(0, 8).map(function (x) { return { category: x.key || 'بلا تصنيف', amount: x.amount, count: x.count }; }),
+      byProject: group(yearExps.filter(function (e) { return e.project; }), function (e) { return e.project; }).slice(0, 6).map(function (x) { return { project: x.key, amount: x.amount, count: x.count }; }),
+      byMethod: group(yearExps, function (e) { return e.paymentMethod || 'cash'; }).map(function (x) { return { method: x.key, label: CUS.PAY[x.key] || x.key, amount: x.amount, count: x.count }; }),
+      custodies: openViews.slice(0, 12),
+      pendingClose: s.pendingClose.slice(0, 6), pendingRequests: s.pendingRequests.slice(0, 6), voucherRequests: s.voucherRequests.slice(0, 6)
+    };
+  },
+
   // ───────── فتح عهدة ─────────
   carryInfo_: function (empId) {
     var prev = Custody.lastClosedOf_(empId);
@@ -983,10 +1033,11 @@ var Custody = {
   approvers_: function () { return Notify.usersWithRole_('custody', ['accountant']); },
 
   routes_: function () {
-    var any = { module: 'custody' }, acc = { module: 'custody', roles: ['accountant'] };
+    var any = { module: 'custody' }, acc = { module: 'custody', roles: ['accountant'] }, staff = acc;
     return {
       'cus.lookups': { perm: any, fn: Custody.lookups },
       'cus.home': { perm: any, fn: Custody.home },
+      'cus.dashboard': { perm: staff, fn: Custody.dashboard },
       'cus.list': { perm: any, fn: Custody.list },
       'cus.get': { perm: any, fn: Custody.get },
       'cus.holders': { perm: acc, fn: Custody.holders },

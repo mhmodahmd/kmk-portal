@@ -4,7 +4,7 @@
  */
 var APP = {
   NAME: 'بوابة KMK',
-  VERSION: '0.9.6',
+  VERSION: '0.9.7',
   // أقدم إصدار واجهة مسموح به. الواجهة الأقدم تُطلب منها إعادة التحميل.
   MIN_CLIENT: '0.1.0',
   TZ: 'Asia/Kuwait',
@@ -37,6 +37,9 @@ var MODULES = [
     roles: { member: 'عضو', manager: 'مدير المهام' } },
   { key: 'crm', label: 'العملاء', enabled: true,
     roles: { sales: 'مبيعات', accountant: 'محاسب', manager: 'مدير مبيعات' } },
+  // المراسلات (0.9.7): موظف مراسلات يسجّل ويؤرشف ويرى ما سجّله أو أُحيل إليه، ومدير يرى الكل ويحذف ويضبط التصنيفات
+  { key: 'correspondence', label: 'المراسلات', enabled: true,
+    roles: { clerk: 'موظف مراسلات', manager: 'مدير المراسلات' } },
   { key: 'finance', label: 'المالية', enabled: false,
     roles: { viewer: 'مشاهد', accountant: 'محاسب', fmanager: 'مدير مالي' } }
 ];

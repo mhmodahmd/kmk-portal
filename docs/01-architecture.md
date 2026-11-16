@@ -119,7 +119,7 @@ doPost(e)
 5. **الأحداث بين الوحدات** عبر `Events.emit('hr.employee.terminated', {...})`، وكل وحدة تشترك فيما يهمها. مثال: العهد ترفض المخالصة إن كانت على الموظف عهدة مفتوحة.
 
 ### 4.5 البيانات
-- ملف Google Sheet لكل وحدة: `KMK-Core`, `KMK-Attendance`, `KMK-HR`, `KMK-Custody`, `KMK-Tasks`, `KMK-CRM`, `KMK-Finance`.
+- ملف Google Sheet لكل وحدة: `KMK-Core`, `KMK-Attendance`, `KMK-HR`, `KMK-Custody`, `KMK-Tasks`, `KMK-CRM`, `KMK-Correspondence`, `KMK-Finance`.
 - كل جدول له مخطط (أسماء الأعمدة وأنواعها) في الكود، ويُنشأ تلقائياً عند الإعداد.
 - معرّف داخلي فريد لكل سجل، ورقم مقروء عند الحاجة (`NTH-2026-014`, `PV-2026-0007`, `INV-2026-0031`).
 - المبالغ تُحسب داخلياً **بالفلس** (أعداد صحيحة) لتجنب أخطاء الكسور، وتُعرض بثلاث خانات عشرية.

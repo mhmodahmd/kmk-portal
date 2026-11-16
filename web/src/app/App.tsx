@@ -25,6 +25,7 @@ const ReportPage = lazy(() => import('../modules/attendance/ReportPage'));
 const EmployeeReportPage = lazy(() => import('../modules/attendance/ReportPage').then((m) => ({ default: m.EmployeeReportPage })));
 const CorrectionsPage = lazy(() => import('../modules/attendance/CorrectionsPage'));
 const AttSettingsPage = lazy(() => import('../modules/attendance/SettingsPage'));
+const AttOverviewPage = lazy(() => import('../modules/attendance/OverviewPage'));
 
 const HrLayout = lazy(() => import('../modules/hr/HrLayout'));
 const MyProfilePage = lazy(() => import('../modules/hr/MyHrPages').then((m) => ({ default: m.MyProfilePage })));
@@ -34,6 +35,7 @@ const TeamPage = lazy(() => import('../modules/hr/TeamPage'));
 const EmployeesPage = lazy(() => import('../modules/hr/EmployeesPage'));
 const RequestsPage = lazy(() => import('../modules/hr/RequestsPage'));
 const StructurePage = lazy(() => import('../modules/hr/StructurePage'));
+const HrOverviewPage = lazy(() => import('../modules/hr/OverviewPage'));
 
 const CustodyLayout = lazy(() => import('../modules/custody/CustodyLayout'));
 const MyCustodyPage = lazy(() => import('../modules/custody/MyCustodyPage'));
@@ -44,6 +46,7 @@ const VouchersPage = lazy(() => import('../modules/custody/RequestsVouchersPages
 const VoucherPrintPage = lazy(() => import('../modules/custody/Documents').then((m) => ({ default: m.VoucherPrintPage })));
 const StatementPrintPage = lazy(() => import('../modules/custody/Documents').then((m) => ({ default: m.StatementPrintPage })));
 const CusSettingsPage = lazy(() => import('../modules/custody/CusSettingsPage'));
+const CustodyOverviewPage = lazy(() => import('../modules/custody/OverviewPage'));
 const SignPage = lazy(() => import('../modules/custody/SignPage'));
 
 const TasksLayout = lazy(() => import('../modules/tasks/TasksPages').then((m) => ({ default: m.TasksLayout })));
@@ -51,6 +54,7 @@ const MyTasksPage = lazy(() => import('../modules/tasks/TasksPages').then((m) =>
 const TaskListPage = lazy(() => import('../modules/tasks/TasksPages').then((m) => ({ default: m.TaskListPage })));
 const TaskBoardPage = lazy(() => import('../modules/tasks/BoardPage'));
 const TaskDetailPage = lazy(() => import('../modules/tasks/TaskDetailPage'));
+const TasksOverviewPage = lazy(() => import('../modules/tasks/OverviewPage'));
 
 const CrmLayout = lazy(() => import('../modules/crm/CrmPages').then((m) => ({ default: m.CrmLayout })));
 const CrmHomePage = lazy(() => import('../modules/crm/CrmPages').then((m) => ({ default: m.CrmHomePage })));
@@ -63,6 +67,13 @@ const ActivitiesPage = lazy(() => import('../modules/crm/CrmPages').then((m) => 
 const CrmReportsPage = lazy(() => import('../modules/crm/CrmPages').then((m) => ({ default: m.ReportsPage })));
 const ClientPage = lazy(() => import('../modules/crm/DetailPages').then((m) => ({ default: m.ClientPage })));
 const CrmProjectPage = lazy(() => import('../modules/crm/DetailPages').then((m) => ({ default: m.ProjectPage })));
+
+const CorLayout = lazy(() => import('../modules/correspondence/CorPages').then((m) => ({ default: m.CorLayout })));
+const LettersPage = lazy(() => import('../modules/correspondence/CorPages').then((m) => ({ default: m.LettersPage })));
+const CorReportPage = lazy(() => import('../modules/correspondence/CorPages').then((m) => ({ default: m.CorReportPage })));
+const CorSettingsPage = lazy(() => import('../modules/correspondence/CorSettingsPage'));
+const CorDashboardPage = lazy(() => import('../modules/correspondence/CorDashboardPage'));
+const LetterDetailPage = lazy(() => import('../modules/correspondence/LetterDetailPage'));
 
 const SOON: Record<string, { label: string; phase: number }> = {
   finance: { label: tr("المالية"), phase: 5 }
@@ -98,6 +109,8 @@ export default function App() {
   const cusStaff = admin || roles.custody === 'accountant';
   const tasks = admin || !!roles.tasks;
   const crm = admin || !!roles.crm;
+  const cor = admin || !!roles.correspondence;
+  const corMgr = admin || roles.correspondence === 'manager';
   return (
     <HashRouter>
       {updateRequired && <UpdateBanner />}
@@ -116,6 +129,7 @@ export default function App() {
                 <Route path="report" element={<ReportPage />} />
                 <Route path="report/:id" element={<EmployeeReportPage />} />
                 <Route path="corrections" element={<CorrectionsPage />} />
+                <Route path="overview" element={<AttOverviewPage />} />
                 {attHr && <Route path="settings" element={<AttSettingsPage />} />}
               </Route>
             )}
@@ -128,12 +142,14 @@ export default function App() {
                 {hrStaff && <Route path="employees" element={<EmployeesPage />} />}
                 {hrStaff && <Route path="requests" element={<RequestsPage />} />}
                 {hrStaff && <Route path="structure" element={<StructurePage />} />}
+                <Route path="overview" element={<HrOverviewPage />} />
               </Route>
             )}
             {cus && (
               <Route path="/custody" element={<CustodyLayout />}>
                 <Route index element={<MyCustodyPage />} />
                 {cusStaff && <Route path="all" element={<CustodiesPage />} />}
+                {cusStaff && <Route path="overview" element={<CustodyOverviewPage />} />}
                 <Route path="requests" element={<CusRequestsPage />} />
                 <Route path="vouchers" element={<VouchersPage />} />
                 {admin && <Route path="settings" element={<CusSettingsPage />} />}
@@ -146,6 +162,7 @@ export default function App() {
               <Route path="/tasks" element={<TasksLayout />}>
                 <Route index element={<MyTasksPage />} />
                 <Route path="board" element={<TaskBoardPage />} />
+                <Route path="overview" element={<TasksOverviewPage />} />
                 <Route path="assigned" element={<TaskListPage view="created" />} />
                 <Route path="watching" element={<TaskListPage view="watching" />} />
                 <Route path="team" element={<TaskListPage view="team" />} />
@@ -165,6 +182,17 @@ export default function App() {
                 <Route path="proposals" element={<ProposalsPage />} />
                 <Route path="activities" element={<ActivitiesPage />} />
                 <Route path="reports" element={<CrmReportsPage />} />
+              </Route>
+            )}
+            {cor && (
+              <Route path="/correspondence" element={<CorLayout />}>
+                <Route index element={<CorDashboardPage />} />
+                <Route path="in" element={<LettersPage view="in" />} />
+                <Route path="out" element={<LettersPage view="out" />} />
+                <Route path="archive" element={<LettersPage view="archive" />} />
+                <Route path="report" element={<CorReportPage />} />
+                {corMgr && <Route path="settings" element={<CorSettingsPage />} />}
+                <Route path=":id" element={<LetterDetailPage />} />
               </Route>
             )}
             {admin && <Route path="/settings/users" element={<UsersPage />} />}

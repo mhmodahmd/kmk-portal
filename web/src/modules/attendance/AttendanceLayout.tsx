@@ -10,6 +10,7 @@ export default function AttendanceLayout() {
     { to: '/attendance', label: tr("تسجيل الحضور"), end: true },
     { to: '/attendance/me', label: tr("سجلي") },
     ...(canSeeTeam ? [
+      { to: '/attendance/overview', label: tr("نظرة عامة") },
       { to: '/attendance/today', label: tr("حضور اليوم") },
       { to: '/attendance/records', label: tr("السجل") },
       { to: '/attendance/report', label: tr("التقرير الشهري") }

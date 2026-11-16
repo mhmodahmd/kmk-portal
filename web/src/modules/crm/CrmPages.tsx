@@ -4,6 +4,8 @@ import { tr } from '../../lib/i18n';
 import { useAction, useApi } from '../../lib/useApi';
 import { dmy, formatDateTime, kwDate, monthLabel } from '../../lib/format';
 import { Badge, Card, CardHeader, EmptyState, ErrorBox, Loader, PageHeader, StatTile } from '../../ui/Display';
+import { Bars, Change as Delta, Kpi, MiniStats, PanelTitle, StackBar, TrendBars } from '../../ui/Dashboard';
+import { DashboardSkeleton } from '../correspondence/CorDashboardPage';
 import { Button } from '../../ui/Button';
 import { DataTable, Pager, SearchBox, Segmented, TabNav, useTable } from '../../ui/Controls';
 import { Select, TextInput } from '../../ui/Field';
@@ -37,30 +39,87 @@ export function CrmLayout() {
   );
 }
 
+interface CrmDashboard {
+  today: string; month: string;
+  kpis: { clients: number; leads: number; ongoing: number; review: number; collected: number; remaining: number; overdue: number; dueSoon: number; openProposals: number; collectedMonth: number; collectedPrev: number; collectedYear: number; newClientsMonth: number; newClientsYear: number; proposalsYear: number; acceptedYear: number; winRate: number | null; activitiesMonth: number; subscriptions: number; cyclesDue: number; cyclesDueAmount: number };
+  byMonth: { month: string; amount: number }[];
+  pipeline: { id: string; name: string; color: string; kind: 'open' | 'won' | 'lost'; count: number }[];
+  projectsByStatus: { status: ProjectView['status']; label: string; count: number }[];
+  topClients: { clientId: string; name: string; amount: number }[];
+  activitiesByType: { type: string; label: string; count: number }[];
+  due: PaymentView[]; cycles: CrmHome['cycles']; needsReview: ProjectView[];
+}
+const P_BG: Record<ProjectView['status'], string> = { ongoing: 'bg-accent', on_hold: 'bg-warn', completed: 'bg-ok', cancelled: 'bg-line-strong' };
+
+/** نظرة عامة على العملاء: التحصيل، المستحقات، المسار، المشاريع، أكثر العملاء، ونشاط الشهر */
 export function CrmHomePage() {
-  const q = useApi<CrmHome>('crm.home');
+  const q = useApi<CrmDashboard>('crm.dashboard', {}, { staleTime: 30_000 });
   if (q.isError) return <ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} />;
-  if (!q.data) return <Loader />;
-  const h = q.data;
+  const d = q.data;
+  if (!d) return <DashboardSkeleton />;
+  const k = d.kpis, pTotal = d.projectsByStatus.reduce((a, x) => a + x.count, 0);
+  const short = (f: number) => kwd(f, false);
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-4">
-        <StatTile label={tr("العملاء")} value={h.clients} icon="crm" foot={<Link to="/crm/pipeline" className="text-accent-fg no-underline">{tr("{0} عميل محتمل", h.leads)}</Link>} />
-        <StatTile label={tr("المشاريع الجارية")} value={h.ongoing} icon="briefcase" foot={h.review ? <Link to="/crm/projects?review=1" className="font-semibold text-warn no-underline">{tr("{0} تحتاج مراجعة", h.review)}</Link> : tr("لا مشاريع تحتاج مراجعة")} />
-        <StatTile label={tr("المحصّل")} value={<Money fils={h.collected} />} icon="wallet" foot={tr("المتبقي على العقود الثابتة {0}", kwd(h.remaining))} />
-        <StatTile label={tr("العروض قيد التفاوض")} value={h.openProposals} icon="file" foot={<Link to="/crm/proposals" className="text-accent-fg no-underline">{tr("كل العروض")}</Link>} />
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <Kpi label={tr("المحصّل هذا الشهر")} value={<Money fils={k.collectedMonth} />} icon="wallet" tone="ok" to="/crm/payments" foot={<><Delta now={k.collectedMonth} prev={k.collectedPrev} format={short} /> · {tr("هذه السنة {0}", short(k.collectedYear))}</>} />
+        <Kpi label={tr("مستحقات متأخرة")} value={k.overdue} icon="alert" tone={k.overdue ? 'bad' : 'ok'} strong to="/crm/payments" foot={tr("{0} دفعة خلال أسبوعين · {1} اشتراك مستحق ({2})", k.dueSoon, k.cyclesDue, short(k.cyclesDueAmount))} />
+        <Kpi label={tr("المشاريع الجارية")} value={k.ongoing} icon="briefcase" tone={k.review ? 'warn' : 'info'} to={k.review ? '/crm/projects?review=1' : '/crm/projects'} foot={k.review ? tr("{0} تحتاج مراجعة · {1} اشتراك", k.review, k.subscriptions) : tr("{0} اشتراك جارٍ · المتبقي على العقود {1}", k.subscriptions, short(k.remaining))} />
+        <Kpi label={tr("العملاء")} value={k.clients} icon="crm" to="/crm/clients" foot={tr("{0} محتمل · {1} جديد هذه السنة", k.leads, k.newClientsYear)} />
       </div>
+
+      <div className="grid items-start gap-4 lg:grid-cols-[3fr_2fr]">
+        <Card className="flex flex-col gap-3">
+          <PanelTitle title={tr("التحصيل الشهري · آخر 12 شهراً")} action={<span className="text-[12px] text-muted">{tr("بالدينار")}</span>} />
+          <TrendBars data={d.byMonth} series={[{ key: 'amount', label: tr("المحصّل"), color: 'var(--c-accent)' }]} labelOf={(x) => monthLabel(String(x.month)).replace(/ \d{4}$/, '')}
+            format={(v) => Math.round(v / 1000).toLocaleString('en-US')} label={tr("التحصيل الشهري · آخر 12 شهراً")} />
+          <MiniStats items={[
+            { label: tr("المحصّل الإجمالي"), value: short(k.collected) }, { label: tr("عروض هذه السنة"), value: k.proposalsYear, sub: k.winRate === null ? tr("لا قرارات بعد") : tr("قبول {0}%", k.winRate) },
+            { label: tr("قيد التفاوض"), value: k.openProposals }, { label: tr("أنشطة هذا الشهر"), value: k.activitiesMonth }
+          ]} />
+        </Card>
+        <Card className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3">
+            <PanelTitle title={tr("مسار المبيعات")} action={<Link to="/crm/pipeline" className="text-[13px] font-semibold text-accent-fg no-underline">{tr("المسار")}</Link>} />
+            <Bars empty={tr("لا عملاء محتملين")} rows={d.pipeline.filter((s) => s.count).map((s) => ({ key: s.id, label: <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: s.color }} />{s.name}</span>, value: s.count, tone: s.kind === 'won' ? 'ok' : s.kind === 'lost' ? 'bad' : 'accent' }))} />
+          </div>
+          <div className="flex flex-col gap-3 border-t border-line pt-3">
+            <PanelTitle title={tr("المشاريع حسب الحالة")} />
+            <StackBar label={tr("المشاريع حسب الحالة")} total={pTotal} items={d.projectsByStatus.map((x) => ({ key: x.status, label: x.label, count: x.count, className: P_BG[x.status] }))} />
+          </div>
+        </Card>
+      </div>
+
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <Card padded={false}>
           <CardHeader title={tr("دفعات مستحقة خلال أسبوعين")} action={<Link to="/crm/payments" className="text-[13px] font-semibold text-accent-fg no-underline">{tr("كل الدفعات")}</Link>} />
-          {h.due.length === 0 ? <EmptyState title={tr("لا دفعات مستحقة قريباً")} /> : h.due.map((d) => <PaymentLine key={d.id} d={d} />)}
+          {d.due.length === 0 ? <EmptyState title={tr("لا دفعات مستحقة قريباً")} /> : d.due.map((x) => <PaymentLine key={x.id} d={x} />)}
         </Card>
         <Card padded={false}>
           <CardHeader title={tr("اشتراكات مستحقة للدورة الحالية")} action={<Link to="/crm/projects" className="text-[13px] font-semibold text-accent-fg no-underline">{tr("المشاريع")}</Link>} />
-          {h.cycles.length === 0 ? <EmptyState title={tr("لا اشتراكات مستحقة")} /> : h.cycles.map((x) => (
+          {d.cycles.length === 0 ? <EmptyState title={tr("لا اشتراكات مستحقة")} /> : d.cycles.map((x) => (
             <Link key={x.projectId} to={'/crm/projects/' + x.projectId} className="flex flex-wrap items-center gap-3 border-t border-line px-5 py-3 text-fg no-underline first:border-t-0 hover:bg-chip/40">
               <span className="flex min-w-0 flex-1 flex-col"><span className="font-semibold">{x.projectName}</span><span className="text-[13px] text-muted">{x.clientName}</span></span>
               <span className="flex flex-col items-end gap-0.5"><Money fils={x.due} className="font-semibold" /><span className={cx('text-[12px] num', x.late ? 'font-semibold text-bad' : 'text-muted')}>{tr("حتى {0}", dmy(x.end))}</span></span>
+            </Link>
+          ))}
+        </Card>
+      </div>
+
+      <div className="grid items-start gap-4 lg:grid-cols-3">
+        <Card className="flex flex-col gap-3">
+          <PanelTitle title={tr("أكثر العملاء تحصيلاً")} />
+          <Bars empty={tr("لا تحصيل بعد")} rows={d.topClients.map((c) => ({ key: c.clientId, label: c.name, value: c.amount, display: short(c.amount), tone: 'ok', to: '/crm/clients/' + c.clientId }))} />
+        </Card>
+        <Card className="flex flex-col gap-3">
+          <PanelTitle title={tr("نشاط هذا الشهر حسب النوع")} action={<Link to="/crm/activities" className="text-[13px] font-semibold text-accent-fg no-underline">{tr("الأنشطة")}</Link>} />
+          <Bars empty={tr("لا أنشطة هذا الشهر")} rows={d.activitiesByType.map((a) => ({ key: a.type, label: a.label, value: a.count }))} />
+        </Card>
+        <Card padded={false}>
+          <CardHeader title={tr("مشاريع تحتاج مراجعة · {0}", k.review)} />
+          {d.needsReview.length === 0 ? <p className="m-0 px-5 pb-4 text-[13px] text-muted">{tr("لا مشاريع تحتاج مراجعة.")}</p> : d.needsReview.map((p) => (
+            <Link key={p.id} to={'/crm/projects/' + p.id} className="flex items-center gap-3 border-t border-line px-5 py-3 text-fg no-underline first:border-t-0 hover:bg-chip/40">
+              <span className="flex min-w-0 flex-1 flex-col"><span className="font-semibold">{p.name}</span><span className="truncate text-[12px] text-muted">{p.reviewNote || p.clientName}</span></span><ProjectBadge p={p} />
             </Link>
           ))}
         </Card>

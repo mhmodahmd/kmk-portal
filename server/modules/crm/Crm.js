@@ -407,6 +407,44 @@ var Crm = {
     };
   },
 
+  /** لوحة العملاء: ما في النظرة العامة + التحصيل الشهري لآخر 12 شهراً، المسار بالمراحل، المشاريع بالحالة، أكثر العملاء تحصيلاً، نشاط الشهر، والعروض */
+  dashboard: function (ctx) {
+    var h = Crm.home(ctx), m = Crm.maps_(), vis = Crm.visibleClientIds_(ctx), today = localDate_(), month = today.slice(0, 7), year = today.slice(0, 4);
+    var prevMonth = Crm.addMonths_(month + '-01', -1).slice(0, 7);
+    var paid = Crm.rows_('Payments').filter(function (x) { var pr = m.projects[x.projectId]; return pr && vis[pr.clientId] && x.status === 'paid'; });
+    var sumIn = function (mo) { return paid.filter(function (x) { return (x.date || '').slice(0, 7) === mo; }).reduce(function (a, x) { return a + x.amount; }, 0); };
+    var byMonth = [];
+    for (var i = 11; i >= 0; i--) { var mo = Crm.addMonths_(month + '-01', -i).slice(0, 7); byMonth.push({ month: mo, amount: sumIn(mo) }); }
+    var clients = Crm.visibleClients_(ctx), projects = Crm.rows_('Projects').filter(function (p) { return vis[p.clientId]; });
+    var stages = Crm.rows_('Stages').slice().sort(function (a, b) { return a.sortOrder - b.sortOrder; });
+    var leads = clients.filter(function (c) { return c.category === 'lead'; });
+    var byClient = {};
+    paid.forEach(function (x) { var pr = m.projects[x.projectId]; byClient[pr.clientId] = (byClient[pr.clientId] || 0) + x.amount; });
+    var props = Crm.rows_('Proposals').filter(function (x) { return vis[x.clientId] && (x.issueDate || '').slice(0, 4) === year; });
+    var acts = Crm.rows_('Activities').filter(function (a) { return vis[a.clientId] && (a.at || '').slice(0, 7) === month; });
+    var accepted = props.filter(function (x) { return x.status === 'accepted'; }).length, decided = accepted + props.filter(function (x) { return x.status === 'rejected'; }).length;
+    return {
+      today: today, month: month,
+      kpis: {
+        clients: h.clients, leads: h.leads, ongoing: h.ongoing, review: h.review, collected: h.collected, remaining: h.remaining,
+        overdue: h.overdue, dueSoon: h.due.length, openProposals: h.openProposals,
+        collectedMonth: sumIn(month), collectedPrev: sumIn(prevMonth), collectedYear: paid.filter(function (x) { return (x.date || '').slice(0, 4) === year; }).reduce(function (a, x) { return a + x.amount; }, 0),
+        newClientsMonth: clients.filter(function (c) { return (c.createdAt || '').slice(0, 7) === month; }).length,
+        newClientsYear: clients.filter(function (c) { return (c.createdAt || '').slice(0, 4) === year; }).length,
+        proposalsYear: props.length, acceptedYear: accepted, winRate: decided ? Math.round(accepted * 100 / decided) : null,
+        activitiesMonth: acts.length, subscriptions: projects.filter(function (p) { return p.billing === 'open' && p.billingCycle && p.status === 'ongoing'; }).length,
+        cyclesDue: h.cycles.length, cyclesDueAmount: h.cycles.reduce(function (a, c) { return a + c.due; }, 0)
+      },
+      byMonth: byMonth,
+      pipeline: stages.map(function (s) { return { id: s.id, name: s.name, color: s.color, kind: s.kind, count: leads.filter(function (c) { return c.stageId === s.id; }).length }; }),
+      projectsByStatus: Object.keys(CRM.P_STATUS).map(function (k) { return { status: k, label: CRM.P_STATUS[k], count: projects.filter(function (p) { return p.status === k; }).length }; }),
+      topClients: Object.keys(byClient).map(function (id) { return { clientId: id, name: (m.clients[id] || {}).name || '', amount: byClient[id] }; }).sort(function (a, b) { return b.amount - a.amount; }).slice(0, 6),
+      activitiesByType: Object.keys(CRM.ACT).map(function (k) { return { type: k, label: CRM.ACT[k], count: acts.filter(function (a) { return a.type === k; }).length }; }).filter(function (x) { return x.count; }).sort(function (a, b) { return b.count - a.count; }),
+      due: h.due.slice(0, 6), cycles: h.cycles.slice(0, 6),
+      needsReview: projects.filter(function (p) { return p.needsReview; }).slice(0, 5).map(function (p) { return Crm.projectView_(p, m); })
+    };
+  },
+
   // ───────── الكتابة: العملاء وجهات الاتصال ─────────
   clientSave: function (ctx, p) {
     p = p || {};
@@ -832,6 +870,7 @@ var Crm = {
     return {
       'crm.lookups': { perm: any, fn: Crm.lookups },
       'crm.home': { perm: any, fn: Crm.home },
+      'crm.dashboard': { perm: any, fn: Crm.dashboard },
       'crm.clients': { perm: any, fn: Crm.clients },
       'crm.client': { perm: any, fn: Crm.client },
       'crm.client.save': { perm: any, fn: Crm.clientSave },

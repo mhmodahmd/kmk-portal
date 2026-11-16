@@ -12,5 +12,7 @@ import './tasks.test.mjs';
 import './notify.test.mjs';
 import './crm.test.mjs';
 import './jobs.test.mjs';
+import './correspondence.test.mjs';
+import './dashboards.test.mjs';
 
 await runAll();

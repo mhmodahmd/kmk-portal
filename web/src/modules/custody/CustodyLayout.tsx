@@ -12,7 +12,7 @@ export default function CustodyLayout() {
   const s = home.data?.staff;
   const items = [
     { to: '/custody', label: tr("عهدتي"), end: true },
-    ...(staff ? [{ to: '/custody/all', label: tr("كل العهد"), badge: s ? s.pendingClose.length + s.awaitingCloseSign.length + s.awaitingOpenSign.length : 0 }] : []),
+    ...(staff ? [{ to: '/custody/overview', label: tr("نظرة عامة") }, { to: '/custody/all', label: tr("كل العهد"), badge: s ? s.pendingClose.length + s.awaitingCloseSign.length + s.awaitingOpenSign.length : 0 }] : []),
     { to: '/custody/requests', label: tr("الطلبات"), badge: s?.pendingRequests.length || 0 },
     { to: '/custody/vouchers', label: tr("السندات"), badge: s?.voucherRequests.length || 0 },
     ...(admin ? [{ to: '/custody/settings', label: tr("الإعدادات") }] : [])

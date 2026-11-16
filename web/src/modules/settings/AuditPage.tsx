@@ -42,13 +42,16 @@ const ACTIONS: Record<string, string> = {
   'payment.collect': tr("تحصيل دفعة"), 'payment.schedule': tr("جدولة دفعة"), 'payment.update': tr("تعديل دفعة"), 'payment.delete': tr("حذف دفعة"),
   'activity.create': tr("تسجيل نشاط"), 'activity.update': tr("تعديل نشاط"), 'proposal.create': tr("إنشاء عرض سعر"), 'proposal.update': tr("تعديل عرض سعر"),
   'proposal.accepted': tr("قبول عرض سعر"), 'proposal.rejected': tr("رفض عرض سعر"), 'proposal.negotiation': tr("عرض سعر قيد التفاوض"), 'proposal.draft': tr("عرض سعر مسودة"), 'proposal.delete': tr("حذف عرض سعر"),
+  // المراسلات
+  'letter.create': tr("تسجيل خطاب"), 'letter.update': tr("تعديل خطاب"), 'letter.status': tr("تغيير حالة خطاب"), 'letter.forward': tr("إحالة خطاب"), 'letter.delete': tr("حذف خطاب"),
+  'letter.file.upload': tr("إرفاق ملف بخطاب"), 'letter.file.delete': tr("حذف مرفق خطاب"), 'category.save': tr("حفظ تصنيف مراسلات"),
   // النظام
   'backup.run': tr("نسخة احتياطية يدوية"), 'migration.legacyAttendance': tr("نقل بيانات الحضور السابق"), 'migration.legacyCustody': tr("نقل بيانات العهد السابق"), 'migration.legacyCrm': tr("نقل بيانات العملاء السابق")
 };
 
 const MODULES: { value: string; label: string }[] = [
   { value: '', label: tr("الكل") }, { value: 'core', label: tr("النواة") }, { value: 'attendance', label: tr("الحضور") }, { value: 'hr', label: tr("الموارد البشرية") },
-  { value: 'custody', label: tr("العهد") }, { value: 'tasks', label: tr("المهام") }, { value: 'crm', label: tr("العملاء") }, { value: 'system', label: tr("النظام") }
+  { value: 'custody', label: tr("العهد") }, { value: 'tasks', label: tr("المهام") }, { value: 'crm', label: tr("العملاء") }, { value: 'correspondence', label: tr("المراسلات") }, { value: 'system', label: tr("النظام") }
 ];
 const MODULE_LABEL: Record<string, string> = Object.fromEntries(MODULES.filter((m) => m.value).map((m) => [m.value, m.label]));
 

@@ -12,6 +12,7 @@ export default function HrLayout() {
     { to: '/hr/leave', label: tr("إجازاتي") },
     { to: '/hr/overtime', label: tr("العمل الإضافي") },
     ...(me.data?.isManager ? [{ to: '/hr/team', label: tr("فريقي") }] : []),
+    ...(isHr || me.data?.isManager ? [{ to: '/hr/overview', label: tr("نظرة عامة") }] : []),
     ...(isHr ? [
       { to: '/hr/employees', label: tr("الموظفون") },
       { to: '/hr/requests', label: tr("كل الطلبات") },

@@ -159,3 +159,26 @@ test('correspondence: attachments on Drive, log entries, and manager-only catego
   eq(c.ok('cor.lookups', {}, c.T.sara).categories.includes('عقود'), false, 'inactive categories are not offered');
   truthy(c.ok('cor.save', { id: l.id, subject: 'عقد موقّع', party: 'الأفق', date: SUN, category: 'عقود' }, c.T.sara), 'but an existing letter keeps it');
 });
+
+test('correspondence: the dashboard counts open, overdue, due soon, monthly in/out, assignee load and average reply time within the user scope', () => {
+  const c = setup();
+  c.clock.set(at(SUN, '08:00'));
+  const a = c.ok('cor.save', { direction: 'in', subject: 'أ', party: 'جهة 1', date: SUN, dueDate: '2026-11-10' }, c.T.sara);
+  c.ok('cor.save', { direction: 'in', subject: 'ب', party: 'جهة 1', date: SUN, dueDate: '2026-11-18' }, c.T.sara);
+  c.ok('cor.save', { direction: 'out', subject: 'ج', party: 'جهة 2', date: '2026-10-20' }, c.T.sara);
+  c.ok('cor.save', { direction: 'in', subject: 'سري', party: 'الديوان', date: SUN }, c.T.huda);
+  c.clock.set(at('2026-11-17', '08:00'));
+  c.ok('cor.save', { direction: 'out', subject: 'رد أ', party: 'جهة 1', date: '2026-11-17', replyToId: a.id, status: 'sent' }, c.T.sara);
+  const d = c.ok('cor.dashboard', {}, c.T.sara);
+  eq([d.scope, d.kpis.open, d.kpis.overdue, d.kpis.dueSoon, d.kpis.drafts, d.kpis.awaitingReply, d.kpis.awaitingParty], ['mine', 3, 0, 1, 1, 1, 1]);
+  eq([d.kpis.monthIn, d.kpis.monthOut, d.kpis.prevOut, d.kpis.avgReplyDays, d.kpis.repliedCount], [2, 1, 1, 2, 1]);
+  eq(d.byMonth.length, 12);
+  eq(d.byMonth[11], { month: '2026-11', in: 2, out: 1 });
+  eq(d.byMonth[10], { month: '2026-10', in: 0, out: 1 });
+  eq(d.byAssignee, [{ id: c.uid.sara, name: 'سارة', open: 3, overdue: 0 }]);
+  eq(d.topParties[0], { party: 'جهة 1', count: 3, open: 2 });
+  eq(d.dueSoon.map((x) => x.subject), ['ب']);
+  eq(d.recent[0].subject, 'رد أ');
+  const all = c.ok('cor.dashboard', {}, c.T.huda);
+  eq([all.scope, all.kpis.total], ['all', 5], 'the manager sees everyone');
+});

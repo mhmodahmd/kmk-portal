@@ -34,6 +34,22 @@ export interface CorLookups {
 
 export interface Category { id: string; name: string; active: boolean }
 
+export interface CorDashboard {
+  today: string; scope: 'all' | 'mine';
+  kpis: {
+    open: number; overdue: number; dueSoon: number; drafts: number; awaitingReply: number; awaitingParty: number;
+    monthIn: number; monthOut: number; prevIn: number; prevOut: number; total: number; archived: number; noDue: number;
+    avgReplyDays: number | null; repliedCount: number;
+  };
+  byMonth: { month: string; in: number; out: number }[];
+  byStatus: { status: LetterStatus; label: string; count: number }[];
+  byCategory: { category: string; count: number }[];
+  byChannel: { channel: string; label: string; count: number }[];
+  byAssignee: { id: string; name: string; open: number; overdue: number }[];
+  topParties: { party: string; count: number; open: number }[];
+  overdue: LetterView[]; dueSoon: LetterView[]; recent: LetterView[];
+}
+
 export interface CorReport {
   year: string; total: number; in: number; out: number; archived: number; awaiting: number; overdueCount: number; repliedIn: number;
   byMonth: { month: string; in: number; out: number }[];

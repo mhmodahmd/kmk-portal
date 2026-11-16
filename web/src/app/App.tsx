@@ -68,6 +68,7 @@ const CorLayout = lazy(() => import('../modules/correspondence/CorPages').then((
 const LettersPage = lazy(() => import('../modules/correspondence/CorPages').then((m) => ({ default: m.LettersPage })));
 const CorReportPage = lazy(() => import('../modules/correspondence/CorPages').then((m) => ({ default: m.CorReportPage })));
 const CorSettingsPage = lazy(() => import('../modules/correspondence/CorSettingsPage'));
+const CorDashboardPage = lazy(() => import('../modules/correspondence/CorDashboardPage'));
 const LetterDetailPage = lazy(() => import('../modules/correspondence/LetterDetailPage'));
 
 const SOON: Record<string, { label: string; phase: number }> = {
@@ -177,7 +178,8 @@ export default function App() {
             )}
             {cor && (
               <Route path="/correspondence" element={<CorLayout />}>
-                <Route index element={<LettersPage view="in" />} />
+                <Route index element={<CorDashboardPage />} />
+                <Route path="in" element={<LettersPage view="in" />} />
                 <Route path="out" element={<LettersPage view="out" />} />
                 <Route path="archive" element={<LettersPage view="archive" />} />
                 <Route path="report" element={<CorReportPage />} />

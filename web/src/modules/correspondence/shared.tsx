@@ -1,14 +1,17 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { tr } from '../../lib/i18n';
+import { api } from '../../lib/api';
 import { useAction, useApi } from '../../lib/useApi';
 import { dmy, kwDate } from '../../lib/format';
 import { Badge } from '../../ui/Display';
 import { Button } from '../../ui/Button';
 import { Select, TextInput, Textarea } from '../../ui/Field';
-import { Dialog } from '../../ui/Overlay';
+import { Dialog, useToast } from '../../ui/Overlay';
 import { Icon } from '../../ui/Icon';
 import { cx } from '../../ui/cx';
+import { ACCEPT, filePayload } from '../custody/files';
 import type { CorLookups, Direction, LetterStatus, LetterView, LinkType } from './types';
 
 export const COR_KEYS = ['cor.list', 'cor.get', 'cor.report', 'cor.lookups', 'home.summary'];
@@ -59,6 +62,69 @@ export function LetterLine({ l }: { l: LetterView }) {
   );
 }
 
+/** يرفع عدة ملفات إلى خطاب على التوالي، ويعيد عدد ما نجح وأول خطأ */
+export async function uploadLetterFiles(letterId: string, files: File[]) {
+  let done = 0, error = '';
+  for (const f of files) {
+    try { await api('cor.file.upload', { letterId, ...(await filePayload(f)) }); done++; }
+    catch (e) { error = error || (e instanceof Error ? e.message : tr("تعذّر رفع الملف.")); }
+  }
+  return { done, error };
+}
+
+/**
+ * زر «إضافة مرفقات» يفتح منتقي الملفات (عدة ملفات) ويرفعها إلى الخطاب فوراً.
+ * يظهر الحالة أثناء الرفع ويحدّث صفحة الخطاب بعده.
+ */
+export function AttachButton({ letterId, size = 'sm', variant = 'secondary', label = tr("إضافة مرفقات") }: { letterId: string; size?: 'sm' | 'md'; variant?: 'ghost' | 'secondary' | 'primary'; label?: string }) {
+  const ref = useRef<HTMLInputElement>(null);
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [busy, setBusy] = useState(0);
+  const pick = async (list: FileList | null) => {
+    const files = Array.from(list || []);
+    if (!files.length) return;
+    setBusy(files.length);
+    const r = await uploadLetterFiles(letterId, files);
+    setBusy(0);
+    if (r.done) toast(r.done === 1 ? tr("أُرفق الملف") : tr("أُرفقت {0} ملفات", r.done));
+    if (r.error) toast(r.error, 'bad');
+    await qc.invalidateQueries({ queryKey: ['cor.get'] });
+    await qc.invalidateQueries({ queryKey: ['cor.list'] });
+  };
+  return (
+    <>
+      <Button size={size} variant={variant} icon={busy ? 'refresh' : 'plus'} loading={!!busy} onClick={() => ref.current?.click()}>{busy ? tr("جارٍ رفع {0} ملف", busy) : label}</Button>
+      <input ref={ref} type="file" accept={ACCEPT} multiple className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(e) => { pick(e.target.files); e.target.value = ''; }} />
+    </>
+  );
+}
+
+/** قائمة ملفات مختارة قبل الرفع (داخل حوار التسجيل) */
+function PendingFiles({ files, onRemove, onAdd }: { files: File[]; onRemove: (i: number) => void; onAdd: (list: FileList | null) => void }) {
+  const ref = useRef<HTMLInputElement>(null);
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-dashed border-line p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[13px] font-medium">{files.length ? tr("المرفقات · {0}", files.length) : tr("المرفقات (اختياري)")}</span>
+        <Button size="sm" variant="ghost" icon="plus" onClick={() => ref.current?.click()}>{tr("إضافة مرفقات")}</Button>
+        <input ref={ref} type="file" accept={ACCEPT} multiple className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(e) => { onAdd(e.target.files); e.target.value = ''; }} />
+      </div>
+      {files.length ? (
+        <ul className="m-0 flex list-none flex-col gap-1 p-0">
+          {files.map((f, i) => (
+            <li key={f.name + i} className="flex items-center gap-2 text-[13px]">
+              <Icon name="file" size={14} className="shrink-0 text-muted" /><span className="min-w-0 flex-1 truncate">{f.name}</span>
+              <span className="num text-[12px] text-muted">{Math.max(1, Math.round(f.size / 1024))} KB</span>
+              <button type="button" aria-label={tr("إزالة")} className="text-muted hover:text-bad cursor-pointer" onClick={() => onRemove(i)}><Icon name="x" size={14} /></button>
+            </li>
+          ))}
+        </ul>
+      ) : <span className="text-[12px] text-muted">{tr("صورة الخطاب أو ملف PDF حتى 10 ميجابايت لكل ملف، وتُرفع بعد التسجيل.")}</span>}
+    </div>
+  );
+}
+
 export interface LetterDraft {
   id?: string; direction?: Direction; subject?: string; summary?: string; party?: string; clientId?: string; date?: string; refNo?: string;
   channel?: string; category?: string; dueDate?: string; assigneeId?: string; projectId?: string; linkedType?: string; linkedId?: string; linkedLabel?: string;
@@ -75,12 +141,28 @@ export function LetterDialog({ open, onClose, initial, onSaved }: { open: boolea
   const [f, setF] = useState<LetterDraft>(() => ({ direction: 'in', channel: 'mail', date: kwDate(), ...initial }));
   const [partyMode, setPartyMode] = useState<'client' | 'free'>(initial.clientId ? 'client' : 'free');
   const [error, setError] = useState('');
+  const [pending, setPending] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const qc = useQueryClient();
+  const toast = useToast();
   const set = (k: keyof LetterDraft, v: string | boolean) => setF((x) => ({ ...x, [k]: v }));
   const act = useAction<Record<string, unknown>, LetterView>('cor.save', {
     invalidate: COR_KEYS, silentError: true, success: editing ? tr("حُفظ الخطاب") : tr("سُجّل الخطاب"),
-    onSuccess: (l) => { onClose(); if (onSaved) onSaved(l); else if (!editing) nav('/correspondence/' + l.id); }
+    onSuccess: async (l) => {
+      // المرفقات المختارة تُرفع بعد التسجيل مباشرة
+      if (pending.length) {
+        setUploading(true);
+        const r = await uploadLetterFiles(l.id, pending);
+        setUploading(false);
+        if (r.done) toast(r.done === 1 ? tr("أُرفق الملف") : tr("أُرفقت {0} ملفات", r.done));
+        if (r.error) toast(r.error, 'bad');
+        qc.invalidateQueries({ queryKey: ['cor.get'] });
+      }
+      onClose(); if (onSaved) onSaved(l); else if (!editing) nav('/correspondence/' + l.id);
+    }
   });
   const L = lk.data;
+  const addFiles = (list: FileList | null) => setPending((p) => [...p, ...Array.from(list || [])].slice(0, 10));
   const save = () => {
     setError('');
     act.mutate({
@@ -100,7 +182,7 @@ export function LetterDialog({ open, onClose, initial, onSaved }: { open: boolea
   const title = editing ? tr("تعديل الخطاب") : f.replyToId ? tr("رد على {0}", f.replyToNumber || '') : f.direction === 'in' ? tr("تسجيل خطاب وارد") : tr("تسجيل خطاب صادر");
   return (
     <Dialog open={open} onClose={onClose} wide title={title} onSubmit={save}
-      footer={<><Button type="submit" variant="primary" className="flex-1" loading={act.isPending}>{editing ? tr("حفظ") : tr("تسجيل الخطاب")}</Button>
+      footer={<><Button type="submit" variant="primary" className="flex-1" loading={act.isPending || uploading}>{uploading ? tr("جارٍ رفع المرفقات") : editing ? tr("حفظ") : tr("تسجيل الخطاب")}</Button>
         <Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button></>}>
       <div className="flex flex-col gap-3">
         <div className="grid gap-3 sm:grid-cols-2">
@@ -153,6 +235,7 @@ export function LetterDialog({ open, onClose, initial, onSaved }: { open: boolea
         )}
         <Textarea label={tr("ملخص المحتوى (اختياري)")} value={f.summary || ''} onChange={(e) => set('summary', e.target.value)} maxLength={4000} />
         <TextInput label={tr("وسوم (مفصولة بفاصلة)")} value={f.tags || ''} onChange={(e) => set('tags', e.target.value)} placeholder={tr("عاجل، مناقصة…")} />
+        {!editing && L?.drive && <PendingFiles files={pending} onAdd={addFiles} onRemove={(i) => setPending((p) => p.filter((_, j) => j !== i))} />}
         {!editing && f.direction === 'out' && (
           <label className="flex min-h-11 items-center gap-3 cursor-pointer select-none sm:min-h-0">
             <input type="checkbox" className="h-[18px] w-[18px] accent-accent" checked={!!f.sent} onChange={(e) => set('sent', e.target.checked)} />

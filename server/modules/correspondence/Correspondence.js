@@ -510,6 +510,70 @@ var Correspondence = {
     };
   },
 
+  /** لوحة المراسلات: المؤشرات، آخر 12 شهراً، التوزيعات، المتأخر والقريب، أحمال المسؤولين، أكثر الجهات (ضمن ما يراه المستخدم) */
+  dashboard: function (ctx) {
+    var today = localDate_(), month = today.slice(0, 7), m = Correspondence.maps_();
+    var mine = Correspondence.rows_('Letters').filter(function (l) { return Correspondence.canSee_(ctx, l); });
+    var open = mine.filter(function (l) { return COR.OPEN.indexOf(l.status) >= 0; });
+    var isOpen = function (l) { return COR.OPEN.indexOf(l.status) >= 0; };
+    var prevMonth = (function () { var y = Number(month.slice(0, 4)), mo = Number(month.slice(5, 7)) - 1; if (mo < 1) { mo = 12; y--; } return y + '-' + String(mo).padStart(2, '0'); })();
+    var inMonth = function (l, mo) { return (l.date || '').slice(0, 7) === mo; };
+    var byMonth = [];
+    for (var i = 11; i >= 0; i--) {
+      var y = Number(month.slice(0, 4)), mo = Number(month.slice(5, 7)) - i;
+      while (mo < 1) { mo += 12; y--; }
+      var key = y + '-' + String(mo).padStart(2, '0');
+      byMonth.push({ month: key, in: mine.filter(function (l) { return l.direction === 'in' && inMonth(l, key); }).length, out: mine.filter(function (l) { return l.direction === 'out' && inMonth(l, key); }).length });
+    }
+    var count = function (list, fn) {
+      var o = {};
+      list.forEach(function (l) { var k = fn(l) || ''; if (k) o[k] = (o[k] || 0) + 1; });
+      return Object.keys(o).map(function (k) { return { key: k, count: o[k] }; }).sort(function (a, b) { return b.count - a.count; });
+    };
+    // متوسط أيام الرد على الوارد: من الاستلام إلى أول حدث «رد» في سجله
+    var replyAt = {};
+    Correspondence.rows_('LetterLog').forEach(function (x) { if (x.kind === 'reply' && (!replyAt[x.letterId] || x.at < replyAt[x.letterId])) replyAt[x.letterId] = x.at; });
+    var replyDays = [];
+    mine.forEach(function (l) {
+      if (l.direction !== 'in' || !replyAt[l.id]) return;
+      var from = l.receivedAt || l.createdAt;
+      if (from) replyDays.push(Math.max(0, (new Date(replyAt[l.id]).getTime() - new Date(from).getTime()) / 86400000));
+    });
+    var soonEnd = addDays_(today, 7);
+    var overdue = Correspondence.sort_(open.filter(function (l) { return l.dueDate && l.dueDate < today; }));
+    var dueSoon = Correspondence.sort_(open.filter(function (l) { return l.dueDate && l.dueDate >= today && l.dueDate <= soonEnd; }));
+    var recent = mine.slice().sort(function (a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); }).slice(0, 8);
+    var v = function (l) { return Correspondence.view_(l, m, ctx); };
+    return {
+      today: today, scope: Correspondence.isMgr_(ctx) ? 'all' : 'mine',
+      kpis: {
+        open: open.length, overdue: overdue.length, dueSoon: dueSoon.length,
+        drafts: open.filter(function (l) { return l.status === 'draft'; }).length,
+        awaitingReply: open.filter(function (l) { return l.direction === 'in'; }).length,
+        awaitingParty: open.filter(function (l) { return l.direction === 'out' && l.status === 'sent'; }).length,
+        monthIn: mine.filter(function (l) { return l.direction === 'in' && inMonth(l, month); }).length,
+        monthOut: mine.filter(function (l) { return l.direction === 'out' && inMonth(l, month); }).length,
+        prevIn: mine.filter(function (l) { return l.direction === 'in' && inMonth(l, prevMonth); }).length,
+        prevOut: mine.filter(function (l) { return l.direction === 'out' && inMonth(l, prevMonth); }).length,
+        total: mine.length, archived: mine.filter(function (l) { return l.status === 'archived'; }).length,
+        noDue: open.filter(function (l) { return !l.dueDate; }).length,
+        avgReplyDays: replyDays.length ? Math.round(replyDays.reduce(function (a, b) { return a + b; }, 0) / replyDays.length * 10) / 10 : null,
+        repliedCount: replyDays.length
+      },
+      byMonth: byMonth,
+      byStatus: COR.ORDER.map(function (s) { return { status: s, label: COR.STATUS[s], count: mine.filter(function (l) { return l.status === s; }).length }; }),
+      byCategory: count(mine, function (l) { return l.category; }).slice(0, 8).map(function (x) { return { category: x.key, count: x.count }; }),
+      byChannel: count(mine, function (l) { return l.channel; }).map(function (x) { return { channel: x.key, label: COR.CHANNEL[x.key] || x.key, count: x.count }; }),
+      byAssignee: count(open, function (l) { return l.assigneeId; }).map(function (x) {
+        return { id: x.key, name: Correspondence.userName_(m, x.key), open: x.count, overdue: open.filter(function (l) { return l.assigneeId === x.key && l.dueDate && l.dueDate < today; }).length };
+      }),
+      topParties: count(mine, function (l) { var c = l.clientId && m.clients[l.clientId]; return c ? c.name : l.party; }).slice(0, 6).map(function (x) {
+        return { party: x.key, count: x.count, open: mine.filter(function (l) { var c = l.clientId && m.clients[l.clientId]; return (c ? c.name : l.party) === x.key && isOpen(l); }).length };
+      }),
+      overdue: overdue.slice(0, 8).map(v), dueSoon: dueSoon.slice(0, 8).map(v), recent: recent.map(v)
+    };
+  },
+
   // ───────── الرئيسية والإشعارات ─────────
   summary_: function (ctx) {
     try { Correspondence.dueCheck_(); } catch (e) { console.error('cor due: ' + e); }
@@ -575,7 +639,8 @@ var Correspondence = {
       'cor.categories': { perm: any, fn: Correspondence.categories },
       'cor.category.save': { perm: mgr, fn: Correspondence.categorySave },
       'cor.category.move': { perm: mgr, fn: Correspondence.categoryMove },
-      'cor.report': { perm: any, fn: Correspondence.report }
+      'cor.report': { perm: any, fn: Correspondence.report },
+      'cor.dashboard': { perm: any, fn: Correspondence.dashboard }
     };
   }
 };

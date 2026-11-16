@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, Outlet, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useNavigate, useSearchParams } from 'react-router-dom';
 import { tr } from '../../lib/i18n';
 import { useApi } from '../../lib/useApi';
 import { dmy, monthLabel } from '../../lib/format';
@@ -17,7 +17,8 @@ export function CorLayout() {
   const [creating, setCreating] = useState<'' | 'in' | 'out'>('');
   const L = lk.data;
   const items = [
-    { to: '/correspondence', label: tr("الوارد"), end: true },
+    { to: '/correspondence', label: tr("نظرة عامة"), end: true },
+    { to: '/correspondence/in', label: tr("الوارد") },
     { to: '/correspondence/out', label: tr("الصادر") },
     { to: '/correspondence/archive', label: tr("الأرشيف") },
     { to: '/correspondence/report', label: tr("التقرير") },
@@ -43,7 +44,9 @@ export function LettersPage({ view }: { view: 'in' | 'out' | 'archive' }) {
   const lk = useCorLookups();
   const nav = useNavigate();
   const L = lk.data;
-  const [status, setStatus] = useState<'all' | 'open' | 'replied' | 'overdue'>('all');
+  const [params] = useSearchParams();
+  const initialStatus = params.get('status');
+  const [status, setStatus] = useState<'all' | 'open' | 'replied' | 'overdue'>(initialStatus === 'overdue' || initialStatus === 'open' || initialStatus === 'replied' ? initialStatus : 'all');
   const [year, setYear] = useState('');
   const [assignee, setAssignee] = useState('');
   const [category, setCategory] = useState('');

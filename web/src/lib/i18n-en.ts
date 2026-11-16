@@ -1818,7 +1818,20 @@ const EN: Record<string, string> = {
   'يعيد الخطاب من الأرشيف مدير المراسلات.': 'Only the correspondence manager restores a letter from the archive.', 'لا يمكنك إحالة هذا الخطاب.': 'You cannot forward this letter.',
   'لا يُحذف خطاب له ردود مرتبطة. احذف الردود أولاً أو أرشفه.': 'A letter with linked replies cannot be deleted. Delete the replies first or archive it.',
   'لا يمكنك إرفاق ملفات بهذا الخطاب.': 'You cannot attach files to this letter.', 'اسم التصنيف': 'the category name',
-  'خطاب تأخر الرد عليه': 'A letter is overdue for reply', 'خطاب يحين موعد الرد عليه قريباً': 'A letter is due for reply soon' };
+  'خطاب تأخر الرد عليه': 'A letter is overdue for reply', 'خطاب يحين موعد الرد عليه قريباً': 'A letter is due for reply soon',
+  // لوحة المراسلات والمرفقات المتعددة
+  'تعرض اللوحة ما سجّلته أو أُحيل إليك. مدير المراسلات يرى الكل.': 'The dashboard shows what you registered or were assigned. The correspondence manager sees everything.',
+  '{0} وارد ينتظر ردّنا · {1} صادر ينتظر رد الجهة': '{0} incoming awaiting our reply · {1} outgoing awaiting the party', 'تحين خلال أسبوع': 'Due within a week',
+  'و{0} بلا موعد رد': 'and {0} without a reply date', 'كل المفتوح له موعد': 'Every open letter has a date', 'الصادر والوارد · آخر 12 شهراً': 'Incoming and outgoing · last 12 months',
+  'لا خطابات بعد': 'No letters yet', 'سجّل أول خطاب من الأزرار أعلى الصفحة.': 'Register the first letter from the buttons above.', 'الإجمالي': 'Total',
+  'متوسط أيام الرد': 'Avg. reply days', 'على {0} خطاباً وارداً': 'over {0} incoming letters', 'لا ردود مسجلة بعد': 'No replies recorded yet', 'توزيع الحالات': 'Status breakdown',
+  '{0} مسودة صادرة لم تُرسل بعد': '{0} outgoing draft(s) not sent yet', 'لا خطابات متأخرة.': 'No overdue letters.', 'تحين خلال أسبوع · {0}': 'Due within a week · {0}',
+  'لا مواعيد قريبة.': 'No upcoming dates.', 'أكثر الجهات مراسلة': 'Most frequent parties', '{0} مفتوح': '{0} open', 'أحمال المسؤولين': 'Owner workload', 'المفتوح لديك': 'Your open letters',
+  'لا خطابات مفتوحة': 'No open letters', 'آخر ما سُجّل': 'Recently registered', 'كالشهر الماضي': 'same as last month', 'لا خطابات الشهر الماضي': 'none last month',
+  '+{0} عن الشهر الماضي': '+{0} vs last month', '−{0} عن الشهر الماضي': '−{0} vs last month',
+  'المرفقات · {0}': 'Attachments · {0}', 'إضافة مرفقات أخرى': 'Add more attachments', 'إضافة مرفقات': 'Add attachments', 'أُرفقت {0} ملفات': '{0} files attached',
+  'جارٍ رفع {0} ملف': 'Uploading {0} file(s)', 'المرفقات (اختياري)': 'Attachments (optional)', 'إزالة': 'Remove',
+  'صورة الخطاب أو ملف PDF حتى 10 ميجابايت لكل ملف، وتُرفع بعد التسجيل.': 'A scan of the letter or a PDF up to 10 MB each, uploaded right after registration.', 'جارٍ رفع المرفقات': 'Uploading attachments' };
 
 /**
  * رسائل الخادم التي فيها متغيرات: {0} {1} مكان الأجزاء المتغيرة (وتُترجم هي أيضاً إن كانت تسميات).

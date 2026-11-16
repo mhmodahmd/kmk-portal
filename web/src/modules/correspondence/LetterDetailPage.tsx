@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
 import { tr, trServer } from '../../lib/i18n';
-import { api, ApiError } from '../../lib/api';
+import { ApiError } from '../../lib/api';
 import { useAction, useApi } from '../../lib/useApi';
 import { dmy, formatDateTime, relativeTime } from '../../lib/format';
 import { Badge, Card, CardHeader, DangerZone, EmptyState, ErrorBox, Loader } from '../../ui/Display';
@@ -13,8 +12,8 @@ import { ReasonDialog } from '../../ui/Decide';
 import { Dialog, useToast } from '../../ui/Overlay';
 import { Icon } from '../../ui/Icon';
 import { cx } from '../../ui/cx';
-import { ACCEPT, filePayload, openFile } from '../custody/files';
-import { COR_KEYS, DirectionMark, LetterDialog, LetterLine, StatusBadge, linkTo, useCorLookups } from './shared';
+import { openFile } from '../custody/files';
+import { AttachButton, COR_KEYS, DirectionMark, LetterDialog, LetterLine, StatusBadge, linkTo, useCorLookups } from './shared';
 import type { LetterDetail, LetterStatus } from './types';
 
 export default function LetterDetailPage() {
@@ -22,14 +21,12 @@ export default function LetterDetailPage() {
   const q = useApi<LetterDetail>('cor.get', { id });
   const lk = useCorLookups();
   const nav = useNavigate();
-  const qc = useQueryClient();
   const toast = useToast();
   const [editing, setEditing] = useState(false);
   const [replying, setReplying] = useState(false);
   const [forwarding, setForwarding] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [removing, setRemoving] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const status = useAction<{ id: string; status: LetterStatus; note?: string }>('cor.status', { invalidate: COR_KEYS, success: tr("حُدّثت الحالة") });
   const delFile = useAction('cor.file.remove', { invalidate: ['cor.get', 'cor.list'], success: tr("حُذف المرفق") });
   const remove = useAction('cor.remove', { invalidate: COR_KEYS, success: tr("حُذف الخطاب"), onSuccess: () => nav('/correspondence') });
@@ -38,13 +35,6 @@ export default function LetterDetailPage() {
   if (!q.data) return <Loader />;
   const { letter: l, original, replies, files, log, can } = q.data;
   const L = lk.data;
-  const attach = async (file?: File) => {
-    if (!file) return;
-    setUploading(true);
-    try { await api('cor.file.upload', { letterId: l.id, ...(await filePayload(file)) }); toast(tr("أُرفق الملف")); await qc.invalidateQueries({ queryKey: ['cor.get'] }); }
-    catch (e) { toast(e instanceof Error ? e.message : tr("تعذّر رفع الملف."), 'bad'); }
-    finally { setUploading(false); }
-  };
   const view = (fid: string) => openFile('cor.file.content', { id: fid }).catch((e) => toast(e instanceof ApiError ? e.message : tr("تعذّر فتح الملف."), 'bad'));
   const link = linkTo(l);
   // أزرار الحالة حسب الاتجاه والحالة الحالية
@@ -73,6 +63,7 @@ export default function LetterDetailPage() {
             ))}
             {can.edit && l.status !== 'archived' && <Button variant={actions.some((a) => a.primary) ? 'secondary' : 'primary'} icon="mail" onClick={() => setReplying(true)}>{l.direction === 'in' ? tr("تسجيل الرد") : tr("تسجيل رد الجهة")}</Button>}
             {can.edit && l.status !== 'archived' && <Button variant="secondary" icon="user" onClick={() => setForwarding(true)}>{tr("إحالة")}</Button>}
+            {can.edit && L?.drive && <AttachButton letterId={l.id} size="md" variant="secondary" />}
             {can.edit && <Button variant="ghost" icon="edit" onClick={() => setEditing(true)}>{tr("تعديل")}</Button>}
             {can.edit && l.status !== 'archived' && <Button variant="ghost" icon="archive" onClick={() => setArchiving(true)}>{tr("أرشفة")}</Button>}
             {L?.isManager && l.status === 'archived' && <Button variant="secondary" icon="refresh" onClick={() => status.mutate({ id: l.id, status: l.direction === 'in' ? 'received' : 'sent' })}>{tr("إعادة من الأرشيف")}</Button>}
@@ -99,12 +90,7 @@ export default function LetterDetailPage() {
       <div className="grid items-start gap-4 lg:grid-cols-[3fr_2fr]">
         <div className="flex flex-col gap-4">
           <Card padded={false}>
-            <CardHeader title={tr("المرفقات")} action={can.edit && L?.drive ? (
-              <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md px-3 text-[13px] font-medium text-accent-fg hover:bg-chip">
-                <Icon name={uploading ? 'refresh' : 'file'} size={16} />{uploading ? tr("جارٍ الرفع") : tr("إرفاق")}
-                <input type="file" accept={ACCEPT} className="sr-only" disabled={uploading} onChange={(e) => { attach(e.target.files?.[0]); e.target.value = ''; }} />
-              </label>
-            ) : undefined} />
+            <CardHeader title={files.length ? tr("المرفقات · {0}", files.length) : tr("المرفقات")} action={can.edit && L?.drive ? <AttachButton letterId={l.id} /> : undefined} />
             {files.length ? files.map((f) => (
               <div key={f.id} className="flex items-center gap-3 border-t border-line px-5 py-2.5">
                 <button type="button" className="inline-flex min-w-0 flex-1 items-center gap-2 text-start text-accent-fg cursor-pointer" onClick={() => view(f.id)}>
@@ -114,6 +100,7 @@ export default function LetterDetailPage() {
                 {f.canDelete && <button type="button" aria-label={tr("حذف المرفق")} className="text-muted hover:text-bad cursor-pointer" onClick={() => delFile.mutate({ id: f.id })}><Icon name="x" size={14} /></button>}
               </div>
             )) : <p className="m-0 px-5 pb-4 text-[13px] text-muted">{L?.drive ? tr("صورة الخطاب أو ملف PDF حتى 10 ميجابايت.") : tr("رفع الملفات غير مفعّل بعد.")}</p>}
+            {can.edit && L?.drive && files.length > 0 && <div className="border-t border-line px-5 py-3"><AttachButton letterId={l.id} variant="ghost" label={tr("إضافة مرفقات أخرى")} /></div>}
           </Card>
 
           <Card padded={false}>

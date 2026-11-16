@@ -41,10 +41,10 @@ var Jobs = {
   /** system.jobs — حالة المشغّلات والطوابير، و{install:1} لتركيبها */
   status: function (ctx, p) {
     var out = { available: Jobs.available_(), triggers: [], mailQueue: Db.view('core', 'MailQueue').length, expected: JOBS_.map(function (j) { return j.fn; }) };
+    out.backup = Backup.status_(); // حالة النسخ الاحتياطي مستقلة عن صلاحية المشغّلات
     if (!out.available) return out;
     if (p && p.install) out.installed = Jobs.install_();
     out.triggers = Jobs.installed_();
-    out.backup = Backup.status_();
     return out;
   }
 };

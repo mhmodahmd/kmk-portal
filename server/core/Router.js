@@ -28,6 +28,7 @@ var Router = {
       'auth.passkey.mine': { fn: Passkeys.mine },
       'auth.passkey.remove': { fn: Passkeys.remove },
       'home.summary': { fn: Home.summary },
+      'home.dashboard': { fn: Home.dashboard },
       'inbox.list': { fn: Home.inbox },
       'inbox.decide': { fn: Home.decide },
       'notify.list': { fn: Notify.list },

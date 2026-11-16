@@ -104,3 +104,22 @@ test('crm dashboard: collected by month, pipeline stages, top clients and propos
   truthy(d.pipeline.length > 0 && d.pipeline.reduce((a, s) => a + s.count, 0) === 1, 'the lead sits in a stage');
   eq([d.kpis.proposalsYear, d.kpis.winRate], [1, null]);
 });
+
+test('home dashboard: attention items follow the user roles, with a personal month summary and the inbox head', () => {
+  const c = company(at(SUN, '08:00'));
+  const users = c.ok('users.list', {}, c.A).users;
+  const uid = (u) => users.find((x) => x.username === u).id;
+  c.ok('users.setRoles', { id: uid('sara'), roles: { attendance: 'employee', hr: 'employee', correspondence: 'clerk' } }, c.A);
+  c.ok('tsk.save', { title: 'متأخرة', assigneeId: uid('sara'), dueDate: '2026-11-10' }, c.T.sara);
+  c.ok('tsk.save', { title: 'اليوم', assigneeId: uid('sara'), dueDate: SUN }, c.T.sara);
+  c.ok('cor.save', { direction: 'in', subject: 'خطاب متأخر', party: 'جهة', date: SUN, dueDate: '2026-11-12' }, c.T.sara);
+  const d = c.ok('home.dashboard', {}, c.T.sara);
+  eq(d.attention.map((x) => x.kind), ['att.punch', 'tsk.overdue', 'cor.overdue', 'tsk.today'], 'ordered: punch, overdue, then today');
+  eq([d.my.tasks.open, d.my.tasks.overdue, d.my.tasks.dueWeek, d.my.attendance.month, d.my.leave.name], [2, 1, 1, '2026-11', 'إجازة سنوية']);
+  c.ok('att.punch', { kind: 'in' }, c.T.sara);
+  eq(c.ok('home.dashboard', {}, c.T.sara).attention.some((x) => x.kind === 'att.punch'), false, 'punched in: no reminder');
+  const r = c.ok('hr.leave.request', { typeId: 'lt_annual', from: '2026-11-22', to: '2026-11-23', reason: 'سفر' }, c.T.ahmad);
+  const mgr = c.ok('home.dashboard', {}, c.T.sara);
+  eq([mgr.inbox.length, mgr.inbox[0].refId], [1, r.id], 'the inbox head shows the team leave request');
+  eq(c.ok('home.dashboard', {}, c.A).my.attendance, null, 'the admin has no employee file');
+});

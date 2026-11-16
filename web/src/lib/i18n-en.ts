@@ -1871,13 +1871,31 @@ const EN: Record<string, string> = {
   'مهام مفتوحة': 'Open tasks', '{0} مسندة إليك · {1} بلا موعد': '{0} assigned to you · {1} without a date', 'و{0} موعدها اليوم': 'and {0} due today', 'لا مهام موعدها اليوم': 'No tasks due today',
   '{0} عاجلة أو مرتفعة · {1} بانتظار مراجعة': '{0} urgent or high · {1} awaiting review', 'نسبة الإنجاز · 30 يوماً': 'Completion rate · 30 days', '{0} أُنجزت · {1} أُنشئت · في الموعد {2}': '{0} done · {1} created · on time {2}',
   'المنشأة والمنجزة · آخر 8 أسابيع': 'Created and done · last 8 weeks', 'عاجلة ومرتفعة': 'Urgent and high', 'المفتوحة حسب الأولوية': 'Open by priority', 'متأخرة · {0}': 'Overdue · {0}', 'لا مهام متأخرة.': 'No overdue tasks.',
-  'أحمال الفريق': 'Team workload', 'لا مهام مفتوحة': 'No open tasks', 'المفتوحة حسب المشروع': 'Open by project', 'لا مهام مرتبطة بمشاريع': 'No tasks linked to projects' };
+  'أحمال الفريق': 'Team workload', 'لا مهام مفتوحة': 'No open tasks', 'المفتوحة حسب المشروع': 'Open by project', 'لا مهام مرتبطة بمشاريع': 'No tasks linked to projects',
+  // ───── الرئيسية (0.9.7) ─────
+  '{0} حاضرون الآن': '{0} present now', 'لم تسجّل بعد': 'Not clocked in yet', '{0} مفتوحة · {1} متأخرة': '{0} open · {1} overdue', '{0} مفتوحة': '{0} open', '{0} دفعات متأخرة': '{0} overdue payments',
+  '{0} مشروع جارٍ': '{0} ongoing projects', '{0} بانتظار الرد · {1} متأخرة': '{0} awaiting reply · {1} overdue', '{0} بانتظار الرد': '{0} awaiting reply', '{0} عهدة مفتوحة': '{0} open custodies', 'المتبقي {0}': 'Remaining {0}',
+  '{0} مستندات تنتهي قريباً': '{0} documents expiring soon', 'رصيد {0}: {1}': '{0} balance: {1}', 'الموافقات ({0})': 'Approvals ({0})', 'اعتمد أو ارفض من صندوق الموافقات': 'Approve or reject from the inbox', 'لا طلبات تنتظرك': 'No requests waiting for you',
+  '{0} خلال أسبوع': '{0} within a week', 'لا مواعيد قريبة': 'No upcoming dates', 'صُرف {0}% · {1}': '{0}% spent · {1}', 'يوم متاح · {0} مستخدم': 'days available · {0} used', '{0} موظف في الدليل': '{0} employees in the directory',
+  'يحتاج انتباهك · {0}': 'Needs your attention · {0}', 'يحتاج انتباهك': 'Needs your attention', 'كل شيء على ما يرام': 'All clear', 'لا مهام متأخرة ولا خطابات تنتظر ردّك ولا تنبيهات.': 'No overdue tasks, no letters awaiting your reply, no alerts.',
+  'مهامي هذا الشهر': 'My tasks this month', 'خلال أسبوع': 'Within a week', 'حضوري · {0}': 'My attendance · {0}', 'يوم حضور': 'days present', 'بلا تأخير': 'No lateness', '{0} يوم غياب': '{0} days absent', 'بلا غياب': 'No absence', '{0} يوم إجازة': '{0} days of leave',
+  'لم تسجّل حضورك اليوم': 'You have not clocked in today', 'مهمة موعدها اليوم': 'Task due today', 'عهدتك تجاوزت مبلغها': 'Your custody is overspent', 'عهدتك قاربت على النفاد': 'Your custody is nearly exhausted' };
 
 /**
  * رسائل الخادم التي فيها متغيرات: {0} {1} مكان الأجزاء المتغيرة (وتُترجم هي أيضاً إن كانت تسميات).
  * الترتيب مهم: الأخص قبل الأعم.
  */
 export const EN_PATTERNS: Record<string, string> = {
+  // الرئيسية
+  'مهمة متأخرة منذ {0}': 'Task overdue since {0}',
+  '{0} مهمة بانتظار مراجعتك': '{0} tasks awaiting your review',
+  '{0} · تأخر الرد منذ {1}': '{0} · reply overdue since {1}',
+  '{0} · موعد الرد {1}': '{0} · reply due {1}',
+  '{0} مستندات تنتهي خلال 30 يوماً': '{0} documents expire within 30 days',
+  '{0} دفعات متأخرة التحصيل': '{0} payments overdue for collection',
+  '{0} مشاريع تحتاج مراجعة': '{0} projects need review',
+  '{0} عهد تجاوزت نسبة التنبيه': '{0} custodies past the alert threshold',
+  'المتبقي {0}': 'Remaining {0}',
   // المراسلات (الأخص أولاً)
   'سجّل الخطاب {0} رداً على {1}': 'registered letter {0} in reply to {1}',
   'سجّل الخطاب {0}': 'registered letter {0}',

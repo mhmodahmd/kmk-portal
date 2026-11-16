@@ -524,6 +524,56 @@ var Tasks = {
     return true;
   },
 
+  /** لوحة المهام ضمن ما يراه المستخدم: المفتوح والمتأخر وهذا الأسبوع، الإنجاز، التوزيع بالحالة والأولوية والمسؤول والمشروع، والاتجاه الأسبوعي */
+  dashboard: function (ctx) {
+    var mgr = Tasks.isMgr_(ctx), team = Tasks.team_(ctx), today = localDate_(), week = addDays_(today, 7), m = Tasks.maps_();
+    var vis = Tasks.rows_('Tasks').filter(function (t) { return Tasks.canSee_(ctx, t) && !t.private; });
+    var open = vis.filter(function (t) { return TSK.OPEN.indexOf(t.status) >= 0; });
+    var since30 = new Date(Date.now() - 30 * 86400000).toISOString();
+    var done30 = vis.filter(function (t) { return t.status === 'done' && (t.completedAt || '') >= since30; });
+    var created30 = vis.filter(function (t) { return (t.createdAt || '') >= since30; });
+    var overdue = open.filter(function (t) { return t.dueDate && t.dueDate < today; });
+    var count = function (list, fn) {
+      var o = {};
+      list.forEach(function (t) { var k = fn(t) || ''; o[k] = (o[k] || 0) + 1; });
+      return Object.keys(o).map(function (k) { return { key: k, count: o[k] }; }).sort(function (a, b) { return b.count - a.count; });
+    };
+    // آخر 8 أسابيع: المنشأة والمنجزة
+    var weeks = [];
+    for (var i = 7; i >= 0; i--) {
+      var end = addDays_(today, -7 * i), start = addDays_(end, -6);
+      weeks.push({
+        week: start, label: dmy_(start).slice(0, 5),
+        created: vis.filter(function (t) { var d = (t.createdAt || '').slice(0, 10); return d >= start && d <= end; }).length,
+        done: vis.filter(function (t) { var d = (t.completedAt || '').slice(0, 10); return t.status === 'done' && d >= start && d <= end; }).length
+      });
+    }
+    var v = function (t) { return Tasks.view_(t, m, ctx); };
+    return {
+      today: today, scope: mgr ? 'all' : team.length ? 'team' : 'mine',
+      kpis: {
+        open: open.length, overdue: overdue.length, dueWeek: open.filter(function (t) { return t.dueDate && t.dueDate >= today && t.dueDate <= week; }).length,
+        dueToday: open.filter(function (t) { return t.dueDate === today; }).length, noDue: open.filter(function (t) { return !t.dueDate; }).length,
+        review: open.filter(function (t) { return t.status === 'review'; }).length, urgent: open.filter(function (t) { return t.priority === 'urgent' || t.priority === 'high'; }).length,
+        done30: done30.length, created30: created30.length, total: vis.length,
+        completionRate: done30.length + open.length ? Math.round(done30.length * 100 / (done30.length + open.length)) : null,
+        onTimeRate: done30.length ? Math.round(done30.filter(function (t) { return !t.dueDate || (t.completedAt || '').slice(0, 10) <= t.dueDate; }).length * 100 / done30.length) : null,
+        mine: open.filter(function (t) { return t.assigneeId === ctx.user.id; }).length
+      },
+      byStatus: TSK.ORDER.map(function (k) { return { status: k, label: TSK.STATUS[k], count: vis.filter(function (t) { return t.status === k; }).length }; }),
+      byPriority: Object.keys(TSK.PRIORITY).map(function (k) { return { priority: k, label: TSK.PRIORITY[k], count: open.filter(function (t) { return (t.priority || 'normal') === k; }).length }; }),
+      byAssignee: count(open, function (t) { return t.assigneeId; }).slice(0, 8).map(function (x) {
+        return { id: x.key, name: Tasks.userName_(m, x.key), open: x.count, overdue: overdue.filter(function (t) { return t.assigneeId === x.key; }).length };
+      }),
+      byProject: count(open.filter(function (t) { return t.projectId; }), function (t) { return t.projectId; }).slice(0, 6).map(function (x) {
+        return { id: x.key, name: (m.projects[x.key] || {}).name || x.key, open: x.count };
+      }),
+      weekly: weeks,
+      overdue: Tasks.sort_(overdue.slice()).slice(0, 8).map(v),
+      dueSoon: Tasks.sort_(open.filter(function (t) { return t.dueDate && t.dueDate >= today && t.dueDate <= week; })).slice(0, 8).map(v)
+    };
+  },
+
   // ───────── الرئيسية وصندوق الموافقات ─────────
   summary_: function (ctx) {
     var u = ctx.user.id, today = localDate_(), week = addDays_(today, 7);
@@ -602,6 +652,7 @@ var Tasks = {
     return {
       'tsk.lookups': { perm: any, fn: Tasks.lookups },
       'tsk.list': { perm: any, fn: Tasks.list },
+      'tsk.dashboard': { perm: any, fn: Tasks.dashboard },
       'tsk.get': { perm: any, fn: Tasks.get },
       'tsk.save': { perm: any, fn: Tasks.save },
       'tsk.status': { perm: any, fn: Tasks.status },

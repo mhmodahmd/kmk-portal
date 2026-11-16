@@ -331,6 +331,50 @@ var Attendance = {
     };
   },
 
+  /** لوحة الحضور (للمديرين والموارد البشرية): اليوم، الشهر حتى تاريخه، الاتجاه اليومي، الأكثر تأخراً وغياباً، والأقسام */
+  dashboard: function (ctx, p) {
+    var scope = Attendance.requireScope_(ctx);
+    var month = requireMonth_(p && p.month), today = localDate_();
+    var rep = Attendance.report(ctx, { month: month, withDays: true }), board = Attendance.board(ctx, {});
+    var rows = rep.rows, details = rep.details || [], maps = Staff.maps_();
+    var sum = function (k) { return rows.reduce(function (a, r) { return a + (r[k] || 0); }, 0); };
+    var byDay = {}, byDept = {};
+    details.forEach(function (d) {
+      var emp = maps.emps[d.employee.id], dept = emp && emp.departmentId && maps.depts[emp.departmentId];
+      var dk = dept ? dept.name : '';
+      var dp = byDept[dk] = byDept[dk] || { department: dk || 'بلا قسم', employees: 0, present: 0, absent: 0, late: 0 };
+      dp.employees++;
+      d.days.forEach(function (x) {
+        if (x.date > today || ['weekend', 'holiday', 'none', 'future'].indexOf(x.status) >= 0) return;
+        var o = byDay[x.date] = byDay[x.date] || { date: x.date, day: DAYS_AR[dowOf_(x.date)], present: 0, late: 0, absent: 0, leave: 0 };
+        if (x.status === 'absent') { o.absent++; dp.absent++; }
+        else if (x.status === 'leave') o.leave++;
+        else { o.present++; dp.present++; if (x.late) { o.late++; dp.late++; } }
+      });
+    });
+    var present = sum('daysPresent'), absent = sum('absentDays');
+    var top = function (k, n) {
+      return rows.filter(function (r) { return r[k] > 0; }).sort(function (a, b) { return b[k] - a[k]; }).slice(0, n)
+        .map(function (r) { return { employeeId: r.employeeId, name: r.name, lateDays: r.lateDays, lateMin: r.lateMin, absentDays: r.absentDays, overtimeMin: r.overtimeMin }; });
+    };
+    var pending = Db.view('attendance', 'Corrections').filter(function (c) { return c.status === 'pending' && Staff.inScope_(scope, c.employeeId); }).length;
+    return {
+      month: month, today: today, scope: scope.all ? 'all' : 'team', employees: rows.length,
+      todayCounts: board.counts,
+      kpis: {
+        presentDays: present, absentDays: absent, lateDays: sum('lateDays'), lateMin: sum('lateMin'), earlyMin: sum('earlyMin'), overtimeMin: sum('overtimeMin'),
+        incomplete: sum('incomplete'), leaveDays: sum('leaveDays'), totalMinutes: sum('totalMinutes'),
+        attendanceRate: present + absent ? Math.round(present * 100 / (present + absent)) : null,
+        punctualityRate: present ? Math.round((present - sum('lateDays')) * 100 / present) : null,
+        pendingCorrections: pending
+      },
+      byDay: Object.keys(byDay).sort().map(function (k) { return byDay[k]; }),
+      byDepartment: Object.keys(byDept).map(function (k) { var x = byDept[k]; return Object.assign(x, { rate: x.present + x.absent ? Math.round(x.present * 100 / (x.present + x.absent)) : null }); })
+        .sort(function (a, b) { return b.employees - a.employees; }),
+      topLate: top('lateMin', 5), topAbsent: top('absentDays', 5), topOvertime: top('overtimeMin', 5)
+    };
+  },
+
   // ───────── حضور اليوم ─────────
   board: function (ctx, p) {
     var scope = Attendance.requireScope_(ctx);
@@ -656,6 +700,7 @@ var Attendance = {
       'att.punch': { perm: any, fn: Attendance.punch },
       'att.myMonth': { perm: any, fn: Attendance.myMonth },
       'att.board': { perm: any, fn: Attendance.board },
+      'att.dashboard': { perm: any, fn: Attendance.dashboard }, // التحقق داخلها: نطاق فريق أو الكل
       'att.report': { perm: any, fn: Attendance.report },
       'att.records': { perm: any, fn: Attendance.records },
       'att.record.save': { perm: hr, fn: Attendance.recordSave },

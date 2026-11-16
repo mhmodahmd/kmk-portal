@@ -1831,7 +1831,41 @@ const EN: Record<string, string> = {
   '+{0} عن الشهر الماضي': '+{0} vs last month', '−{0} عن الشهر الماضي': '−{0} vs last month',
   'المرفقات · {0}': 'Attachments · {0}', 'إضافة مرفقات أخرى': 'Add more attachments', 'إضافة مرفقات': 'Add attachments', 'أُرفقت {0} ملفات': '{0} files attached',
   'جارٍ رفع {0} ملف': 'Uploading {0} file(s)', 'المرفقات (اختياري)': 'Attachments (optional)', 'إزالة': 'Remove',
-  'صورة الخطاب أو ملف PDF حتى 10 ميجابايت لكل ملف، وتُرفع بعد التسجيل.': 'A scan of the letter or a PDF up to 10 MB each, uploaded right after registration.', 'جارٍ رفع المرفقات': 'Uploading attachments' };
+  'صورة الخطاب أو ملف PDF حتى 10 ميجابايت لكل ملف، وتُرفع بعد التسجيل.': 'A scan of the letter or a PDF up to 10 MB each, uploaded right after registration.', 'جارٍ رفع المرفقات': 'Uploading attachments',
+
+  // ───── لوحات الوحدات (0.9.7) ─────
+  'عن الشهر الماضي': 'vs last month', 'كالفترة السابقة': 'same as the previous period', 'متأخر': 'Late', 'حسب القسم': 'By department', 'حسب الحالة': 'By status',
+  // الحضور
+  'فريقك · {0} موظف': 'Your team · {0} employees', 'كل الموظفين · {0}': 'All employees · {0}', '{0} انصرفوا · {1} لم يسجّلوا بعد': '{0} left · {1} not clocked in yet', 'غائبون اليوم': 'Absent today',
+  '{0} في إجازة · {1} متأخرون': '{0} on leave · {1} late', 'نسبة الحضور · {0}': 'Attendance rate · {0}', '{0} يوم حضور · {1} يوم غياب': '{0} days present · {1} days absent', 'الالتزام بالوقت': 'Punctuality',
+  '{0} يوم تأخير · {1}': '{0} late days · {1}', 'الحضور اليومي · {0}': 'Daily attendance · {0}', 'لا أيام عمل بعد في هذا الشهر': 'No working days yet this month', 'الحضور اليومي': 'Daily attendance',
+  'عمل إضافي': 'Overtime', 'انصراف مبكر': 'Early leave', 'نسبة الحضور': 'Attendance rate', '{0} موظف · {1} تأخير': '{0} employees · {1} late', 'طلبات تصحيح بصمة بانتظار القرار': 'clock-in corrections awaiting a decision',
+  'الأكثر تأخراً': 'Most late', 'لا تأخير هذا الشهر': 'No lateness this month', 'الأكثر غياباً': 'Most absent', 'لا غياب هذا الشهر': 'No absence this month', 'الأكثر عملاً إضافياً': 'Most overtime', 'لا عمل إضافي هذا الشهر': 'No overtime this month',
+  // العملاء
+  'المحصّل هذا الشهر': 'Collected this month', 'هذه السنة {0}': 'this year {0}', '{0} دفعة خلال أسبوعين · {1} اشتراك مستحق ({2})': '{0} payments within two weeks · {1} subscriptions due ({2})',
+  '{0} تحتاج مراجعة · {1} اشتراك': '{0} need review · {1} subscriptions', '{0} اشتراك جارٍ · المتبقي على العقود {1}': '{0} active subscriptions · {1} remaining on contracts', '{0} محتمل · {1} جديد هذه السنة': '{0} leads · {1} new this year',
+  'التحصيل الشهري · آخر 12 شهراً': 'Monthly collection · last 12 months', 'المحصّل الإجمالي': 'Total collected', 'عروض هذه السنة': 'Proposals this year', 'لا قرارات بعد': 'No decisions yet', 'قبول {0}%': '{0}% accepted', 'أنشطة هذا الشهر': 'Activities this month',
+  'مسار المبيعات': 'Sales pipeline', 'لا عملاء محتملين': 'No leads', 'المشاريع حسب الحالة': 'Projects by status', 'أكثر العملاء تحصيلاً': 'Top clients by collection', 'لا تحصيل بعد': 'Nothing collected yet',
+  'نشاط هذا الشهر حسب النوع': 'This month\'s activity by type', 'لا أنشطة هذا الشهر': 'No activities this month', 'مشاريع تحتاج مراجعة · {0}': 'Projects needing review · {0}', 'لا مشاريع تحتاج مراجعة.': 'No projects need review.',
+  // العهد
+  'رصيدها': 'balance', 'بانتظار إجرائك': 'Awaiting your action', '{0} إقفال · {1} طلب عهدة · {2} سند · {3} توقيع': '{0} closures · {1} custody requests · {2} vouchers · {3} signatures', '{0} بند': '{0} entries',
+  'تنبيهات الصرف': 'Spending alerts', 'عهد تجاوزت {0}% من مبلغها أو تجاوزته': 'Custodies past {0}% of their amount or overspent', 'الصرف الشهري · آخر 12 شهراً': 'Monthly spend · last 12 months', 'مصروف هذه السنة': 'Spent this year',
+  'عهد أُقفلت هذه السنة': 'Custodies closed this year', 'متوسط {0} يوماً للإقفال': 'avg. {0} days to close', 'سندات هذا الشهر': 'Vouchers this month', 'بنود بلا مرفق': 'Entries without attachment', 'حسب التصنيف · هذه السنة': 'By category · this year',
+  'العهد النشطة · {0}': 'Active custodies · {0}', 'لا عهد نشطة.': 'No active custodies.', 'إقفالات بانتظار الاعتماد · {0}': 'Closures awaiting approval · {0}', 'لا طلبات إقفال.': 'No closure requests.', 'طلبات عهد · {0}': 'Custody requests · {0}',
+  'لا طلبات.': 'No requests.', 'حسب المشروع · هذه السنة': 'By project · this year', 'لا بنود على مشاريع': 'No entries on projects', 'هذه الشاشة للمحاسب.': 'This screen is for the accountant.',
+  // الموارد البشرية
+  'تعرض اللوحة فريقك فقط. الموارد البشرية ترى كل الموظفين.': 'The dashboard shows your team only. HR sees all employees.', '{0} تعيين خلال 90 يوماً · {1} هذه السنة': '{0} hired in the last 90 days · {1} this year', 'في إجازة اليوم': 'On leave today',
+  '{0} يوم إجازة معتمد هذه السنة': '{0} approved leave days this year', 'طلبات بانتظار القرار': 'Requests awaiting decision', '{0} إجازة ({1} لدى المدير) · {2} عمل إضافي': '{0} leave ({1} with the manager) · {2} overtime',
+  'مستندات تنتهي خلال 60 يوماً': 'Documents expiring within 60 days', '{0} منتهية فعلاً · {1} خلال 30 يوماً': '{0} already expired · {1} within 30 days', '{0} خلال 30 يوماً': '{0} within 30 days', 'التعيينات · آخر 12 شهراً': 'Hires · last 12 months', 'تعيينات': 'Hires',
+  'عمل إضافي هذا الشهر': 'Overtime this month', 'حالة الموظفين': 'Employee status', 'في إجازة اليوم · {0}': 'On leave today · {0}', 'الجميع على رأس العمل.': 'Everyone is at work.', 'إجازات خلال أسبوعين': 'Leave within two weeks', 'لا إجازات قادمة.': 'No upcoming leave.',
+  'طلبات إجازة معلقة': 'Pending leave requests', 'لا طلبات معلقة.': 'No pending requests.', 'لا مستندات قريبة الانتهاء.': 'No documents expiring soon.', 'أيام الإجازة هذه السنة حسب النوع': 'Leave days this year by type', 'لا إجازات معتمدة هذه السنة': 'No approved leave this year',
+  'الجنسيات والعقود': 'Nationalities and contracts', 'بلا نوع عقد': 'No contract type',
+  // المهام
+  'أُنشئت': 'Created', 'كل مهام الشركة (مدير المهام).': 'All company tasks (task manager).', 'مهامك ومهام فريقك وما تتابعه.': 'Your tasks, your team\'s tasks and what you watch.', 'مهامك وما تتابعه.': 'Your tasks and what you watch.',
+  'مهام مفتوحة': 'Open tasks', '{0} مسندة إليك · {1} بلا موعد': '{0} assigned to you · {1} without a date', 'و{0} موعدها اليوم': 'and {0} due today', 'لا مهام موعدها اليوم': 'No tasks due today',
+  '{0} عاجلة أو مرتفعة · {1} بانتظار مراجعة': '{0} urgent or high · {1} awaiting review', 'نسبة الإنجاز · 30 يوماً': 'Completion rate · 30 days', '{0} أُنجزت · {1} أُنشئت · في الموعد {2}': '{0} done · {1} created · on time {2}',
+  'المنشأة والمنجزة · آخر 8 أسابيع': 'Created and done · last 8 weeks', 'عاجلة ومرتفعة': 'Urgent and high', 'المفتوحة حسب الأولوية': 'Open by priority', 'متأخرة · {0}': 'Overdue · {0}', 'لا مهام متأخرة.': 'No overdue tasks.',
+  'أحمال الفريق': 'Team workload', 'لا مهام مفتوحة': 'No open tasks', 'المفتوحة حسب المشروع': 'Open by project', 'لا مهام مرتبطة بمشاريع': 'No tasks linked to projects' };
 
 /**
  * رسائل الخادم التي فيها متغيرات: {0} {1} مكان الأجزاء المتغيرة (وتُترجم هي أيضاً إن كانت تسميات).

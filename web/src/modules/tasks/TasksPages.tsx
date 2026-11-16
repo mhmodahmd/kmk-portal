@@ -15,6 +15,7 @@ export function TasksLayout() {
   const L = lk.data;
   const items = [
     { to: '/tasks', label: tr("مهامي"), end: true },
+    { to: '/tasks/overview', label: tr("نظرة عامة") },
     { to: '/tasks/board', label: tr("اللوحة") },
     { to: '/tasks/assigned', label: tr("أسندتها") },
     { to: '/tasks/watching', label: tr("أتابعها") },

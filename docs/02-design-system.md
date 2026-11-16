@@ -97,6 +97,8 @@
 
 **العرض:** Card · StatTile · Badge (لكل حالة) · Avatar · **DataTable** (فرز، بحث، تصفية، ترقيم، رأس ثابت، ويتحول إلى بطاقات على الجوال) · Timeline · EmptyState · Skeleton · ProgressBar · Tabs
 
+**اللوحات (`ui/Dashboard.tsx`، 0.9.7):** Kpi (مؤشر برقم كبير وأيقونة بلون الحالة ورابط) · Change (مقارنة بالفترة السابقة) · MiniStats · StackBar (شريط مكدّس مع قائمة نصية) · Bars (أعمدة أفقية بتسميات مباشرة) · TrendBars (أعمدة زمنية لسلسلة أو سلسلتين بتلميح لكل نقطة) · Legend · PanelTitle. القاعدة: الوارد والحضور والمنجز أخضر، الصادر والمحصّل والمنشأ أزرق، التأخير تحذيري، الغياب والتجاوز خطر؛ وكل سلسلة باسمها ورقمها فلا يُعتمد على اللون وحده.
+
 **التفاعل:** Dialog · Drawer (للجوال) · ConfirmDialog · Toast · Tooltip · DropdownMenu · CommandPalette (البحث الشامل بـ Ctrl+K)
 
 **الأعمال:** FileUploader (كاميرا + ضغط صور + معاينة) · SignaturePad · ApprovalBar (موافقة/رفض مع سبب) · StatusStepper (مراحل العهدة أو الطلب) · PrintLayout (A4 بهوية الشركة) · FilterBar · PageHeader

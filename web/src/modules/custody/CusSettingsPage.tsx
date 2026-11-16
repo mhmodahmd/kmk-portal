@@ -2,10 +2,9 @@ import { useEffect, useState } from 'react';
 import { tr } from '../../lib/i18n';
 import { useAction, useApi } from '../../lib/useApi';
 import { Badge, Card, CardHeader, ErrorBox, Loader } from '../../ui/Display';
-import { Button } from '../../ui/Button';
-import { Select, TextInput } from '../../ui/Field';
+import { Button, IconAction } from '../../ui/Button';
+import { Form, Select, TextInput } from '../../ui/Field';
 import { Dialog } from '../../ui/Overlay';
-import { Icon } from '../../ui/Icon';
 import { toInput } from './shared';
 
 interface Item { id: string; name: string; type: string; active: boolean }
@@ -32,15 +31,17 @@ export default function CusSettingsPage() {
 
   return (
     <div className="flex max-w-3xl flex-col gap-4">
-      <Card className="flex flex-col gap-3">
-        <h2 className="m-0 text-[16px] font-semibold">{tr("الإدارة والتنبيهات")}</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <TextInput label={tr("اسم المدير (يوقّع السندات والكشوف)")} value={f.managerName} onChange={set('managerName')} />
-          <TextInput label={tr("جوال المدير لواتساب")} ltr inputMode="tel" value={f.managerPhone} onChange={set('managerPhone')} hint={tr("بالمفتاح الدولي، مثل 9655xxxxxxx")} />
-          <TextInput label={tr("نسبة التنبيه عند الصرف (%)")} type="number" min={10} max={100} value={f.alertPercent} onChange={set('alertPercent')} />
-          <TextInput label={tr("المبلغ الافتراضي للعهدة (د.ك)")} inputMode="decimal" ltr value={f.defaultAmount} onChange={set('defaultAmount')} />
-        </div>
-        <Button variant="primary" className="self-start" loading={save.isPending} onClick={() => save.mutate(f)}>{tr("حفظ")}</Button>
+      <Card>
+        <Form className="flex flex-col gap-3" onSubmit={() => save.mutate(f)}>
+          <h2 className="m-0 text-[16px] font-semibold">{tr("الإدارة والتنبيهات")}</h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <TextInput label={tr("اسم المدير (يوقّع السندات والكشوف)")} required value={f.managerName} onChange={set('managerName')} />
+            <TextInput label={tr("جوال المدير لواتساب")} ltr inputMode="tel" value={f.managerPhone} onChange={set('managerPhone')} hint={tr("بالمفتاح الدولي، مثل 9655xxxxxxx")} />
+            <TextInput label={tr("نسبة التنبيه عند الصرف (%)")} type="number" required min={10} max={100} value={f.alertPercent} onChange={set('alertPercent')} />
+            <TextInput label={tr("المبلغ الافتراضي للعهدة (د.ك)")} required inputMode="decimal" ltr value={f.defaultAmount} onChange={set('defaultAmount')} />
+          </div>
+          <Button type="submit" variant="primary" className="self-start" loading={save.isPending}>{tr("حفظ")}</Button>
+        </Form>
       </Card>
 
       {(Object.keys(titles) as ListKey[]).map((k) => (
@@ -51,8 +52,8 @@ export default function CusSettingsPage() {
               <span className={it.active ? 'flex-1' : 'flex-1 text-muted line-through'}>{it.name}</span>
               {k === 'projects' && <Badge>{q.data.projectTypes[it.type] || it.type}</Badge>}
               {!it.active && <Badge>{tr("موقوف")}</Badge>}
-              <button type="button" aria-label={tr("أعلى")} disabled={i === 0} onClick={() => move.mutate({ list: k, id: it.id, dir: 'up' })} className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-chip disabled:opacity-30 cursor-pointer"><Icon name="chevronDown" size={16} className="rotate-180" /></button>
-              <button type="button" aria-label={tr("أسفل")} disabled={i === arr.length - 1} onClick={() => move.mutate({ list: k, id: it.id, dir: 'down' })} className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-chip disabled:opacity-30 cursor-pointer"><Icon name="chevronDown" size={16} /></button>
+              <IconAction icon="chevronDown" rotate label={tr("أعلى")} disabled={i === 0} onClick={() => move.mutate({ list: k, id: it.id, dir: 'up' })} />
+              <IconAction icon="chevronDown" label={tr("أسفل")} disabled={i === arr.length - 1} onClick={() => move.mutate({ list: k, id: it.id, dir: 'down' })} />
               <Button size="sm" variant="ghost" icon="edit" onClick={() => setEditing({ list: k, item: it })}>{tr("تعديل")}</Button>
             </div>
           ))}
@@ -70,10 +71,10 @@ function ItemDialog({ editing, types, onClose }: { editing: { list: ListKey; ite
   const save = useAction('cus.list.save', { invalidate: ['cus.settings.get', 'cus.lookups'], success: tr("حُفظ"), silentError: true, onSuccess: onClose });
   return (
     <Dialog open={!!editing} onClose={onClose} title={editing?.item ? tr("تعديل") : tr("إضافة")}
-      footer={<><Button variant="primary" className="flex-1" loading={save.isPending} onClick={() => { setError(''); save.mutate({ list: editing!.list, id: editing!.item?.id, name: f.name, type: f.type, active: f.active === 'true' }, { onError: (e) => setError(e.message) }); }}>{tr("حفظ")}</Button>
-        <Button variant="ghost" onClick={onClose}>{tr("إلغاء")}</Button></>}>
+      onSubmit={() => { setError(''); save.mutate({ list: editing!.list, id: editing!.item?.id, name: f.name, type: f.type, active: f.active === 'true' }, { onError: (e) => setError(e.message) }); }} footer={<><Button type="submit" variant="primary" className="flex-1" loading={save.isPending}>{tr("حفظ")}</Button>
+        <Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button></>}>
       <div className="flex flex-col gap-3">
-        <TextInput label={tr("الاسم")} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} hint={editing?.item ? tr("إعادة التسمية تُطبَّق على البنود المسجلة") : undefined} />
+        <TextInput label={tr("الاسم")} required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} hint={editing?.item ? tr("إعادة التسمية تُطبَّق على البنود المسجلة") : undefined} />
         {editing?.list === 'projects' && <Select label={tr("النوع")} value={f.type} onChange={(e) => setF({ ...f, type: e.target.value })} options={Object.entries(types).map(([value, label]) => ({ value, label }))} />}
         <Select label={tr("الحالة")} value={f.active} onChange={(e) => setF({ ...f, active: e.target.value })} options={[{ value: 'true', label: tr("نشط") }, { value: 'false', label: tr("موقوف (لا يظهر في الاختيارات)") }]} />
         {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}

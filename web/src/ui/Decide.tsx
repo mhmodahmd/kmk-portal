@@ -28,9 +28,9 @@ export function DecideDialog({ open, onClose, title, children, onDecide, approve
   };
 
   return (
-    <Dialog open={open} onClose={onClose} title={title}
+    <Dialog open={open} onClose={onClose} title={title} onSubmit={() => go(true)}
       footer={<>
-        <Button variant="primary" icon="check" className="flex-1" loading={busy === 'approve'} disabled={!!busy} onClick={() => go(true)}>{approveLabel}</Button>
+        <Button type="submit" variant="primary" icon="check" className="flex-1" loading={busy === 'approve'} disabled={!!busy}>{approveLabel}</Button>
         <Button variant="danger-outline" icon="x" className="flex-1" loading={busy === 'reject'} disabled={!!busy} onClick={() => go(false)}>{rejectLabel}</Button>
       </>}>
       <div className="flex flex-col gap-4">
@@ -59,14 +59,14 @@ export function ReasonDialog({ open, onClose, title, label, confirmLabel, danger
     finally { setBusy(false); }
   };
   return (
-    <Dialog open={open} onClose={onClose} title={title}
+    <Dialog open={open} onClose={onClose} title={title} onSubmit={go}
       footer={<>
-        <Button variant={danger ? 'danger' : 'primary'} className="flex-1" loading={busy} onClick={go}>{confirmLabel}</Button>
+        <Button type="submit" variant={danger ? 'danger' : 'primary'} className="flex-1" loading={busy}>{confirmLabel}</Button>
         <Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button>
       </>}>
       <div className="flex flex-col gap-4">
         {children}
-        <Textarea label={label} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} />
+        <Textarea label={label} required value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} />
         {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
       </div>
     </Dialog>

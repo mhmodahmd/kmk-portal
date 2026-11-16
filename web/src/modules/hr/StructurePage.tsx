@@ -4,10 +4,9 @@ import type { Directory } from '../../lib/types';
 import { dmy } from '../../lib/format';
 import { useAction, useApi } from '../../lib/useApi';
 import { Badge, Card, CardHeader, ErrorBox, Loader } from '../../ui/Display';
-import { Button } from '../../ui/Button';
+import { Button, IconAction } from '../../ui/Button';
 import { Checkbox, Select, TextInput } from '../../ui/Field';
 import { Dialog } from '../../ui/Overlay';
-import { Icon } from '../../ui/Icon';
 import { cx } from '../../ui/cx';
 
 type Kind = 'dept' | 'branch' | 'shift' | 'holiday' | 'leaveType';
@@ -54,7 +53,7 @@ export default function StructurePage() {
       <Block title={tr("العطل الرسمية")} hint={tr("لا يُحتسب فيها غياب ولا تُخصم من الإجازات")} onAdd={() => open('holiday', {})}>
         {d.holidays.map((h) => (
           <Row key={h.id} title={h.name} sub={<span className="num">{dmy(h.date)}{h.dateTo ? ' ← ' + dmy(h.dateTo) : ''}</span>} onEdit={() => open('holiday', { ...h })}
-            extra={<button type="button" aria-label={tr("حذف")} onClick={() => del.mutate({ id: h.id })} className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-bad-bg hover:text-bad cursor-pointer"><Icon name="trash" size={16} /></button>} />
+            extra={<IconAction icon="trash" danger label={tr("حذف")} onClick={() => del.mutate({ id: h.id })} />} />
         ))}
       </Block>
       <EditDialog edit={edit} dir={d} onClose={() => setEdit(null)} />
@@ -79,7 +78,7 @@ function Row({ title, sub, inactive, onEdit, extra }: { title: string; sub: Reac
         <span className="font-semibold">{title} {inactive && <Badge>{tr("موقوف")}</Badge>}</span>
         <span className="text-[13px] text-muted">{sub}</span>
       </span>
-      <button type="button" aria-label={tr("تعديل ") + title} onClick={onEdit} className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-chip hover:text-fg cursor-pointer"><Icon name="edit" size={16} /></button>
+      <IconAction icon="edit" label={tr("تعديل ") + title} onClick={onEdit} />
       {extra}
     </div>
   );
@@ -102,9 +101,9 @@ function EditDialog({ edit, dir, onClose }: { edit: { kind: Kind; draft: Draft }
   };
   return (
     <Dialog open={!!edit} onClose={onClose} title={(f.id ? tr("تعديل ") : tr("إضافة ")) + TITLES[kind]}
-      footer={<><Button variant="primary" className="flex-1" loading={save.isPending} onClick={() => { setError(''); save.mutate(f, { onError: (e) => setError(e.message) }); }}>{tr("حفظ")}</Button><Button variant="ghost" onClick={onClose}>{tr("إلغاء")}</Button></>}>
+      onSubmit={() => { setError(''); save.mutate(f, { onError: (e) => setError(e.message) }); }} footer={<><Button type="submit" variant="primary" className="flex-1" loading={save.isPending}>{tr("حفظ")}</Button><Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button></>}>
       <div className="flex flex-col gap-3">
-        <TextInput label={tr("الاسم")} value={s('name')} onChange={set('name')} />
+        <TextInput label={tr("الاسم")} required value={s('name')} onChange={set('name')} />
         {kind === 'dept' && (
           <Select label={tr("مدير القسم")} value={s('managerId')} onChange={set('managerId')} hint={tr("يصبح المدير المباشر لموظفي القسم ما لم يُحدَّد لهم مدير آخر")}
             options={[{ value: '', label: tr("بلا مدير") }, ...dir.employees.filter((e) => e.status !== 'terminated').map((e) => ({ value: e.id, label: e.fullName }))]} />
@@ -112,9 +111,9 @@ function EditDialog({ edit, dir, onClose }: { edit: { kind: Kind; draft: Draft }
         {kind === 'branch' && <TextInput label={tr("العنوان")} value={s('address')} onChange={set('address')} />}
         {kind === 'shift' && <>
           <div className="grid grid-cols-3 gap-3">
-            <TextInput label={tr("البداية")} type="time" value={s('start')} onChange={set('start')} />
-            <TextInput label={tr("النهاية")} type="time" value={s('end')} onChange={set('end')} />
-            <TextInput label={tr("السماح (د)")} type="number" min={0} max={120} value={s('graceMin')} onChange={set('graceMin')} />
+            <TextInput label={tr("البداية")} type="time" required value={s('start')} onChange={set('start')} />
+            <TextInput label={tr("النهاية")} type="time" required value={s('end')} onChange={set('end')} />
+            <TextInput label={tr("السماح (د)")} type="number" required min={0} max={120} value={s('graceMin')} onChange={set('graceMin')} />
           </div>
           <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
             <legend className="mb-1.5 text-[13px] font-medium">{tr("أيام العمل")}</legend>
@@ -128,12 +127,12 @@ function EditDialog({ edit, dir, onClose }: { edit: { kind: Kind; draft: Draft }
         </>}
         {kind === 'holiday' && (
           <div className="grid grid-cols-2 gap-3">
-            <TextInput label={tr("من")} type="date" value={s('date')} onChange={set('date')} />
+            <TextInput label={tr("من")} type="date" required value={s('date')} onChange={set('date')} />
             <TextInput label={tr("إلى (اختياري)")} type="date" min={s('date')} value={s('dateTo')} onChange={set('dateTo')} />
           </div>
         )}
         {kind === 'leaveType' && <>
-          <TextInput label={tr("الأيام السنوية")} type="number" min={0} max={365} value={s('annualDays')} onChange={set('annualDays')} hint={tr("0 = بلا سقف")} />
+          <TextInput label={tr("الأيام السنوية")} type="number" required min={0} max={365} value={s('annualDays')} onChange={set('annualDays')} hint={tr("0 = بلا سقف")} />
           <Checkbox label={tr("إجازة مدفوعة")} checked={f.paid !== false} onChange={(v) => setF((x) => ({ ...x, paid: v }))} />
         </>}
         {kind !== 'holiday' && <Checkbox label={tr("نشط")} description={tr("الموقوف لا يظهر في الاختيارات الجديدة")} checked={f.active !== false} onChange={(v) => setF((x) => ({ ...x, active: v }))} />}

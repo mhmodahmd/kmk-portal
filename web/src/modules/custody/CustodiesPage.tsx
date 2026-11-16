@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { tr } from '../../lib/i18n';
 import { useApi } from '../../lib/useApi';
 import { Card, EmptyState, ErrorBox, Loader, StatTile } from '../../ui/Display';
 import { Button } from '../../ui/Button';
-import { DataTable, SearchBox, Segmented } from '../../ui/Controls';
+import { DataTable, Pager, SearchBox, Segmented, useTable } from '../../ui/Controls';
 import { Money, OpenCustodyDialog, StatusBadge, dateLabel, kwd } from './shared';
 import type { CusHome, CustodyView } from './types';
+
+const custodySortValue = (c: CustodyView, k: string) => (k === 'total' ? c.amount + c.carriedBalance : (c as unknown as Record<string, unknown>)[k]);
 
 /** المحاسب: كل العهد وما ينتظر الإجراء */
 export default function CustodiesPage() {
@@ -16,8 +18,9 @@ export default function CustodiesPage() {
   const nav = useNavigate();
   const list = useApi<CustodyView[]>('cus.list', {});
   const home = useApi<CusHome>('cus.home');
+  const rows = useMemo(() => (list.data || []).filter((c) => (!status || c.status === status) && (!q || (c.id + ' ' + c.periodLabel + ' ' + c.employeeName).includes(q.trim()))), [list.data, status, q]);
+  const t = useTable(rows, { sort: { key: 'openDate', dir: 'desc' }, get: custodySortValue });
   if (list.isError) return <ErrorBox message={(list.error as Error).message} onRetry={() => list.refetch()} />;
-  const rows = (list.data || []).filter((c) => (!status || c.status === status) && (!q || (c.id + ' ' + c.periodLabel + ' ' + c.employeeName).includes(q.trim())));
   const s = home.data?.staff;
   const count = (st: string) => (list.data || []).filter((c) => c.status === st).length;
   return (
@@ -45,8 +48,9 @@ export default function CustodiesPage() {
       </Card>
       <Card padded={false}>
         {list.isPending ? <Loader /> : rows.length === 0 ? <EmptyState title={tr("لا عهد")} /> : (
-          <DataTable head={[tr("العهدة"), tr("الموظف"), tr("تاريخ الفتح"), tr("المبلغ"), tr("المصروف"), tr("المتبقي"), tr("الحالة")]} minWidth={860}>
-            {rows.map((c) => (
+          <DataTable sticky sort={t.sort} onSort={t.onSort} pager={<Pager {...t.pager} />} minWidth={860}
+            head={[{ key: 'periodLabel', label: tr("العهدة") }, { key: 'employeeName', label: tr("الموظف") }, { key: 'openDate', label: tr("تاريخ الفتح") }, { key: 'total', label: tr("المبلغ") }, { key: 'totalSpent', label: tr("المصروف") }, { key: 'remaining', label: tr("المتبقي") }, { key: 'statusLabel', label: tr("الحالة") }]}>
+            {t.rows.map((c) => (
               <tr key={c.id} className="cursor-pointer hover:bg-chip/40" onClick={() => nav('/custody/' + c.id)}>
                 <td><Link to={'/custody/' + c.id} className="font-semibold text-fg no-underline">{c.periodLabel}</Link><div className="text-[12px] text-muted num">{c.id}</div></td>
                 <td>{c.employeeName}</td>

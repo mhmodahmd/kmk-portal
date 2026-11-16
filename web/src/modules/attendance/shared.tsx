@@ -113,17 +113,17 @@ export function CorrectionDialog({ open, onClose, date: initialDate }: { open: b
   const needIn = f.kind !== 'missingOut';
   return (
     <Dialog open={open} onClose={onClose} title={tr("طلب تصحيح بصمة")}
-      footer={<><Button variant="primary" className="flex-1" loading={req.isPending} onClick={submit}>{tr("إرسال الطلب")}</Button><Button variant="ghost" onClick={onClose}>{tr("إلغاء")}</Button></>}>
+      onSubmit={submit} footer={<><Button type="submit" variant="primary" className="flex-1" loading={req.isPending}>{tr("إرسال الطلب")}</Button><Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button></>}>
       <div className="flex flex-col gap-3">
         <p className="m-0 text-[13px] leading-relaxed text-muted">{tr("يصل الطلب إلى مديرك المباشر أو الموارد البشرية، ويُعدَّل سجلك تلقائياً بعد الموافقة.")}</p>
         <Select label={tr("ما المشكلة؟")} value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })}
           options={[{ value: 'missingOut', label: tr("نسيت تسجيل الانصراف") }, { value: 'missingIn', label: tr("نسيت تسجيل الحضور") }, { value: 'wrongTime', label: tr("الوقت المسجّل خطأ") }]} />
-        <TextInput label={tr("اليوم")} type="date" value={f.date} max={kwDate()} onChange={(e) => setF({ ...f, date: e.target.value })} />
+        <TextInput label={tr("اليوم")} type="date" required value={f.date} max={kwDate()} onChange={(e) => setF({ ...f, date: e.target.value })} />
         <div className="grid grid-cols-2 gap-3">
-          {needIn && <TextInput label={tr("وقت الحضور الصحيح")} type="time" value={f.inTime} onChange={(e) => setF({ ...f, inTime: e.target.value })} hint={f.kind === 'wrongTime' ? tr("اتركه فارغاً إن كان صحيحاً") : undefined} />}
-          {<TextInput label={f.kind === 'missingIn' ? tr("وقت الانصراف (إن وُجد)") : tr("وقت الانصراف الصحيح")} type="time" value={f.outTime} onChange={(e) => setF({ ...f, outTime: e.target.value })} />}
+          {needIn && <TextInput label={tr("وقت الحضور الصحيح")} type="time" required={f.kind === 'missingIn'} value={f.inTime} onChange={(e) => setF({ ...f, inTime: e.target.value })} hint={f.kind === 'wrongTime' ? tr("اتركه فارغاً إن كان صحيحاً") : undefined} />}
+          {<TextInput label={f.kind === 'missingIn' ? tr("وقت الانصراف (إن وُجد)") : tr("وقت الانصراف الصحيح")} type="time" required={f.kind === 'missingOut'} value={f.outTime} onChange={(e) => setF({ ...f, outTime: e.target.value })} />}
         </div>
-        <Textarea label={tr("السبب")} value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} maxLength={300} placeholder={tr("مثال: نفدت بطارية الجوال قبل الانصراف")} />
+        <Textarea label={tr("السبب")} required value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} maxLength={300} placeholder={tr("مثال: نفدت بطارية الجوال قبل الانصراف")} />
         {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
       </div>
     </Dialog>

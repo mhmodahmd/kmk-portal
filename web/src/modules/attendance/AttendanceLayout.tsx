@@ -7,7 +7,7 @@ import { useAttendanceScope } from './shared';
 export default function AttendanceLayout() {
   const { canSeeTeam, isHr } = useAttendanceScope();
   const items = [
-    { to: '/attendance', label: tr("البصمة"), end: true },
+    { to: '/attendance', label: tr("تسجيل الحضور"), end: true },
     { to: '/attendance/me', label: tr("سجلي") },
     ...(canSeeTeam ? [
       { to: '/attendance/today', label: tr("حضور اليوم") },

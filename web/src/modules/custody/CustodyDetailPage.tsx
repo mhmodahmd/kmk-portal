@@ -197,7 +197,7 @@ function NoteDialog({ item, onClose }: { item: ExpenseView | null; onClose: () =
   const act = useAction('cus.expense.note', { invalidate: ['cus.get'], success: tr("حُفظت الملاحظة"), onSuccess: onClose });
   return (
     <Dialog open={!!item} onClose={onClose} title={tr("ملاحظة على البند")}
-      footer={<><Button variant="primary" className="flex-1" loading={act.isPending} onClick={() => act.mutate({ id: item!.id, note })}>{tr("حفظ")}</Button><Button variant="ghost" onClick={onClose}>{tr("إلغاء")}</Button></>}>
+      onSubmit={() => act.mutate({ id: item!.id, note })} footer={<><Button type="submit" variant="primary" className="flex-1" loading={act.isPending}>{tr("حفظ")}</Button><Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button></>}>
       <div className="flex flex-col gap-3" key={item?.id}>
         <p className="m-0 text-muted">{item?.description}</p>
         <Textarea label={tr("الملاحظة (فارغة لمسحها)")} defaultValue={item?.reviewNote} onChange={(e) => setNote(e.target.value)} maxLength={300} />
@@ -213,8 +213,8 @@ function CloseDialog({ open, onClose, id, overspent, remaining }: { open: boolea
   const act = useAction('cus.requestClose', { invalidate: ['cus.get', 'cus.list', 'cus.home'], success: tr("أُرسل طلب الإقفال إلى المحاسب"), silentError: true, onSuccess: onClose });
   return (
     <Dialog open={open} onClose={onClose} title={tr("طلب إقفال العهدة")}
-      footer={<><Button variant="primary" className="flex-1" loading={act.isPending} onClick={() => { setError(''); act.mutate({ id, closeNote: note, acknowledgeOverspend: ack }, { onError: (e) => setError(e instanceof ApiError ? e.message : tr("تعذّر الإرسال.")) }); }}>{tr("إرسال للمحاسب")}</Button>
-        <Button variant="ghost" onClick={onClose}>{tr("إلغاء")}</Button></>}>
+      onSubmit={() => { setError(''); act.mutate({ id, closeNote: note, acknowledgeOverspend: ack }, { onError: (e) => setError(e instanceof ApiError ? e.message : tr("تعذّر الإرسال.")) }); }} footer={<><Button type="submit" variant="primary" className="flex-1" loading={act.isPending}>{tr("إرسال للمحاسب")}</Button>
+        <Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button></>}>
       <div className="flex flex-col gap-3">
         <p className="m-0">{tr("بعد الإرسال تُقفل العهدة للتعديل حتى يعتمدها المحاسب أو يعيدها. المتبقي:")} <Money fils={remaining} strong /></p>
         {overspent && <Checkbox label={tr("أؤكد أن المصروفات تجاوزت المبلغ المتاح")} checked={ack} onChange={setAck} />}
@@ -233,8 +233,8 @@ function ApproveDialog({ open, onClose, id, remaining }: { open: boolean; onClos
   const voucherText = remaining > 0 ? tr("سند قبض بالمتبقي {0} من الموظف", kwd(remaining)) : remaining < 0 ? tr("سند صرف بالتجاوز {0} للموظف", kwd(-remaining)) : tr("لا سند: الرصيد صفر");
   return (
     <Dialog open={open} onClose={onClose} title={tr("اعتماد إقفال العهدة")}
-      footer={<><Button variant="primary" className="flex-1" loading={act.isPending} onClick={() => { setError(''); act.mutate({ id, ...f }, { onError: (e) => setError(e.message) }); }}>{tr("اعتماد")}</Button>
-        <Button variant="ghost" onClick={onClose}>{tr("إلغاء")}</Button></>}>
+      onSubmit={() => { setError(''); act.mutate({ id, ...f }, { onError: (e) => setError(e.message) }); }} footer={<><Button type="submit" variant="primary" className="flex-1" loading={act.isPending}>{tr("اعتماد")}</Button>
+        <Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button></>}>
       <div className="flex flex-col gap-3">
         <p className="m-0">{tr("المتبقي في العهدة:")} <Money fils={remaining} strong /></p>
         <Select label={tr("طريقة التسوية")} value={f.settlementMethod} onChange={(e) => setF({ ...f, settlementMethod: e.target.value })}
@@ -259,14 +259,15 @@ function DeleteCustodyDialog({ open, onClose, id, onConfirm }: { open: boolean; 
   const [busy, setBusy] = useState(false);
   return (
     <Dialog open={open} onClose={onClose} title={tr("حذف العهدة نهائياً")}
-      footer={<><Button variant="danger" className="flex-1" loading={busy} onClick={async () => {
+      onSubmit={async () => {
         setBusy(true); setError('');
         try { await onConfirm({ id, confirmId, reason }); onClose(); } catch (e) { setError(e instanceof ApiError ? e.message : tr("تعذّر الحذف.")); } finally { setBusy(false); }
-      }}>{tr("حذف نهائي")}</Button><Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button></>}>
+      }}
+      footer={<><Button type="submit" variant="danger" className="flex-1" loading={busy}>{tr("حذف نهائي")}</Button><Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button></>}>
       <div className="flex flex-col gap-3">
         <p className="m-0 text-bad">{tr("تُحذف العهدة مع بنودها وسنداتها، ويبقى ملخصها في سجل العمليات.")}</p>
-        <TextInput label={tr("اكتب رقم العهدة للتأكيد ({0})", id)} ltr value={confirmId} onChange={(e) => setConfirmId(e.target.value)} />
-        <Textarea label={tr("سبب الحذف")} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} />
+        <TextInput label={tr("اكتب رقم العهدة للتأكيد ({0})", id)} required ltr value={confirmId} onChange={(e) => setConfirmId(e.target.value)} />
+        <Textarea label={tr("سبب الحذف")} required value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} />
         {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
       </div>
     </Dialog>

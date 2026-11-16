@@ -5,7 +5,7 @@ import { dmy, relativeTime } from '../../lib/format';
 import { useAction, useApi } from '../../lib/useApi';
 import { api } from '../../lib/api';
 import { useQueryClient } from '@tanstack/react-query';
-import { Avatar, Badge, Card, CardHeader, EmptyState, ErrorBox, Skeleton } from '../../ui/Display';
+import { Avatar, Badge, Card, CardHeader, EmptyState, ErrorBox, ListRow, Skeleton } from '../../ui/Display';
 import { Segmented, Facts } from '../../ui/Controls';
 import { Button } from '../../ui/Button';
 import { DecideDialog } from '../../ui/Decide';
@@ -30,15 +30,12 @@ export default function CorrectionsPage() {
         {mine.isPending ? <div className="p-5"><Skeleton className="h-10" /></div> : !mine.data?.length ? (
           <EmptyState title={tr("لا طلبات تصحيح")} body={tr("إذا نسيت البصمة أو سُجّل وقت خطأ، اطلب تصحيحه هنا خلال 31 يوماً.")} />
         ) : mine.data.map((c) => (
-          <div key={c.id} className="flex flex-wrap items-center gap-3 border-t border-line px-5 py-3.5">
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className="font-semibold">{c.kindLabel} · <span className="font-normal text-muted">{c.dayName} {dmy(c.date)}</span></span>
-              <span className="text-[13px] text-muted">{times(c)}{c.reason ? ' · ' + c.reason : ''}</span>
-              {c.decisionNote && <span className="text-[13px]">{tr("ملاحظة")} {c.decidedBy}: {c.decisionNote}</span>}
-            </span>
-            <Badge tone={CORR_TONE[c.status]}>{c.statusLabel}</Badge>
-            {c.status === 'pending' && <Button size="sm" variant="ghost" loading={cancel.isPending} onClick={() => cancel.mutate({ id: c.id })}>{tr("إلغاء")}</Button>}
-          </div>
+          <ListRow key={c.id}
+            title={<>{c.kindLabel} · <span className="font-normal text-muted">{c.dayName} {dmy(c.date)}</span></>}
+            sub={<>{times(c)}{c.reason ? ' · ' + c.reason : ''}</>}
+            note={c.decisionNote ? <>{tr("ملاحظة")} {c.decidedBy}: {c.decisionNote}</> : undefined}
+            badge={<Badge tone={CORR_TONE[c.status]}>{c.statusLabel}</Badge>}
+            actions={c.status === 'pending' && <Button size="sm" variant="ghost" loading={cancel.isPending} onClick={() => cancel.mutate({ id: c.id })}>{tr("إلغاء الطلب")}</Button>} />
         ))}
       </Card>
       <CorrectionDialog open={creating} onClose={() => setCreating(false)} />
@@ -57,15 +54,11 @@ function TeamCorrections() {
       {q.isPending ? <div className="p-5"><Skeleton className="h-10" /></div> : !q.data?.length ? (
         <EmptyState title={status === 'pending' ? tr("لا طلبات بانتظار قرارك") : tr("لا طلبات")} />
       ) : q.data.map((c) => (
-        <div key={c.id} className="flex flex-wrap items-center gap-3 border-t border-line px-5 py-3.5">
-          <Avatar name={c.name} size={34} />
-          <span className="flex min-w-0 flex-1 flex-col">
-            <span className="font-semibold">{c.name} · <span className="font-normal">{c.kindLabel}</span></span>
-            <span className="text-[13px] text-muted">{c.dayName} {dmy(c.date)} · {times(c)} · {relativeTime(c.createdAt)}</span>
-          </span>
-          <Badge tone={CORR_TONE[c.status]}>{c.statusLabel}</Badge>
-          {c.status === 'pending' && <Button size="sm" variant="primary" onClick={() => setSel(c)}>{tr("البت")}</Button>}
-        </div>
+        <ListRow key={c.id} leading={<Avatar name={c.name} size={34} />}
+          title={<>{c.name} · <span className="font-normal">{c.kindLabel}</span></>}
+          sub={<>{c.dayName} {dmy(c.date)} · {times(c)} · {relativeTime(c.createdAt)}</>}
+          badge={<Badge tone={CORR_TONE[c.status]}>{c.statusLabel}</Badge>}
+          actions={c.status === 'pending' && <Button size="sm" variant="primary" onClick={() => setSel(c)}>{tr("اعتماد أو رفض")}</Button>} />
       ))}
       <DecideDialog open={!!sel} onClose={() => setSel(null)} title={tr("طلب تصحيح بصمة")}
         onDecide={async (approve, note) => {

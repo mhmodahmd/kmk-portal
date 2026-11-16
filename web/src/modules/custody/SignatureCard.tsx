@@ -23,7 +23,7 @@ export default function SignatureCard() {
           <SignaturePad onChange={setSig} height={150} />
           <div className="flex gap-2">
             <Button variant="primary" className="flex-1" disabled={!sig} loading={save.isPending} onClick={() => save.mutate({ data: sig })}>{tr("حفظ التوقيع")}</Button>
-            <Button variant="ghost" onClick={() => setDrawing(false)}>{tr("إلغاء")}</Button>
+            <Button variant="ghost" onClick={() => setDrawing(false)}>{tr("تراجع")}</Button>
           </div>
         </>
       ) : (

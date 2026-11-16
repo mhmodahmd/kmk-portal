@@ -5,7 +5,7 @@ import { useAction, useApi } from '../../lib/useApi';
 import { dmy, formatDateTime, kwDate, monthLabel } from '../../lib/format';
 import { Badge, Card, CardHeader, EmptyState, ErrorBox, Loader, PageHeader, StatTile } from '../../ui/Display';
 import { Button } from '../../ui/Button';
-import { DataTable, SearchBox, Segmented, TabNav } from '../../ui/Controls';
+import { DataTable, Pager, SearchBox, Segmented, TabNav, useTable } from '../../ui/Controls';
 import { Select, TextInput } from '../../ui/Field';
 import { ReasonDialog } from '../../ui/Decide';
 import { Dialog } from '../../ui/Overlay';
@@ -84,6 +84,11 @@ function PaymentLine({ d }: { d: PaymentView }) {
   );
 }
 
+/** قيم الفرز للأعمدة المركّبة في جداول العملاء */
+const clientSortValue = (c: ClientView, k: string) => (k === 'category' ? (c.category === 'lead' ? c.stageName : c.categoryLabel) : (c as unknown as Record<string, unknown>)[k]);
+const projectSortValue = (p: ProjectView, k: string) => (k === 'billing' ? (p.billing === 'fixed' ? p.contractValue : p.cycleAmount || 0) : k === 'collect' ? p.percent : k === 'status' ? p.statusLabel : (p as unknown as Record<string, unknown>)[k]);
+const paymentSortValue = (d: PaymentView, k: string) => (k === 'status' ? (d.overdue ? 'z' : d.statusLabel) : (d as unknown as Record<string, unknown>)[k]);
+
 export function ClientsPage() {
   const lk = useCrmLookups();
   const nav = useNavigate();
@@ -93,6 +98,7 @@ export function ClientsPage() {
   const [creating, setCreating] = useState(false);
   const q = useApi<ClientView[]>('crm.clients', { category: category || undefined, status: status || undefined });
   const rows = useMemo(() => (q.data || []).filter((c) => !search.trim() || (c.name + ' ' + c.phone + ' ' + c.email).toLowerCase().includes(search.trim().toLowerCase())), [q.data, search]);
+  const t = useTable(rows, { sort: { key: 'name', dir: 'asc' }, get: clientSortValue });
   const L = lk.data;
   return (
     <div className="flex flex-col gap-3">
@@ -104,8 +110,9 @@ export function ClientsPage() {
       </div>
       <Card padded={false}>
         {q.isError ? <ErrorBox message={(q.error as Error).message} /> : !q.data ? <Loader /> : rows.length === 0 ? <EmptyState title={tr("لا عملاء")} /> : (
-          <DataTable head={[tr("العميل"), tr("الفئة"), tr("المسؤول"), tr("المشاريع"), tr("المحصّل"), tr("المتبقي")]} minWidth={760}>
-            {rows.map((c) => (
+          <DataTable sticky sort={t.sort} onSort={t.onSort} pager={<Pager {...t.pager} />} minWidth={760}
+            head={[{ key: 'name', label: tr("العميل") }, { key: 'category', label: tr("الفئة") }, { key: 'assignedName', label: tr("المسؤول") }, { key: 'projectsCount', label: tr("المشاريع") }, { key: 'paid', label: tr("المحصّل") }, { key: 'remaining', label: tr("المتبقي") }]}>
+            {t.rows.map((c) => (
               <tr key={c.id} className="cursor-pointer border-t border-line hover:bg-chip/40" onClick={() => nav('/crm/clients/' + c.id)}>
                 <td className="px-4 py-3"><span className="flex flex-col"><Link to={'/crm/clients/' + c.id} className="font-semibold text-fg no-underline">{c.name}</Link>
                   <span className="text-[12px] text-muted">{c.typeLabel}{c.status !== 'active' ? ' · ' + c.statusLabel : ''}{c.phone ? ' · ' : ''}<span className="ltr inline-block">{c.phone}</span></span></span></td>
@@ -176,7 +183,8 @@ export function ProjectsPage() {
   const [creating, setCreating] = useState(false);
   const q = useApi<ProjectView[]>('crm.projects', status === 'review' ? { review: true } : status ? { status } : {});
   const clients = useApi<ClientView[]>('crm.clients', {}, { enabled: creating });
-  const rows = (q.data || []).filter((p) => !search.trim() || (p.name + ' ' + p.clientName).includes(search.trim()));
+  const rows = useMemo(() => (q.data || []).filter((p) => !search.trim() || (p.name + ' ' + p.clientName).includes(search.trim())), [q.data, search]);
+  const t = useTable(rows, { sort: { key: 'name', dir: 'asc' }, get: projectSortValue });
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-end gap-3">
@@ -188,8 +196,9 @@ export function ProjectsPage() {
       {status === 'review' && <p className="m-0 rounded-lg bg-warn-bg px-3 py-2.5 text-warn">{tr("مشاريع نُقلت من النظام السابق بلا قيمة عقد أو بمحصّل أكبر من العقد. افتح كل مشروع واختر «عقد ثابت» بقيمته أو «اشتراك أو مفتوح»، ثم علّمه «راجعته».")}</p>}
       <Card padded={false}>
         {q.isError ? <ErrorBox message={(q.error as Error).message} /> : !q.data ? <Loader /> : rows.length === 0 ? <EmptyState title={tr("لا مشاريع")} /> : (
-          <DataTable head={[tr("المشروع"), tr("العميل"), tr("الفوترة"), tr("التحصيل"), tr("الحالة")]} minWidth={760}>
-            {rows.map((p) => (
+          <DataTable sticky sort={t.sort} onSort={t.onSort} pager={<Pager {...t.pager} />} minWidth={760}
+            head={[{ key: 'name', label: tr("المشروع") }, { key: 'clientName', label: tr("العميل") }, { key: 'billing', label: tr("الفوترة") }, { key: 'collect', label: tr("التحصيل") }, { key: 'status', label: tr("الحالة") }]}>
+            {t.rows.map((p) => (
               <tr key={p.id} className="cursor-pointer border-t border-line hover:bg-chip/40" onClick={() => nav('/crm/projects/' + p.id)}>
                 <td className="px-4 py-3"><span className="flex flex-col"><Link to={'/crm/projects/' + p.id} className="font-semibold text-fg no-underline">{p.name}</Link>
                   <span className="text-[12px] text-muted">{[p.type, p.startDate && dmy(p.startDate)].filter(Boolean).join(' · ')}</span></span></td>
@@ -214,6 +223,7 @@ export function PaymentsPage() {
   const [editing, setEditing] = useState<PaymentView | null>(null);
   const q = useApi<PaymentView[]>('crm.payments', status ? { status } : {});
   const total = (q.data || []).reduce((a, x) => a + x.amount, 0);
+  const t = useTable(q.data || EMPTY_PAYMENTS, { sort: { key: 'date', dir: status === 'paid' ? 'desc' : 'asc' }, get: paymentSortValue });
   const canPay = !!lk.data?.isAccountant;
   return (
     <div className="flex flex-col gap-3">
@@ -224,8 +234,9 @@ export function PaymentsPage() {
       </div>
       <Card padded={false}>
         {q.isError ? <ErrorBox message={(q.error as Error).message} /> : !q.data ? <Loader /> : q.data.length === 0 ? <EmptyState title={tr("لا دفعات")} /> : (
-          <DataTable head={[tr("التاريخ"), tr("المشروع"), tr("العميل"), tr("المبلغ"), tr("الطريقة"), tr("الفاتورة"), tr("الحالة"), '']} minWidth={860}>
-            {q.data.map((d) => (
+          <DataTable sticky sort={t.sort} onSort={t.onSort} pager={<Pager {...t.pager} />} minWidth={860}
+            head={[{ key: 'date', label: tr("التاريخ") }, { key: 'projectName', label: tr("المشروع") }, { key: 'clientName', label: tr("العميل") }, { key: 'amount', label: tr("المبلغ") }, { key: 'methodLabel', label: tr("الطريقة") }, { key: 'invoiceNo', label: tr("الفاتورة") }, { key: 'status', label: tr("الحالة") }, '']}>
+            {t.rows.map((d) => (
               <tr key={d.id} className="border-t border-line">
                 <td className={cx('px-4 py-3 num', d.overdue && 'font-semibold text-bad')}>{dmy(d.date)}</td>
                 <td className="px-4 py-3"><Link to={'/crm/projects/' + d.projectId} className="text-fg no-underline hover:underline">{d.projectName}</Link></td>
@@ -250,6 +261,7 @@ export function ProposalsPage() {
   const [status, setStatus] = useState('');
   const [adding, setAdding] = useState(false);
   const q = useApi<ProposalView[]>('crm.proposals', status ? { status } : {});
+  const t = useTable(q.data || EMPTY_PROPOSALS, { sort: { key: 'issueDate', dir: 'desc' }, get: (p, k) => (k === 'status' ? p.statusLabel : (p as unknown as Record<string, unknown>)[k]) });
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-end gap-3">
@@ -258,8 +270,9 @@ export function ProposalsPage() {
       </div>
       <Card padded={false}>
         {q.isError ? <ErrorBox message={(q.error as Error).message} /> : !q.data ? <Loader /> : q.data.length === 0 ? <EmptyState title={tr("لا عروض")} body={tr("القبول والرفض من صفحة العميل.")} /> : (
-          <DataTable head={[tr("العرض"), tr("العميل"), tr("القيمة"), tr("التاريخ"), tr("الحالة")]} minWidth={680}>
-            {q.data.map((p) => (
+          <DataTable sticky sort={t.sort} onSort={t.onSort} pager={<Pager {...t.pager} />} minWidth={680}
+            head={[{ key: 'name', label: tr("العرض") }, { key: 'clientName', label: tr("العميل") }, { key: 'value', label: tr("القيمة") }, { key: 'issueDate', label: tr("التاريخ") }, { key: 'status', label: tr("الحالة") }]}>
+            {t.rows.map((p) => (
               <tr key={p.id} className="border-t border-line">
                 <td className="px-4 py-3"><span className="flex flex-col"><span className="font-semibold">{p.name}</span><span className="text-[12px] text-muted num">{p.number}{p.projectName ? ' · ' + p.projectName : ''}</span></span></td>
                 <td className="px-4 py-3"><Link to={'/crm/clients/' + p.clientId} className="text-fg no-underline hover:underline">{p.clientName}</Link></td>
@@ -314,6 +327,7 @@ export function ActivitiesPage() {
     return all.filter((a) => (!f.type || a.type === f.type) && (!f.clientId || a.clientId === f.clientId) && (!f.userId || a.userId === f.userId) && (!f.projectId || a.projectId === f.projectId) &&
       (!s || [a.clientName, a.contactName, a.userName, a.projectName, a.title, a.description, a.followUpTask?.title].filter(Boolean).join(' ').toLowerCase().includes(s)));
   }, [all, f]);
+  const t = useTable(rows, { sort: { key: 'at', dir: 'desc' } });
   const exportCsv = () => downloadCsv(tr("الأنشطة.csv"), [
     [tr("النوع"), tr("العميل"), tr("جهة الاتصال"), tr("المشروع"), tr("الموظف"), tr("التاريخ والوقت"), tr("المدة (دقيقة)"), tr("الموضوع"), tr("التفاصيل"), tr("مهمة المتابعة")],
     ...rows.map((a) => [a.typeLabel, a.clientName, a.contactName, a.projectName, a.userName, formatDateTime(a.at), a.durationMin || '', a.title, a.description, a.followUpTask ? a.followUpTask.number + ' ' + a.followUpTask.title : ''])
@@ -337,8 +351,9 @@ export function ActivitiesPage() {
         {q.isError ? <ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} /> : !q.data ? <Loader /> : rows.length === 0 ? (
           <EmptyState title={all.length ? tr("لا نتائج تطابق التصفية") : tr("لا أنشطة بعد")} body={all.length ? undefined : tr("سجّل كل اجتماع أو مكالمة أو زيارة ليبقى تاريخ العلاقة مع العميل في مكان واحد.")} />
         ) : (
-          <DataTable head={[tr("النوع"), tr("العميل / جهة الاتصال"), tr("المشروع"), tr("المهمة"), tr("الموظف"), tr("التاريخ والوقت"), tr("المدة"), '']} minWidth={900}>
-            {rows.map((a) => (
+          <DataTable sticky sort={t.sort} onSort={t.onSort} pager={<Pager {...t.pager} />} minWidth={900}
+            head={[{ key: 'typeLabel', label: tr("النوع") }, { key: 'clientName', label: tr("العميل / جهة الاتصال") }, { key: 'projectName', label: tr("المشروع") }, tr("المهمة"), { key: 'userName', label: tr("الموظف") }, { key: 'at', label: tr("التاريخ والوقت") }, { key: 'durationMin', label: tr("المدة") }, '']}>
+            {t.rows.map((a) => (
               <tr key={a.id} className="border-t border-line">
                 <td className="px-4 py-3"><Badge tone={ACT_TONE[a.type] || 'neutral'}>{a.typeLabel}</Badge></td>
                 <td className="px-4 py-3">
@@ -411,7 +426,8 @@ function MonthBars({ data }: { data: { month: string; amount: number }[] }) {
   );
 }
 
-type SortKey = 'name' | 'clientName' | 'contractValue' | 'paid' | 'remaining' | 'spent';
+const EMPTY_PAYMENTS: PaymentView[] = [];
+const EMPTY_PROPOSALS: ProposalView[] = [];
 
 export function ReportsPage() {
   const lk = useCrmLookups();
@@ -420,18 +436,12 @@ export function ReportsPage() {
   const [custom, setCustom] = useState({ from: today.slice(0, 4) + '-01-01', to: today });
   const range = preset === 'custom' ? custom : presetRange(preset, today);
   const q = useApi<CrmReport>('crm.report', { from: range.from, to: range.to }, { placeholderData: (p) => p });
-  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'paid', dir: -1 });
   const [pstatus, setPstatus] = useState<'' | 'ongoing' | 'completed' | 'on_hold'>('');
   const r = q.data;
-  const projects = useMemo(() => {
-    const list = (r?.projects || []).filter((p) => !pstatus || p.status === pstatus);
-    return list.sort((a, b) => { const va = a[sort.key], vb = b[sort.key]; return (typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb), 'ar')) * sort.dir; });
-  }, [r, sort, pstatus]);
-  const th = (key: SortKey, label: string) => (
-    <button type="button" onClick={() => setSort((s) => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : -1 }))} className={cx('inline-flex items-center gap-1 cursor-pointer', sort.key === key && 'text-fg')}>
-      {label}{sort.key === key && <span aria-hidden="true">{sort.dir === -1 ? '▼' : '▲'}</span>}
-    </button>
-  );
+  const filtered = useMemo(() => (r?.projects || []).filter((p) => !pstatus || p.status === pstatus), [r, pstatus]);
+  // تقرير يُطبع كاملاً: فرز بلا ترقيم
+  const pt = useTable(filtered, { sort: { key: 'paid', dir: 'desc' }, pageSize: Infinity });
+  const projects = pt.rows;
   const exportProjects = () => r && downloadCsv(tr("تحصيل-المشاريع.csv"), [
     [tr("المشروع"), tr("العميل"), tr("الفوترة"), tr("العقد"), tr("المحصّل"), tr("المجدول"), tr("المتبقي"), tr("مصروف العهد"), tr("الحالة")],
     ...projects.map((p) => [p.name, p.clientName, p.cycle ? p.billingCycleLabel + ' ' + kwd(p.cycleAmount, false) : p.billingLabel, kwd(p.contractValue, false), kwd(p.paid, false), kwd(p.scheduled, false), kwd(p.remaining, false), kwd(p.spent, false), p.statusLabel])
@@ -511,7 +521,8 @@ export function ReportsPage() {
 
           <Card padded={false} className="print-table">
             <CardHeader title={tr("المشاريع: العقد والتحصيل ومصروف العهد")} action={<Segmented label={tr("الحالة")} value={pstatus} onChange={setPstatus} options={[{ value: '', label: tr("الكل") }, { value: 'ongoing', label: tr("جارية") }, { value: 'on_hold', label: tr("متوقفة") }, { value: 'completed', label: tr("مكتملة") }]} />} />
-            <DataTable head={[th('name', tr("المشروع")), th('clientName', tr("العميل")), th('contractValue', tr("العقد / الاشتراك")), th('paid', tr("المحصّل")), th('remaining', tr("المتبقي")), th('spent', tr("مصروف العهد"))]} minWidth={760}>
+            <DataTable sort={pt.sort} onSort={pt.onSort} minWidth={760}
+              head={[{ key: 'name', label: tr("المشروع") }, { key: 'clientName', label: tr("العميل") }, { key: 'contractValue', label: tr("العقد / الاشتراك") }, { key: 'paid', label: tr("المحصّل") }, { key: 'remaining', label: tr("المتبقي") }, { key: 'spent', label: tr("مصروف العهد") }]}>
               {projects.map((p) => (
                 <tr key={p.id} className="border-t border-line">
                   <td className="px-4 py-2.5"><Link to={'/crm/projects/' + p.id} className="text-fg no-underline hover:underline">{p.name}</Link></td>

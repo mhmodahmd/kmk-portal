@@ -36,7 +36,7 @@ export default function InboxPage() {
         <div role="tablist" aria-label={tr("تصفية حسب النوع")} className="flex flex-wrap gap-2">
           {[['all', { label: tr("الكل"), count: items.length }] as const, ...modules].map(([key, m]) => (
             <button key={key} type="button" role="tab" aria-selected={filter === key} onClick={() => setFilter(key)}
-              className={cx('inline-flex h-9 items-center gap-2 rounded-full px-3.5 font-medium cursor-pointer', filter === key ? 'bg-fg text-bg' : 'border border-line bg-surface')}>
+              className={cx('inline-flex h-11 items-center gap-2 rounded-full px-3.5 font-medium cursor-pointer sm:h-9', filter === key ? 'bg-fg text-bg' : 'border border-line bg-surface')}>
               {m.label}<span className={cx('rounded-full px-1.5 text-[12px] font-semibold', filter === key ? 'bg-bg text-fg' : 'bg-chip text-muted')}>{m.count}</span>
             </button>
           ))}
@@ -104,7 +104,7 @@ function Detail({ item, onDone }: { item: InboxItem; onDone: () => void }) {
       <Textarea label={tr("ملاحظة (مطلوبة عند الرفض)")} value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} className="[&_textarea]:min-h-[64px]" />
       {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
       <div className="flex gap-2">
-        <Button variant="primary" icon="check" className="flex-1" loading={busy === 'a'} disabled={!!busy} onClick={() => go(true)}>{item.approveLabel || tr("موافقة")}</Button>
+        <Button variant="primary" icon="check" className="flex-1" loading={busy === 'a'} disabled={!!busy} onClick={() => go(true)}>{item.approveLabel || tr("اعتماد")}</Button>
         <Button variant="danger-outline" icon="x" className="flex-1" loading={busy === 'r'} disabled={!!busy} onClick={() => go(false)}>{item.rejectLabel || tr("رفض")}</Button>
       </div>
     </Card>

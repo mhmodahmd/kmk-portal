@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { IS_EN, tr } from '../../lib/i18n';
 import { useAction, useApi } from '../../lib/useApi';
 import { dmy } from '../../lib/format';
-import { Badge } from '../../ui/Display';
+import { Badge, ListRow } from '../../ui/Display';
 import { Button } from '../../ui/Button';
 import { Select, TextInput, Textarea } from '../../ui/Field';
 import { Dialog } from '../../ui/Overlay';
@@ -37,17 +37,19 @@ export function DueText({ t, today }: { t: Pick<TaskView, 'dueDate' | 'overdue'>
 /** سطر مهمة في القوائم */
 export function TaskRow({ t, today, showAssignee, onToggle }: { t: TaskView; today?: string; showAssignee?: boolean; onToggle?: (t: TaskView) => void }) {
   const closed = t.status === 'done' || t.status === 'cancelled';
+  // دائرة الإنجاز 24px بصرياً، وهدف لمسها 44px على الجوال (32px على الحاسوب)
+  const toggle = onToggle && t.canWork && t.status !== 'cancelled' ? (
+    <button type="button" onClick={() => onToggle(t)} aria-label={closed ? tr("إعادة فتح") : tr("إنجاز")} title={closed ? tr("إعادة فتح") : tr("إنجاز")}
+      className="-mx-2.5 inline-flex h-11 w-11 shrink-0 items-center justify-center cursor-pointer sm:-mx-1 sm:h-8 sm:w-8">
+      <span className={cx('inline-flex h-6 w-6 items-center justify-center rounded-full border-2', closed ? 'border-ok bg-ok text-white' : t.status === 'review' ? 'border-warn text-warn' : 'border-line-strong text-transparent hover:text-muted')}>
+        <Icon name="check" size={14} strokeWidth={2.4} />
+      </span>
+    </button>
+  ) : <span className="h-6 w-6 shrink-0" />;
   return (
-    <div className="flex items-center gap-3 border-t border-line px-5 py-3 first:border-t-0 hover:bg-chip/40">
-      {onToggle && t.canWork && t.status !== 'cancelled' ? (
-        <button type="button" onClick={() => onToggle(t)} aria-label={closed ? tr("إعادة فتح") : tr("إنجاز")} title={closed ? tr("إعادة فتح") : tr("إنجاز")}
-          className={cx('inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 cursor-pointer', closed ? 'border-ok bg-ok text-white' : t.status === 'review' ? 'border-warn text-warn' : 'border-line-strong text-transparent hover:text-muted')}>
-          <Icon name="check" size={14} strokeWidth={2.4} />
-        </button>
-      ) : <span className="h-6 w-6 shrink-0" />}
-      <Link to={'/tasks/' + t.id} className="flex min-w-0 flex-1 flex-col gap-0.5 text-fg no-underline">
-        <span className={cx('font-semibold', closed && 'text-muted line-through decoration-1')}>{t.title}</span>
-        <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px] text-muted">
+    <ListRow className="py-3" leading={toggle} to={'/tasks/' + t.id} title={t.title} titleClassName={closed ? 'text-muted line-through decoration-1' : undefined}
+      sub={
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px]">
           <span className="num">{t.number}</span>
           {t.parentNumber && <span>{tr("فرعية من {0}", t.parentNumber)}</span>}
           {showAssignee && <span className="inline-flex items-center gap-1"><Icon name="user" size={13} />{t.assigneeName}</span>}
@@ -56,12 +58,13 @@ export function TaskRow({ t, today, showAssignee, onToggle }: { t: TaskView; tod
           {t.commentsCount > 0 && <span className="num">💬 {t.commentsCount}</span>}
           {t.recurrenceLabel && <span className="inline-flex items-center gap-1"><Icon name="refresh" size={13} />{t.recurrenceLabel}</span>}
         </span>
-      </Link>
-      <span className="flex shrink-0 flex-col items-end gap-1">
-        {t.status === 'todo' || t.status === 'doing' ? <PriorityMark t={t} /> : <StatusBadge t={t} />}
-        {!closed && <DueText t={t} today={today} />}
-      </span>
-    </div>
+      }
+      badge={
+        <span className="flex shrink-0 flex-col items-end gap-1">
+          {t.status === 'todo' || t.status === 'doing' ? <PriorityMark t={t} /> : <StatusBadge t={t} />}
+          {!closed && <DueText t={t} today={today} />}
+        </span>
+      } />
   );
 }
 
@@ -107,10 +110,10 @@ export function TaskDialog({ open, onClose, initial, onSaved }: { open: boolean;
   const watchers = f.watchers || [];
   return (
     <Dialog open={open} onClose={onClose} wide title={editing ? tr("تعديل المهمة") : f.parentId ? tr("مهمة فرعية جديدة") : tr("مهمة جديدة")}
-      footer={<><Button variant="primary" className="flex-1" loading={act.isPending} onClick={save}>{editing ? tr("حفظ") : tr("إنشاء المهمة")}</Button>
-        <Button variant="ghost" onClick={onClose}>{tr("إلغاء")}</Button></>}>
+      onSubmit={save} footer={<><Button type="submit" variant="primary" className="flex-1" loading={act.isPending}>{editing ? tr("حفظ") : tr("إنشاء المهمة")}</Button>
+        <Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button></>}>
       <div className="flex flex-col gap-3">
-        <TextInput label={tr("العنوان")} value={f.title || ''} onChange={(e) => set('title', e.target.value)} maxLength={160} autoFocus />
+        <TextInput label={tr("العنوان")} required value={f.title || ''} onChange={(e) => set('title', e.target.value)} maxLength={160} autoFocus />
         <Textarea label={tr("الوصف (اختياري)")} value={f.description || ''} onChange={(e) => set('description', e.target.value)} maxLength={4000} />
         <div className="grid gap-3 sm:grid-cols-2">
           <Select label={tr("المسؤول")} value={f.assigneeId || me} onChange={(e) => set('assigneeId', e.target.value)}

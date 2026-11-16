@@ -7,7 +7,7 @@ import { formatDateTime } from '../../lib/format';
 import { useAuth } from '../../app/auth';
 import { Avatar, Badge, Card, ErrorBox, PageHeader, Skeleton } from '../../ui/Display';
 import { Button } from '../../ui/Button';
-import { Checkbox, Select, TextInput } from '../../ui/Field';
+import { Checkbox, Form, Select, TextInput } from '../../ui/Field';
 import { Dialog, useToast } from '../../ui/Overlay';
 import { Icon } from '../../ui/Icon';
 import { cx } from '../../ui/cx';
@@ -116,6 +116,7 @@ export default function UsersPage() {
 
         {(creating || selected) && (
           <Card as="aside" className="flex min-w-0 flex-[2_1_340px] flex-col gap-4">
+            <Form className="flex flex-col gap-4" onSubmit={() => { setError(''); save.mutate(draft); }}>
             <div className="flex items-center gap-3">
               <Avatar name={draft.fullName || '+'} size={44} />
               <div className="flex flex-col">
@@ -125,8 +126,8 @@ export default function UsersPage() {
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <TextInput label={tr("الاسم الكامل")} value={draft.fullName} onChange={(e) => setDraft({ ...draft, fullName: e.target.value })} />
-              <TextInput label={tr("اسم المستخدم")} ltr value={draft.username} disabled={!creating} onChange={(e) => setDraft({ ...draft, username: e.target.value })} autoCapitalize="none" hint={creating ? tr("حروف إنجليزية صغيرة وأرقام") : undefined} />
+              <TextInput label={tr("الاسم الكامل")} required value={draft.fullName} onChange={(e) => setDraft({ ...draft, fullName: e.target.value })} />
+              <TextInput label={tr("اسم المستخدم")} required ltr value={draft.username} disabled={!creating} onChange={(e) => setDraft({ ...draft, username: e.target.value })} autoCapitalize="none" hint={creating ? tr("حروف إنجليزية صغيرة وأرقام") : undefined} />
               <TextInput label={tr("المسمى الوظيفي")} value={draft.jobTitle} onChange={(e) => setDraft({ ...draft, jobTitle: e.target.value })} />
               <TextInput label={tr("الهاتف")} ltr inputMode="tel" value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} />
             </div>
@@ -152,11 +153,12 @@ export default function UsersPage() {
             {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
 
             <div className="flex flex-wrap gap-2">
-              <Button variant="primary" className="flex-[1_1_140px]" loading={save.isPending} onClick={() => { setError(''); save.mutate(draft); }}>{creating ? tr("إنشاء الحساب") : tr("حفظ التغييرات")}</Button>
+              <Button type="submit" variant="primary" className="flex-[1_1_140px]" loading={save.isPending}>{creating ? tr("إنشاء الحساب") : tr("حفظ التغييرات")}</Button>
               {!creating && selected && <Button icon="key" className="flex-[1_1_140px]" loading={reset.isPending} onClick={() => { setError(''); reset.mutate(selected.id); }}>{tr("كلمة مرور مؤقتة")}</Button>}
               {!creating && selected?.locked && <Button icon="lock" onClick={() => unlock.mutate(selected.id)}>{tr("فك القفل")}</Button>}
-              {creating && <Button variant="ghost" onClick={() => setCreating(false)}>{tr("إلغاء")}</Button>}
+              {creating && <Button variant="ghost" onClick={() => setCreating(false)}>{tr("تراجع")}</Button>}
             </div>
+            </Form>
           </Card>
         )}
       </div>

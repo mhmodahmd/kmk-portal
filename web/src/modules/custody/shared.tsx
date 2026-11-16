@@ -123,9 +123,9 @@ export function ExpenseDialog({ open, onClose, custodyId, expense }: { open: boo
   const L = lk.data;
   return (
     <Dialog open={open} onClose={onClose} title={expense ? tr("تعديل بند") : tr("إضافة بند")}
-      footer={<><Button variant="primary" className="flex-1" loading={save.isPending}
-        onClick={() => { setError(''); save.mutate({ ...f, id: expense?.id, custodyId }, { onError: (e) => setError(e.message) }); }}>{tr("حفظ")}</Button>
-        <Button variant="ghost" onClick={onClose}>{tr("إلغاء")}</Button></>}>
+      onSubmit={() => { setError(''); save.mutate({ ...f, id: expense?.id, custodyId }, { onError: (e) => setError(e.message) }); }} footer={<><Button type="submit" variant="primary" className="flex-1" loading={save.isPending}
+       >{tr("حفظ")}</Button>
+        <Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button></>}>
       <div className="flex flex-col gap-3">
         <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={tr("نوع الحركة")}>
           {(['expense', 'receipt'] as const).map((t) => (
@@ -136,11 +136,11 @@ export function ExpenseDialog({ open, onClose, custodyId, expense }: { open: boo
           ))}
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <TextInput label={tr("التاريخ")} type="date" max={L?.today} value={f.date} onChange={set('date')} />
-          <TextInput label={tr("المبلغ (د.ك)")} inputMode="decimal" ltr value={f.amount} onChange={set('amount')} placeholder="0.000" />
+          <TextInput label={tr("التاريخ")} type="date" required max={L?.today} value={f.date} onChange={set('date')} />
+          <TextInput label={tr("المبلغ (د.ك)")} required inputMode="decimal" ltr value={f.amount} onChange={set('amount')} placeholder="0.000" />
         </div>
-        <TextInput label={tr("البيان")} value={f.description} onChange={set('description')} maxLength={300} />
-        {isExp && <Select label={tr("التصنيف")} value={f.category} onChange={set('category')} options={[{ value: '', label: tr("اختر") }, ...(L?.categories || []).map((x) => ({ value: x, label: x }))]} />}
+        <TextInput label={tr("البيان")} required value={f.description} onChange={set('description')} maxLength={300} />
+        {isExp && <Select label={tr("التصنيف")} required value={f.category} onChange={set('category')} options={[{ value: '', label: tr("اختر") }, ...(L?.categories || []).map((x) => ({ value: x, label: x }))]} />}
         <div className="grid grid-cols-2 gap-3">
           <Select label={tr("المشروع (اختياري)")} value={f.project} onChange={set('project')} options={[{ value: '', label: '—' }, ...(L?.projects || []).map((x) => ({ value: x.name, label: x.name + (x.type === 'debt' ? ' · ' + x.typeLabel : '') }))]} />
           <Select label={tr("نوع المستند")} value={f.docType} onChange={set('docType')} options={[{ value: '', label: '—' }, ...(L?.docTypes || []).map((x) => ({ value: x, label: x }))]} />
@@ -179,10 +179,10 @@ export function OpenCustodyDialog({ open, onClose, preset }: { open: boolean; on
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   return (
     <Dialog open={open} onClose={() => onClose()} title={tr("فتح عهدة جديدة")}
-      footer={<><Button variant="primary" className="flex-1" loading={act.isPending} onClick={() => { setError(''); act.mutate(f, { onError: (e) => setError(e.message) }); }}>{tr("فتح العهدة وإصدار سند الصرف")}</Button>
-        <Button variant="ghost" onClick={() => onClose()}>{tr("إلغاء")}</Button></>}>
+      onSubmit={() => { setError(''); act.mutate(f, { onError: (e) => setError(e.message) }); }} footer={<><Button type="submit" variant="primary" className="flex-1" loading={act.isPending}>{tr("فتح العهدة وإصدار سند الصرف")}</Button>
+        <Button variant="ghost" onClick={() => onClose()}>{tr("تراجع")}</Button></>}>
       <div className="flex flex-col gap-3">
-        <Select label={tr("الموظف")} value={f.employeeId} onChange={set('employeeId')} disabled={!!preset}
+        <Select label={tr("الموظف")} required value={f.employeeId} onChange={set('employeeId')} disabled={!!preset}
           options={[{ value: '', label: tr("اختر الموظف") }, ...(holders.data || []).map((x) => ({ value: x.id, label: x.fullName + (x.activeCustodyId ? ' — ' + x.activeStatusLabel : '') }))]} />
         {h?.activeCustodyId && <div className="rounded-lg bg-warn-bg px-3 py-2.5 text-warn">{tr("لديه عهدة نشطة ({0}) يجب إقفالها أولاً.", h.activeCustodyId)}</div>}
         {h && !!h.carried && (
@@ -193,8 +193,8 @@ export function OpenCustodyDialog({ open, onClose, preset }: { open: boolean; on
           </div>
         )}
         <div className="grid grid-cols-2 gap-3">
-          <TextInput label={tr("مبلغ العهدة (د.ك)")} inputMode="decimal" ltr value={f.amount} onChange={set('amount')} />
-          <TextInput label={tr("تاريخ الفتح")} type="date" max={lk.data?.today} value={f.openDate} onChange={set('openDate')} />
+          <TextInput label={tr("مبلغ العهدة (د.ك)")} required inputMode="decimal" ltr value={f.amount} onChange={set('amount')} />
+          <TextInput label={tr("تاريخ الفتح")} type="date" required max={lk.data?.today} value={f.openDate} onChange={set('openDate')} />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <Select label={tr("طريقة الصرف")} value={f.paymentMethod} onChange={set('paymentMethod')} options={(lk.data?.paymentMethods || []).map((m) => ({ value: m.id, label: m.label }))} />
@@ -217,8 +217,8 @@ export function VoucherFormDialog({ open, onClose, request }: { open: boolean; o
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   return (
     <Dialog open={open} onClose={onClose} title={request ? tr("طلب سند") : tr("إصدار سند")}
-      footer={<><Button variant="primary" className="flex-1" loading={act.isPending} onClick={() => { setError(''); act.mutate(f, { onError: (e) => setError(e.message) }); }}>{request ? tr("إرسال الطلب") : tr("إصدار")}</Button>
-        <Button variant="ghost" onClick={onClose}>{tr("إلغاء")}</Button></>}>
+      onSubmit={() => { setError(''); act.mutate(f, { onError: (e) => setError(e.message) }); }} footer={<><Button type="submit" variant="primary" className="flex-1" loading={act.isPending}>{request ? tr("إرسال الطلب") : tr("إصدار")}</Button>
+        <Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button></>}>
       <div className="flex flex-col gap-3">
         <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={tr("نوع السند")}>
           {(['payment', 'receipt'] as const).map((t) => (
@@ -228,12 +228,12 @@ export function VoucherFormDialog({ open, onClose, request }: { open: boolean; o
             </button>
           ))}
         </div>
-        <TextInput label={f.type === 'payment' ? tr("اسم المستلم") : tr("اسم الدافع")} value={f.partyName} onChange={set('partyName')} />
+        <TextInput label={f.type === 'payment' ? tr("اسم المستلم") : tr("اسم الدافع")} required value={f.partyName} onChange={set('partyName')} />
         <div className="grid grid-cols-2 gap-3">
-          <TextInput label={tr("المبلغ (د.ك)")} inputMode="decimal" ltr value={f.amount} onChange={set('amount')} />
-          {!request && <TextInput label={tr("تاريخ السند")} type="date" max={lk.data?.today} value={f.date} onChange={set('date')} />}
+          <TextInput label={tr("المبلغ (د.ك)")} required inputMode="decimal" ltr value={f.amount} onChange={set('amount')} />
+          {!request && <TextInput label={tr("تاريخ السند")} type="date" required max={lk.data?.today} value={f.date} onChange={set('date')} />}
         </div>
-        <TextInput label={tr("البيان")} value={f.reason} onChange={set('reason')} maxLength={300} />
+        <TextInput label={tr("البيان")} required value={f.reason} onChange={set('reason')} maxLength={300} />
         <div className="grid grid-cols-2 gap-3">
           <Select label={tr("طريقة الدفع")} value={f.paymentMethod} onChange={set('paymentMethod')} options={(lk.data?.paymentMethods || []).map((m) => ({ value: m.id, label: m.label }))} />
           {f.paymentMethod === 'cheque' && <TextInput label={tr("رقم الشيك")} value={f.chequeNo} onChange={set('chequeNo')} />}
@@ -308,8 +308,8 @@ export function SignActions({ kind, id, info, onDone }: { kind: 'voucher' | 'sta
         </div>
       </Dialog>
       <Dialog open={paper} onClose={() => setPaper(false)} title={tr("تأكيد توقيع الإدارة ورقياً")}
-        footer={<><Button variant="primary" className="flex-1" loading={mark.isPending} onClick={() => { setError(''); mark.mutate({ kind, id, note }, { onError: (e) => setError(e.message) }); }}>{tr("تأكيد")}</Button>
-          <Button variant="ghost" onClick={() => setPaper(false)}>{tr("إلغاء")}</Button></>}>
+        onSubmit={() => { setError(''); mark.mutate({ kind, id, note }, { onError: (e) => setError(e.message) }); }} footer={<><Button type="submit" variant="primary" className="flex-1" loading={mark.isPending}>{tr("تأكيد")}</Button>
+          <Button variant="ghost" onClick={() => setPaper(false)}>{tr("تراجع")}</Button></>}>
         <div className="flex flex-col gap-3">
           <p className="m-0 text-muted">{kind === 'voucher' ? tr("استخدمه إذا وقّع المدير على السند المطبوع. سند صرف العهدة ينقلها إلى «جاري الصرف».") : tr("استخدمه إذا وقّع المدير على الكشف المطبوع. تُغلق العهدة نهائياً.")}</p>
           <TextInput label={tr("ملاحظة (اختياري)")} value={note} onChange={(e) => setNote(e.target.value)} placeholder={tr("مثال: الأصل محفوظ في ملف 2026")} />

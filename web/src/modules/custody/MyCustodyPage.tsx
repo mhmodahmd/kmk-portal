@@ -79,10 +79,10 @@ function RequestDialog({ open, onClose, amount }: { open: boolean; onClose: () =
   const act = useAction('cus.request.create', { invalidate: ['cus.home', 'cus.request.list'], success: tr("أُرسل الطلب إلى المحاسب"), silentError: true, onSuccess: onClose });
   return (
     <Dialog open={open} onClose={onClose} title={tr("طلب عهدة جديدة")}
-      footer={<><Button variant="primary" className="flex-1" loading={act.isPending} onClick={() => { setError(''); act.mutate(f, { onError: (e) => setError(e.message) }); }}>{tr("إرسال الطلب")}</Button>
-        <Button variant="ghost" onClick={onClose}>{tr("إلغاء")}</Button></>}>
+      onSubmit={() => { setError(''); act.mutate(f, { onError: (e) => setError(e.message) }); }} footer={<><Button type="submit" variant="primary" className="flex-1" loading={act.isPending}>{tr("إرسال الطلب")}</Button>
+        <Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button></>}>
       <div className="flex flex-col gap-3">
-        <TextInput label={tr("المبلغ المطلوب (د.ك)")} inputMode="decimal" ltr value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
+        <TextInput label={tr("المبلغ المطلوب (د.ك)")} required inputMode="decimal" ltr value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
         <TextInput label={tr("السبب (اختياري)")} value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} maxLength={300} />
         {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
       </div>

@@ -1,5 +1,6 @@
 import { tr } from '../lib/i18n';
 import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { cx } from './cx';
 import { Icon, type IconName } from './Icon';
 import { initial } from '../lib/format';
@@ -55,6 +56,33 @@ export function StatTile({ label, value, foot, icon }: { label: string; value: R
       <span className="text-[26px] font-bold leading-none num">{value}</span>
       {foot && <span className="mt-auto text-[13px] text-muted">{foot}</span>}
     </Card>
+  );
+}
+
+/**
+ * صف في قائمة مكدّسة (الطلبات، المهام، السندات): عنصر بادئ اختياري، عنوان وسطر ثانٍ، شارة، وأزرار.
+ * القاعدة: جدول (DataTable) للبيانات الرقمية القابلة للمقارنة، وصفوف (ListRow) للطلبات والعناصر.
+ */
+export function ListRow({ leading, title, sub, note, badge, actions, to, onClick, className, titleClassName }: {
+  leading?: ReactNode; title: ReactNode; sub?: ReactNode; note?: ReactNode; badge?: ReactNode; actions?: ReactNode; to?: string; onClick?: () => void; className?: string; titleClassName?: string;
+}) {
+  const text = (
+    <>
+      <span className={cx('font-semibold', titleClassName)}>{title}</span>
+      {sub && <span className="text-[13px] text-muted">{sub}</span>}
+      {note && <span className="text-[13px]">{note}</span>}
+    </>
+  );
+  const body = 'flex min-w-0 flex-1 flex-col gap-0.5';
+  return (
+    <div className={cx('flex flex-wrap items-center gap-3 border-t border-line px-5 py-3.5 first:border-t-0', (to || onClick) && 'hover:bg-chip/40', className)}>
+      {leading}
+      {to ? <Link to={to} className={cx(body, 'text-fg no-underline')}>{text}</Link>
+        : onClick ? <button type="button" onClick={onClick} className={cx(body, 'text-start cursor-pointer')}>{text}</button>
+        : <span className={body}>{text}</span>}
+      {badge}
+      {actions && <span className="flex flex-wrap items-center gap-2">{actions}</span>}
+    </div>
   );
 }
 

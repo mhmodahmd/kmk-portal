@@ -6,9 +6,9 @@ import { dmy, kwDate } from '../../lib/format';
 import { useAction, useApi } from '../../lib/useApi';
 import { Avatar, Badge, Card, CardHeader, EmptyState, ErrorBox, Loader, Skeleton } from '../../ui/Display';
 import { SearchBox, Segmented } from '../../ui/Controls';
-import { Button } from '../../ui/Button';
+import { Button, IconAction } from '../../ui/Button';
 import { QuickTaskButton } from '../tasks/shared';
-import { Select, TextInput, Textarea } from '../../ui/Field';
+import { Form, Select, TextInput, Textarea } from '../../ui/Field';
 import { Dialog, useToast } from '../../ui/Overlay';
 import { Icon } from '../../ui/Icon';
 import { cx } from '../../ui/cx';
@@ -124,6 +124,7 @@ function EmployeeCard({ emp, dir, onCreated, onCancel }: { emp: EmployeeView | n
 
   return (
     <Card as="aside" className="flex min-w-0 flex-1 flex-col gap-3">
+      <Form className="flex flex-col gap-3" onSubmit={() => { setError(''); save.mutate({ ...f, id: emp?.id || '' }, { onError: (e) => setError(e.message) }); }}>
       <div className="flex items-center gap-3">
         <Avatar name={f.fullName || '+'} size={48} />
         <div className="flex min-w-0 flex-1 flex-col">
@@ -134,7 +135,7 @@ function EmployeeCard({ emp, dir, onCreated, onCancel }: { emp: EmployeeView | n
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <TextInput label={tr("الاسم الكامل")} value={f.fullName} onChange={set('fullName')} />
+        <TextInput label={tr("الاسم الكامل")} required value={f.fullName} onChange={set('fullName')} />
         <TextInput label={tr("المسمى الوظيفي")} value={f.jobTitle} onChange={set('jobTitle')} />
       </div>
       <Section title={tr("العمل")}>
@@ -169,10 +170,11 @@ function EmployeeCard({ emp, dir, onCreated, onCancel }: { emp: EmployeeView | n
 
       {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
       <div className="flex flex-wrap gap-2">
-        <Button variant="primary" className="flex-[1_1_160px]" loading={save.isPending} onClick={() => { setError(''); save.mutate({ ...f, id: emp?.id || '' }, { onError: (e) => setError(e.message) }); }}>{emp ? tr("حفظ التغييرات") : tr("إضافة الموظف")}</Button>
-        {!emp && <Button variant="ghost" onClick={onCancel}>{tr("إلغاء")}</Button>}
+        <Button type="submit" variant="primary" className="flex-[1_1_160px]" loading={save.isPending}>{emp ? tr("حفظ التغييرات") : tr("إضافة الموظف")}</Button>
+        {!emp && <Button variant="ghost" onClick={onCancel}>{tr("تراجع")}</Button>}
         {emp && <QuickTaskButton size="md" variant="secondary" label={tr("مهمة مرتبطة بالموظف")} draft={{ linkedType: 'employee', linkedId: emp.id, linkedLabel: emp.fullName }} />}
       </div>
+      </Form>
 
       {emp && <BalancesBlock emp={emp} />}
       {emp && dir.canManageAccounts && <AccountBlock emp={emp} dir={dir} />}
@@ -194,7 +196,7 @@ function BalancesBlock({ emp }: { emp: EmployeeView }) {
               <span className="flex-1">{b.name}</span>
               <span className="text-[13px] text-muted">{tr("مستخدم")} {b.used}{b.pending ? tr(" · معلّق {0}", b.pending) : ''}{b.adjustment ? tr(" · تسوية {0}{1}", b.adjustment > 0 ? '+' : '', b.adjustment) : ''}</span>
               <b className="w-12 text-left num">{b.unlimited ? '∞' : b.available}</b>
-              <button type="button" onClick={() => setAdj(b)} aria-label={tr("تسوية ") + b.name} className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-chip hover:text-fg cursor-pointer"><Icon name="edit" size={16} /></button>
+              <IconAction icon="edit" label={tr("تسوية ") + b.name} onClick={() => setAdj(b)} />
             </div>
           ))}
         </div>
@@ -212,10 +214,10 @@ function AdjustDialog({ emp, year, balance, onClose }: { emp: EmployeeView; year
   const save = useAction('hr.leave.adjust', { invalidate: ['hr.leave.balances', 'hr.me'], success: tr("حُفظت التسوية"), silentError: true, onSuccess: onClose });
   return (
     <Dialog open={!!balance} onClose={onClose} title={tr("تسوية رصيد {0}", balance?.name || '')}
-      footer={<><Button variant="primary" className="flex-1" loading={save.isPending} onClick={() => save.mutate({ employeeId: emp.id, typeId: balance!.typeId, year, adjustment: v, note }, { onError: (e) => setError(e.message) })}>{tr("حفظ")}</Button><Button variant="ghost" onClick={onClose}>{tr("إلغاء")}</Button></>}>
+      onSubmit={() => save.mutate({ employeeId: emp.id, typeId: balance!.typeId, year, adjustment: v, note }, { onError: (e) => setError(e.message) })} footer={<><Button type="submit" variant="primary" className="flex-1" loading={save.isPending}>{tr("حفظ")}</Button><Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button></>}>
       <div className="flex flex-col gap-3">
         <p className="m-0 text-muted">{emp.fullName} {tr("· الاستحقاق السنوي")} {balance?.entitled} {tr("يوم. التسوية تُضاف أو تُطرح (مثل رصيد مُرحّل من السنة السابقة).")}</p>
-        <TextInput label={tr("أيام التسوية (+ أو −)")} type="number" min={-365} max={365} value={v} onChange={(e) => setV(e.target.value)} />
+        <TextInput label={tr("أيام التسوية (+ أو −)")} type="number" required min={-365} max={365} value={v} onChange={(e) => setV(e.target.value)} />
         <TextInput label={tr("ملاحظة")} value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} />
         {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
       </div>

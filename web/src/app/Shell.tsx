@@ -1,4 +1,4 @@
-import { tr } from '../lib/i18n';
+import { IS_EN, tr } from '../lib/i18n';
 import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -72,22 +72,27 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           </span>
         </NavLink>
         <button type="button" onClick={signOut} aria-label={tr("تسجيل الخروج")} title={tr("تسجيل الخروج")}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-side-fg hover:bg-side-active hover:text-white cursor-pointer"><Icon name="logout" /></button>
+          className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-side-fg hover:bg-side-active hover:text-white cursor-pointer lg:h-9 lg:w-9"><Icon name="logout" /></button>
       </div>
     </nav>
   );
 }
 
+/** شريط الجوال حسب الدور: الرئيسية، الحضور، المهام، الموافقات، ثم «المزيد» (أربعة أزرار + المزيد). من لا يملك وحدة يحل محلها ما بعدها */
 function useMobileTabs(): { to: string; label: string; icon: IconName; end?: boolean }[] {
   const { user, roles } = useAuth();
   const all = !!user?.isSuperAdmin;
-  return [
+  const has = (m: string) => all || !!roles[m];
+  const candidates: ({ to: string; label: string; icon: IconName; end?: boolean } | null)[] = [
     { to: '/', label: tr("الرئيسية"), icon: 'home', end: true },
-    ...(all || roles.attendance ? [{ to: '/attendance', label: tr("البصمة"), icon: 'clock' as IconName, end: true }] : []),
-    ...(roles.custody ? [{ to: '/custody', label: tr("العهدة"), icon: 'wallet' as IconName }] : []),
+    has('attendance') ? { to: '/attendance', label: IS_EN ? 'Attendance' : 'الحضور', icon: 'clock', end: true } : null,
+    has('tasks') ? { to: '/tasks', label: tr("المهام"), icon: 'tasks' } : null,
     { to: '/inbox', label: tr("الموافقات"), icon: 'inbox' },
-    all || roles.hr ? { to: '/hr', label: tr("ملفي"), icon: 'user', end: true } : { to: '/profile', label: tr("ملفي"), icon: 'user' }
+    has('custody') ? { to: '/custody', label: tr("العهدة"), icon: 'wallet' } : null,
+    has('crm') ? { to: '/crm', label: tr("العملاء"), icon: 'crm' } : null,
+    { to: '/profile', label: tr("ملفي"), icon: 'user' }
   ];
+  return candidates.filter((x): x is NonNullable<typeof x> => !!x).slice(0, 4);
 }
 
 export default function Shell({ children }: { children: ReactNode }) {

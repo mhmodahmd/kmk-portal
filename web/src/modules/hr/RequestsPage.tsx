@@ -49,14 +49,14 @@ export default function RequestsPage() {
           {!q.data.length ? <EmptyState title={tr("لا طلبات")} /> : tab === 'leave'
             ? (q.data as LeaveView[]).map((l) => (
               <LeaveRow key={l.id} l={l} showName actions={<>
-                {(l.status === 'pending_manager' || l.status === 'pending_hr') && <Button size="sm" variant="primary" onClick={() => setPick({ kind: 'leave', item: l })}>{tr("البت")}</Button>}
-                {l.status === 'approved' && <Button size="sm" variant="ghost" onClick={() => setCancelling(l)}>{tr("إلغاء")}</Button>}
+                {(l.status === 'pending_manager' || l.status === 'pending_hr') && <Button size="sm" variant="primary" onClick={() => setPick({ kind: 'leave', item: l })}>{tr("اعتماد أو رفض")}</Button>}
+                {l.status === 'approved' && <Button size="sm" variant="ghost" onClick={() => setCancelling(l)}>{tr("إلغاء الطلب")}</Button>}
               </>} />
             ))
             : (q.data as OtView[]).map((o) => (
               <OtRow key={o.id} o={o} showName actions={<>
-                {o.status === 'pending' && <Button size="sm" variant="primary" onClick={() => setPick({ kind: 'ot', item: o })}>{tr("البت")}</Button>}
-                {o.status === 'approved' && <Button size="sm" variant="ghost" onClick={() => setCancelling(o)}>{tr("إلغاء")}</Button>}
+                {o.status === 'pending' && <Button size="sm" variant="primary" onClick={() => setPick({ kind: 'ot', item: o })}>{tr("اعتماد أو رفض")}</Button>}
+                {o.status === 'approved' && <Button size="sm" variant="ghost" onClick={() => setCancelling(o)}>{tr("إلغاء الطلب")}</Button>}
               </>} />
             ))}
         </Card>

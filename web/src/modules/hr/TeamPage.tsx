@@ -52,8 +52,8 @@ export default function TeamPage() {
       {(pendingLeaves.length > 0 || pendingOt.length > 0) && (
         <Card padded={false}>
           <CardHeader title={tr("بانتظار قرارك")} action={<Badge tone="warn">{pendingLeaves.length + pendingOt.length}</Badge>} />
-          {pendingLeaves.map((l) => <LeaveRow key={l.id} l={l} showName actions={<Button size="sm" variant="primary" onClick={() => setPick({ kind: 'leave', item: l })}>{tr("البت")}</Button>} />)}
-          {pendingOt.map((o) => <OtRow key={o.id} o={o} showName actions={<Button size="sm" variant="primary" onClick={() => setPick({ kind: 'ot', item: o })}>{tr("البت")}</Button>} />)}
+          {pendingLeaves.map((l) => <LeaveRow key={l.id} l={l} showName actions={<Button size="sm" variant="primary" onClick={() => setPick({ kind: 'leave', item: l })}>{tr("اعتماد أو رفض")}</Button>} />)}
+          {pendingOt.map((o) => <OtRow key={o.id} o={o} showName actions={<Button size="sm" variant="primary" onClick={() => setPick({ kind: 'ot', item: o })}>{tr("اعتماد أو رفض")}</Button>} />)}
         </Card>
       )}
 

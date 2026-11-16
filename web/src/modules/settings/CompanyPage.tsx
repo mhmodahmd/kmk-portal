@@ -3,9 +3,12 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../lib/api';
 import type { CompanySettings } from '../../lib/types';
+import { formatDateTime } from '../../lib/format';
+import { useAction, useApi } from '../../lib/useApi';
 import { Card, ErrorBox, Loader, PageHeader } from '../../ui/Display';
+import { Facts } from '../../ui/Controls';
 import { Button } from '../../ui/Button';
-import { TextInput } from '../../ui/Field';
+import { Form, TextInput } from '../../ui/Field';
 import { useToast } from '../../ui/Overlay';
 
 export default function CompanyPage() {
@@ -27,15 +30,57 @@ export default function CompanyPage() {
       {q.isError && <ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} />}
       <Card className="max-w-2xl">
         {q.isPending ? <Loader /> : (
-          <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
-            <TextInput label={tr("اسم الشركة")} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+          <Form className="flex flex-col gap-4" onSubmit={() => save.mutate()}>
+            <TextInput label={tr("اسم الشركة")} required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
             <TextInput label={tr("العنوان")} value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} />
             <TextInput label={tr("الهاتف")} ltr inputMode="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />
             {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
             <Button type="submit" variant="primary" loading={save.isPending} className="self-start">{tr("حفظ")}</Button>
-          </form>
+          </Form>
         )}
       </Card>
+      <SystemCard />
     </div>
+  );
+}
+
+interface JobsStatus {
+  available: boolean; expected: string[]; triggers: string[]; mailQueue: number;
+  backup?: { available: boolean; keepDays: number; last: { at: string; day: string; copied: string[]; skipped: string[]; removed: string[]; folderUrl: string } | null };
+}
+
+/** النسخ الاحتياطي والمشغّلات الزمنية (مدير النظام) */
+function SystemCard() {
+  const q = useApi<JobsStatus>('system.jobs', {}, { staleTime: 60_000 });
+  const backup = useAction<Record<string, never>, { copied: string[]; folderUrl: string }>('system.backup', {
+    invalidate: ['system.jobs'], success: (r) => (r.copied.length ? tr("نُسخت {0} قاعدة بيانات إلى درايف", r.copied.length) : tr("نسخة اليوم موجودة مسبقاً"))
+  });
+  const install = useAction<{ install: 1 }, JobsStatus>('system.jobs', { invalidate: ['system.jobs'], success: tr("رُكّبت المشغّلات") });
+  const s = q.data;
+  const missing = s ? s.expected.filter((j) => !s.triggers.includes(j)) : [];
+  const last = s?.backup?.last;
+  return (
+    <Card className="flex max-w-2xl flex-col gap-3">
+      <div className="flex flex-col">
+        <h2 className="m-0 text-[16px] font-semibold">{tr("النسخ الاحتياطي والمهام المؤجّلة")}</h2>
+        <span className="text-[13px] text-muted">{tr("نسخة يومية من ملفات البيانات إلى درايف مالك البوابة (تبقى 30 يوماً)، وإرسال البريد كل دقيقة.")}</span>
+      </div>
+      {q.isError ? <ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} /> : !s ? <Loader /> : (
+        <>
+          <Facts items={[
+            { k: tr("آخر نسخة احتياطية"), v: last ? <span className="num">{formatDateTime(last.at)}</span> : tr("لم تُنفَّذ بعد") },
+            { k: tr("ملفات النسخة"), v: last ? tr("{0} نُسخت · {1} مكرّرة", last.copied.length, last.skipped.length) : '—' },
+            { k: tr("المشغّلات الزمنية"), v: !s.available ? tr("غير متاحة (تحتاج موافقة المالك بعد النشر)") : missing.length ? tr("ناقصة: {0}", missing.join(', ')) : tr("مركّبة ({0})", s.triggers.length) },
+            { k: tr("بريد بانتظار الإرسال"), v: <span className="num">{s.mailQueue}</span> }
+          ]} />
+          <div className="flex flex-wrap gap-2">
+            <Button icon="copy" loading={backup.isPending} disabled={!s.backup?.available} onClick={() => backup.mutate({})}>{tr("نسخة احتياطية الآن")}</Button>
+            {s.available && missing.length > 0 && <Button variant="ghost" icon="refresh" loading={install.isPending} onClick={() => install.mutate({ install: 1 })}>{tr("تركيب المشغّلات")}</Button>}
+            {last?.folderUrl && <a href={last.folderUrl} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center gap-1.5 px-2 text-accent-fg no-underline sm:h-10">{tr("مجلد النسخ على درايف")}</a>}
+          </div>
+          {!s.backup?.available && <p className="m-0 text-[13px] text-muted">{tr("النسخ الاحتياطي يحتاج صلاحية درايف المفعّلة من مالك البوابة.")}</p>}
+        </>
+      )}
+    </Card>
   );
 }

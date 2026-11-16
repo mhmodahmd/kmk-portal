@@ -4,7 +4,7 @@ import type { Balance, HrMe, LeaveStatus, LeaveView, OtStatus, OtView } from '..
 import { daysWord, dmy, duration, kwDate } from '../../lib/format';
 import { useAction, useApi } from '../../lib/useApi';
 import { useAuth } from '../../app/auth';
-import { Badge, Card } from '../../ui/Display';
+import { Badge, Card, ListRow } from '../../ui/Display';
 import { Button } from '../../ui/Button';
 import { Select, TextInput, Textarea } from '../../ui/Field';
 import { Dialog } from '../../ui/Overlay';
@@ -43,29 +43,21 @@ export function BalanceCards({ balances }: { balances: Balance[] }) {
 
 export function LeaveRow({ l, showName, actions }: { l: LeaveView; showName?: boolean; actions?: React.ReactNode }) {
   return (
-    <div className="flex flex-wrap items-center gap-3 border-t border-line px-5 py-3.5">
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="font-semibold">{showName ? `${l.name} · ` : ''}{l.typeName} <span className="font-normal text-muted">· {daysWord(l.days)}</span></span>
-        <span className="text-[13px] text-muted num">{dmy(l.from)}{l.to !== l.from ? ` ← ${dmy(l.to)}` : ''}{l.reason ? ` · ${l.reason}` : ''}</span>
-        {(l.managerNote || l.decisionNote) && <span className="text-[13px]">{l.decisionNote ? `${l.decidedBy}: ${l.decisionNote}` : `${l.managerName}: ${l.managerNote}`}</span>}
-      </span>
-      <Badge tone={LEAVE_TONE[l.status]}>{l.statusLabel}</Badge>
-      {actions}
-    </div>
+    <ListRow
+      title={<>{showName ? `${l.name} · ` : ''}{l.typeName} <span className="font-normal text-muted">· {daysWord(l.days)}</span></>}
+      sub={<span className="num">{dmy(l.from)}{l.to !== l.from ? ` ← ${dmy(l.to)}` : ''}{l.reason ? ` · ${l.reason}` : ''}</span>}
+      note={l.managerNote || l.decisionNote ? (l.decisionNote ? `${l.decidedBy}: ${l.decisionNote}` : `${l.managerName}: ${l.managerNote}`) : undefined}
+      badge={<Badge tone={LEAVE_TONE[l.status]}>{l.statusLabel}</Badge>} actions={actions} />
   );
 }
 
 export function OtRow({ o, showName, actions }: { o: OtView; showName?: boolean; actions?: React.ReactNode }) {
   return (
-    <div className="flex flex-wrap items-center gap-3 border-t border-line px-5 py-3.5">
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="font-semibold">{showName ? `${o.name} · ` : ''}{duration(o.minutes)} <span className="font-normal text-muted">· {dmy(o.date)}</span></span>
-        <span className="text-[13px] text-muted">{o.reason || '—'}{o.createdByName && o.createdByName !== o.name ? tr(" · سجّله {0}", o.createdByName) : ''}</span>
-        {o.decisionNote && <span className="text-[13px]">{o.decidedBy}: {o.decisionNote}</span>}
-      </span>
-      <Badge tone={OT_TONE[o.status]}>{o.statusLabel}</Badge>
-      {actions}
-    </div>
+    <ListRow
+      title={<>{showName ? `${o.name} · ` : ''}{duration(o.minutes)} <span className="font-normal text-muted">· {dmy(o.date)}</span></>}
+      sub={<>{o.reason || '—'}{o.createdByName && o.createdByName !== o.name ? tr(" · سجّله {0}", o.createdByName) : ''}</>}
+      note={o.decisionNote ? `${o.decidedBy}: ${o.decisionNote}` : undefined}
+      badge={<Badge tone={OT_TONE[o.status]}>{o.statusLabel}</Badge>} actions={actions} />
   );
 }
 
@@ -82,13 +74,13 @@ export function LeaveDialog({ open, onClose, types, employees }: {
   });
   return (
     <Dialog open={open} onClose={onClose} title={onBehalf ? tr("تسجيل إجازة لموظف") : tr("طلب إجازة")}
-      footer={<><Button variant="primary" className="flex-1" loading={act.isPending} onClick={() => { setError(''); act.mutate(f, { onError: (e) => setError(e.message) }); }}>{onBehalf ? tr("تسجيل") : tr("إرسال الطلب")}</Button><Button variant="ghost" onClick={onClose}>{tr("إلغاء")}</Button></>}>
+      onSubmit={() => { setError(''); act.mutate(f, { onError: (e) => setError(e.message) }); }} footer={<><Button type="submit" variant="primary" className="flex-1" loading={act.isPending}>{onBehalf ? tr("تسجيل") : tr("إرسال الطلب")}</Button><Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button></>}>
       <div className="flex flex-col gap-3">
-        {onBehalf && <Select label={tr("الموظف")} value={f.employeeId} onChange={(e) => setF({ ...f, employeeId: e.target.value })} options={[{ value: '', label: tr("اختر الموظف") }, ...employees!.map((x) => ({ value: x.id, label: x.fullName }))]} />}
-        <Select label={tr("نوع الإجازة")} value={f.typeId} onChange={(e) => setF({ ...f, typeId: e.target.value })} options={types.map((t) => ({ value: t.id, label: t.name }))} />
+        {onBehalf && <Select label={tr("الموظف")} required value={f.employeeId} onChange={(e) => setF({ ...f, employeeId: e.target.value })} options={[{ value: '', label: tr("اختر الموظف") }, ...employees!.map((x) => ({ value: x.id, label: x.fullName }))]} />}
+        <Select label={tr("نوع الإجازة")} required value={f.typeId} onChange={(e) => setF({ ...f, typeId: e.target.value })} options={types.map((t) => ({ value: t.id, label: t.name }))} />
         <div className="grid grid-cols-2 gap-3">
-          <TextInput label={tr("من")} type="date" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value, to: f.to < e.target.value ? e.target.value : f.to })} />
-          <TextInput label={tr("إلى")} type="date" value={f.to} min={f.from} onChange={(e) => setF({ ...f, to: e.target.value })} />
+          <TextInput label={tr("من")} type="date" required value={f.from} onChange={(e) => setF({ ...f, from: e.target.value, to: f.to < e.target.value ? e.target.value : f.to })} />
+          <TextInput label={tr("إلى")} type="date" required value={f.to} min={f.from} onChange={(e) => setF({ ...f, to: e.target.value })} />
         </div>
         <p className="m-0 text-[13px] text-muted">{tr("تُحتسب أيام العمل فقط، وتُستثنى العطل الأسبوعية والرسمية.")}</p>
         <Textarea label={tr("السبب (اختياري)")} value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} maxLength={500} />
@@ -115,13 +107,13 @@ export function OtDialog({ open, onClose, employees }: { open: boolean; onClose:
   };
   return (
     <Dialog open={open} onClose={onClose} title={direct ? tr("تسجيل عمل إضافي") : tr("طلب عمل إضافي")}
-      footer={<><Button variant="primary" className="flex-1" loading={act.isPending} onClick={submit}>{direct ? tr("تسجيل") : tr("إرسال الطلب")}</Button><Button variant="ghost" onClick={onClose}>{tr("إلغاء")}</Button></>}>
+      onSubmit={submit} footer={<><Button type="submit" variant="primary" className="flex-1" loading={act.isPending}>{direct ? tr("تسجيل") : tr("إرسال الطلب")}</Button><Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button></>}>
       <div className="flex flex-col gap-3">
-        {direct && <Select label={tr("الموظف")} value={f.employeeId} onChange={(e) => setF({ ...f, employeeId: e.target.value })} options={[{ value: '', label: tr("اختر الموظف") }, ...employees!.map((x) => ({ value: x.id, label: x.fullName }))]} />}
-        <TextInput label={tr("اليوم")} type="date" max={kwDate()} value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} />
+        {direct && <Select label={tr("الموظف")} required value={f.employeeId} onChange={(e) => setF({ ...f, employeeId: e.target.value })} options={[{ value: '', label: tr("اختر الموظف") }, ...employees!.map((x) => ({ value: x.id, label: x.fullName }))]} />}
+        <TextInput label={tr("اليوم")} type="date" required max={kwDate()} value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} />
         <div className="grid grid-cols-2 gap-3">
           <TextInput label={tr("ساعات")} type="number" min={0} max={12} value={f.hours} onChange={(e) => setF({ ...f, hours: e.target.value })} />
-          <TextInput label={tr("دقائق")} type="number" min={0} max={59} step={5} value={f.mins} onChange={(e) => setF({ ...f, mins: e.target.value })} />
+          <TextInput label={tr("دقائق")} type="number" min={0} max={59} value={f.mins} onChange={(e) => setF({ ...f, mins: e.target.value })} />
         </div>
         <Textarea label={tr("العمل المنجز")} value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} maxLength={300} />
         {!direct && <p className="m-0 text-[13px] text-muted">{tr("يجب أن يكون لك تسجيل حضور في هذا اليوم، ويُعتمد من مديرك المباشر.")}</p>}

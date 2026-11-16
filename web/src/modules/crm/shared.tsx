@@ -61,8 +61,8 @@ function FormDialog({ open, onClose, title, action, payload, success, children, 
   const act = useAction<Record<string, unknown>, unknown>(action, { invalidate: CRM_KEYS, success, silentError: true, onSuccess: (r) => { onClose(); onSaved?.(r); } });
   return (
     <Dialog open={open} onClose={onClose} title={title} wide={wide}
-      footer={<><Button variant="primary" className="flex-1" loading={act.isPending} onClick={() => { setError(''); act.mutate(payload(), { onError: (e) => setError(e.message) }); }}>{tr("حفظ")}</Button>
-        <Button variant="ghost" onClick={onClose}>{tr("إلغاء")}</Button></>}>
+      onSubmit={() => { setError(''); act.mutate(payload(), { onError: (e) => setError(e.message) }); }} footer={<><Button type="submit" variant="primary" className="flex-1" loading={act.isPending}>{tr("حفظ")}</Button>
+        <Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button></>}>
       <div className="flex flex-col gap-3">{children}<Err e={error} /></div>
     </Dialog>
   );
@@ -91,7 +91,7 @@ export function ClientDialog({ open, onClose, client, onSaved }: { open: boolean
   return (
     <FormDialog open={open} onClose={onClose} wide title={client ? tr("تعديل العميل") : tr("عميل جديد")} action="crm.client.save" success={tr("حُفظ العميل")}
       payload={() => ({ ...f, id: client?.id })} onSaved={(r) => onSaved?.(r as ClientView)}>
-      <TextInput label={tr("الاسم")} value={f.name} onChange={set('name')} maxLength={120} autoFocus />
+      <TextInput label={tr("الاسم")} required value={f.name} onChange={set('name')} maxLength={120} autoFocus />
       <Grid>
         <Select label={tr("النوع")} value={f.type} onChange={set('type')} options={opts(L?.clientTypes || [])} />
         <Select label={tr("الفئة")} value={f.category} onChange={set('category')} options={opts(L?.categories || [])} />
@@ -117,7 +117,7 @@ export function ContactDialog({ open, onClose, clientId, contact }: { open: bool
   return (
     <FormDialog open={open} onClose={onClose} title={contact ? tr("تعديل جهة الاتصال") : tr("جهة اتصال جديدة")} action="crm.contact.save" success={tr("حُفظت جهة الاتصال")}
       payload={() => ({ ...f, id: contact?.id, clientId })}>
-      <TextInput label={tr("الاسم")} value={f.name} onChange={set('name')} autoFocus />
+      <TextInput label={tr("الاسم")} required value={f.name} onChange={set('name')} autoFocus />
       <Grid>
         <TextInput label={tr("المسمى الوظيفي")} value={f.jobTitle} onChange={set('jobTitle')} />
         <TextInput label={tr("الهاتف")} ltr inputMode="tel" value={f.phone} onChange={set('phone')} />
@@ -149,20 +149,20 @@ export function ProjectDialog({ open, onClose, project, clientId, clients, onSav
           <label className="mt-2 flex items-center gap-2 font-semibold"><input type="checkbox" className="h-4 w-4 accent-accent" checked={f.reviewed} onChange={(e) => setF({ ...f, reviewed: e.target.checked })} />{tr("راجعته وصحّحته")}</label>
         </div>
       )}
-      <TextInput label={tr("اسم المشروع")} value={f.name} onChange={set('name')} autoFocus />
+      <TextInput label={tr("اسم المشروع")} required value={f.name} onChange={set('name')} autoFocus />
       <Grid>
-        {clients && <Select label={tr("العميل")} value={f.clientId} onChange={set('clientId')} options={[{ value: '', label: tr("اختر العميل") }, ...clients.map((c) => ({ value: c.id, label: c.name }))]} />}
+        {clients && <Select label={tr("العميل")} required value={f.clientId} onChange={set('clientId')} options={[{ value: '', label: tr("اختر العميل") }, ...clients.map((c) => ({ value: c.id, label: c.name }))]} />}
         <TextInput label={tr("النوع")} value={f.type} onChange={set('type')} list="crm-project-types" />
         <Select label={tr("الحالة")} value={f.status} onChange={set('status')} options={opts(L?.projectStatuses || [])} />
         <Select label={tr("الفوترة")} value={f.billing} onChange={set('billing')} options={opts(L?.billing || [])}
           hint={f.billing === 'open' ? tr("بلا قيمة ثابتة: يُعرض المحصّل فقط ولا يُحسب متبقٍ") : undefined} />
-        {f.billing === 'fixed' && <TextInput label={tr("قيمة العقد (د.ك)")} ltr inputMode="decimal" value={f.contractValue} onChange={set('contractValue')} />}
+        {f.billing === 'fixed' && <TextInput label={tr("قيمة العقد (د.ك)")} required ltr inputMode="decimal" value={f.contractValue} onChange={set('contractValue')} />}
         {f.billing === 'open' && (
           <Select label={tr("دورة الفوترة")} value={f.billingCycle} onChange={set('billingCycle')} options={[{ value: '', label: tr("بلا دورة (يُدفع عند الحاجة)") }, ...opts(L?.cycles || [])]}
             hint={f.billingCycle ? tr("تبدأ الدورات من تاريخ البداية، ويُحسب مستحق كل دورة من دفعاتها") : undefined} />
         )}
         {f.billing === 'open' && f.billingCycle && <TextInput label={tr("قيمة الدورة (د.ك)")} ltr inputMode="decimal" value={f.cycleAmount} onChange={set('cycleAmount')} />}
-        <TextInput label={tr("البداية")} type="date" ltr value={f.startDate} onChange={set('startDate')} />
+        <TextInput label={tr("البداية")} type="date" required ltr value={f.startDate} onChange={set('startDate')} />
         <TextInput label={tr("النهاية")} type="date" ltr value={f.endDate} onChange={set('endDate')} />
       </Grid>
       <datalist id="crm-project-types">{(L?.projectTypes || []).map((t) => <option key={t} value={t} />)}</datalist>
@@ -188,16 +188,16 @@ export function PaymentDialog({ open, onClose, projectId, payment, defaultAmount
       payload={() => ({ ...f, id: payment?.id, projectId: projectId || payment?.projectId || sel.projectId })}>
       {pick && (
         <Grid>
-          <Select label={tr("العميل")} value={sel.clientId} onChange={(e) => setSel({ clientId: e.target.value, projectId: '' })} options={clients} autoFocus />
-          <Select label={tr("المشروع")} value={sel.projectId} onChange={(e) => setSel({ ...sel, projectId: e.target.value })} disabled={!sel.clientId}
+          <Select label={tr("العميل")} required value={sel.clientId} onChange={(e) => setSel({ clientId: e.target.value, projectId: '' })} options={clients} autoFocus />
+          <Select label={tr("المشروع")} required value={sel.projectId} onChange={(e) => setSel({ ...sel, projectId: e.target.value })} disabled={!sel.clientId}
             hint={sel.clientId && detail.data && !projects.length ? tr("لا مشاريع جارية لهذا العميل") : undefined}
             options={[{ value: '', label: tr("اختر المشروع") }, ...projects.map((p) => ({ value: p.id, label: p.name }))]} />
         </Grid>
       )}
       <Grid>
-        <TextInput label={tr("المبلغ (د.ك)")} ltr inputMode="decimal" value={f.amount} onChange={set('amount')} autoFocus={!pick} />
+        <TextInput label={tr("المبلغ (د.ك)")} required ltr inputMode="decimal" value={f.amount} onChange={set('amount')} autoFocus={!pick} />
         <Select label={tr("الحالة")} value={f.status} onChange={set('status')} options={[{ value: 'paid', label: tr("محصّلة") }, { value: 'scheduled', label: tr("مجدولة (موعد قادم)") }]} />
-        <TextInput label={f.status === 'paid' ? tr("تاريخ التحصيل") : tr("موعد الاستحقاق")} type="date" ltr value={f.date} onChange={set('date')} />
+        <TextInput label={f.status === 'paid' ? tr("تاريخ التحصيل") : tr("موعد الاستحقاق")} type="date" required ltr value={f.date} onChange={set('date')} />
         <Select label={tr("النوع")} value={f.kind} onChange={set('kind')} options={opts(L?.payKinds || [])} />
         <Select label={tr("طريقة الدفع")} value={f.method} onChange={set('method')} options={opts(L?.payMethods || [])} />
         <TextInput label={tr("رقم الفاتورة")} ltr value={f.invoiceNo} onChange={set('invoiceNo')} />
@@ -219,11 +219,11 @@ export function ProposalDialog({ open, onClose, clientId, proposal }: { open: bo
   return (
     <FormDialog open={open} onClose={onClose} title={proposal ? tr("تعديل العرض") : tr("عرض سعر جديد")} action="crm.proposal.save" success={tr("حُفظ العرض")}
       payload={() => ({ ...f, id: proposal?.id, clientId: clientId || proposal?.clientId || selClient })}>
-      {pick && <Select label={tr("العميل")} value={selClient} onChange={(e) => setSelClient(e.target.value)} options={clients} autoFocus />}
-      <TextInput label={tr("اسم العرض")} value={f.name} onChange={set('name')} autoFocus={!pick} />
+      {pick && <Select label={tr("العميل")} required value={selClient} onChange={(e) => setSelClient(e.target.value)} options={clients} autoFocus />}
+      <TextInput label={tr("اسم العرض")} required value={f.name} onChange={set('name')} autoFocus={!pick} />
       <Grid>
-        <TextInput label={tr("القيمة (د.ك)")} ltr inputMode="decimal" value={f.value} onChange={set('value')} />
-        <TextInput label={tr("التاريخ")} type="date" ltr value={f.issueDate} onChange={set('issueDate')} />
+        <TextInput label={tr("القيمة (د.ك)")} required ltr inputMode="decimal" value={f.value} onChange={set('value')} />
+        <TextInput label={tr("التاريخ")} type="date" required ltr value={f.issueDate} onChange={set('issueDate')} />
         <TextInput label={tr("النوع")} value={f.type} onChange={set('type')} list="crm-project-types" />
         <TextInput label={tr("رابط العرض (اختياري)")} ltr value={f.attachmentUrl} onChange={set('attachmentUrl')} placeholder="https://" />
       </Grid>
@@ -253,10 +253,10 @@ export function ActivityDialog({ open, onClose, clientId, contacts: contactsIn, 
   return (
     <FormDialog open={open} onClose={onClose} wide title={activity ? tr("تعديل النشاط") : tr("نشاط جديد")} action="crm.activity.save" success={tr("سُجّل النشاط")}
       payload={() => ({ ...f, id: activity?.id, clientId: clientId || activity?.clientId || selClient, at: new Date(f.at).toISOString() })}>
-      {pick && <Select label={tr("العميل")} value={selClient} onChange={(e) => { setSelClient(e.target.value); setF((x) => ({ ...x, contactId: '', projectId: '' })); }} options={clients} autoFocus />}
+      {pick && <Select label={tr("العميل")} required value={selClient} onChange={(e) => { setSelClient(e.target.value); setF((x) => ({ ...x, contactId: '', projectId: '' })); }} options={clients} autoFocus />}
       <Grid>
         <Select label={tr("النوع")} value={f.type} onChange={set('type')} options={opts(L?.activityTypes || [])} />
-        <TextInput label={tr("الوقت")} type="datetime-local" ltr value={f.at} onChange={set('at')} />
+        <TextInput label={tr("الوقت")} type="datetime-local" required ltr value={f.at} onChange={set('at')} />
       </Grid>
       <TextInput label={tr("الموضوع")} value={f.title} onChange={set('title')} autoFocus />
       <Textarea label={tr("ما الذي حدث؟")} value={f.description} onChange={set('description')} />
@@ -292,10 +292,10 @@ export function LinkDialog({ open, onClose, ownerType, ownerId }: { open: boolea
   };
   return (
     <Dialog open={open} onClose={onClose} title={tr("إضافة مستند أو رابط")}
-      footer={<><Button variant="primary" className="flex-1" loading={busy} onClick={save}>{tr("حفظ")}</Button><Button variant="ghost" onClick={onClose}>{tr("إلغاء")}</Button></>}>
+      onSubmit={save} footer={<><Button type="submit" variant="primary" className="flex-1" loading={busy}>{tr("حفظ")}</Button><Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button></>}>
       <div className="flex flex-col gap-3">
-        <TextInput label={tr("العنوان")} value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
-        <TextInput label={tr("الرابط")} ltr value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://" disabled={!!file} />
+        <TextInput label={tr("العنوان")} required={!file} value={title} onChange={(e) => setTitle(e.target.value)} autoFocus hint={file ? tr("إن تُرك فارغاً يُستخدم اسم الملف") : undefined} />
+        <TextInput label={tr("الرابط")} type="url" required={!file} ltr value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://" disabled={!!file} />
         {L?.drive && (
           <label className="flex cursor-pointer items-center gap-2 text-[13px] text-accent-fg">
             {file ? tr("الملف: {0}", file.name) : tr("أو ارفع ملفاً (صورة أو PDF حتى 10 ميجابايت)")}

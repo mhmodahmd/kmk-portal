@@ -4,8 +4,8 @@ import type { RecordRow } from '../../lib/types';
 import { dmy, formatTime, hm, kwDate, kwMonth } from '../../lib/format';
 import { useAction, useApi } from '../../lib/useApi';
 import { Badge, Card, EmptyState, ErrorBox, Loader } from '../../ui/Display';
-import { DataTable, MonthPicker } from '../../ui/Controls';
-import { Button } from '../../ui/Button';
+import { DataTable, MonthPicker, Pager, useTable } from '../../ui/Controls';
+import { Button, IconAction } from '../../ui/Button';
 import { Select, TextInput, Textarea } from '../../ui/Field';
 import { Dialog } from '../../ui/Overlay';
 import { ReasonDialog } from '../../ui/Decide';
@@ -14,6 +14,9 @@ import { MapLink } from './shared';
 
 interface Records { month: string; rows: RecordRow[]; people: { id: string; name: string }[]; canEdit: boolean }
 const toHm = (iso: string) => (iso ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kuwait', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso)) : '');
+const EMPTY_ROWS: RecordRow[] = [];
+// المدة تُفرز للتسجيلات المكتملة فقط، والحضور/الانصراف بوقت اليوم لا بالتاريخ الكامل
+const recordSortValue = (r: RecordRow, k: string) => (k === 'minutes' ? (r.outTs ? r.minutes : null) : k === 'inTs' || k === 'outTs' ? (r[k] ? toHm(r[k]) : null) : (r as unknown as Record<string, unknown>)[k]);
 
 export default function RecordsPage() {
   const [month, setMonth] = useState(kwMonth());
@@ -22,6 +25,7 @@ export default function RecordsPage() {
   const [deleting, setDeleting] = useState<RecordRow | null>(null);
   const q = useApi<Records>('att.records', { month, employeeId: emp }, { placeholderData: (p) => p });
   const d = q.data;
+  const t = useTable(d?.rows || EMPTY_ROWS, { sort: { key: 'inTs', dir: 'desc' }, get: recordSortValue });
   const del = useAction('att.record.delete', { invalidate: ['att.records', 'att.board', 'att.report'], success: tr("حُذف التسجيل") });
 
   return (
@@ -37,8 +41,9 @@ export default function RecordsPage() {
       {!d ? <Loader /> : (
         <Card padded={false} className="overflow-hidden">
           {d.rows.length === 0 ? <EmptyState title={tr("لا تسجيلات في هذا الشهر")} /> : (
-            <DataTable head={[tr("الموظف"), tr("اليوم"), tr("الحضور"), tr("الانصراف"), tr("المدة"), tr("المصدر"), tr("الموقع"), '']} minWidth={900}>
-              {d.rows.map((r) => (
+            <DataTable sticky sort={t.sort} onSort={t.onSort} pager={<Pager {...t.pager} />} minWidth={900}
+              head={[{ key: 'name', label: tr("الموظف") }, { key: 'date', label: tr("اليوم") }, { key: 'inTs', label: tr("الحضور") }, { key: 'outTs', label: tr("الانصراف") }, { key: 'minutes', label: tr("المدة") }, { key: 'source', label: tr("المصدر") }, tr("الموقع"), '']}>
+              {t.rows.map((r) => (
                 <tr key={r.id}>
                   <td className="font-semibold">{r.name}</td>
                   <td className="whitespace-nowrap">{r.dayName} <span className="text-muted num">{dmy(r.date)}</span></td>
@@ -52,8 +57,8 @@ export default function RecordsPage() {
                   <td><MapLink loc={r.inLoc} /></td>
                   <td className="text-left whitespace-nowrap">
                     {d.canEdit && <>
-                      <button type="button" aria-label={tr("تعديل")} title={tr("تعديل")} onClick={() => setEditing(r)} className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-chip hover:text-fg cursor-pointer"><Icon name="edit" size={17} /></button>
-                      <button type="button" aria-label={tr("حذف")} title={tr("حذف")} onClick={() => setDeleting(r)} className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-bad-bg hover:text-bad cursor-pointer"><Icon name="trash" size={17} /></button>
+                      <IconAction icon="edit" label={tr("تعديل")} onClick={() => setEditing(r)} />
+                      <IconAction icon="trash" label={tr("حذف")} danger onClick={() => setDeleting(r)} />
                     </>}
                   </td>
                 </tr>
@@ -81,16 +86,16 @@ function RecordDialog({ record, people, onClose }: { record: Partial<RecordRow> 
   const save = useAction('att.record.save', { invalidate: ['att.records', 'att.board', 'att.report'], success: tr("حُفظ التسجيل"), silentError: true, onSuccess: onClose });
   return (
     <Dialog open={!!record} onClose={onClose} title={f.id ? tr("تعديل تسجيل") : tr("تسجيل حضور يدوي")}
-      footer={<><Button variant="primary" className="flex-1" loading={save.isPending} onClick={() => { setError(''); save.mutate(f, { onError: (e) => setError(e.message) }); }}>{tr("حفظ")}</Button><Button variant="ghost" onClick={onClose}>{tr("إلغاء")}</Button></>}>
+      onSubmit={() => { setError(''); save.mutate(f, { onError: (e) => setError(e.message) }); }} footer={<><Button type="submit" variant="primary" className="flex-1" loading={save.isPending}>{tr("حفظ")}</Button><Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button></>}>
       <div className="flex flex-col gap-3">
-        <Select label={tr("الموظف")} value={f.employeeId} disabled={!!f.id} onChange={(e) => setF({ ...f, employeeId: e.target.value })}
+        <Select label={tr("الموظف")} required value={f.employeeId} disabled={!!f.id} onChange={(e) => setF({ ...f, employeeId: e.target.value })}
           options={[{ value: '', label: tr("اختر الموظف") }, ...people.map((p) => ({ value: p.id, label: p.name }))]} />
-        <TextInput label={tr("اليوم")} type="date" max={kwDate()} value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} />
+        <TextInput label={tr("اليوم")} type="date" required max={kwDate()} value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} />
         <div className="grid grid-cols-2 gap-3">
-          <TextInput label={tr("الحضور")} type="time" value={f.inTime} onChange={(e) => setF({ ...f, inTime: e.target.value })} />
+          <TextInput label={tr("الحضور")} type="time" required value={f.inTime} onChange={(e) => setF({ ...f, inTime: e.target.value })} />
           <TextInput label={tr("الانصراف")} type="time" value={f.outTime} onChange={(e) => setF({ ...f, outTime: e.target.value })} hint={tr("بعد منتصف الليل يُحسب لليوم التالي")} />
         </div>
-        <Textarea label={tr("سبب التعديل")} value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} maxLength={300} hint={tr("يظهر في السجل وسجل العمليات")} />
+        <Textarea label={tr("سبب التعديل")} required value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} maxLength={300} hint={tr("يظهر في السجل وسجل العمليات")} />
         {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
       </div>
     </Dialog>

@@ -116,18 +116,18 @@ function GeoDialog({ branch, onClose }: { branch: Branch | null; onClose: () => 
   };
   return (
     <Dialog open={!!branch} onClose={onClose} title={tr("موقع ") + (branch?.name || '')}
-      footer={<>
-        <Button variant="primary" className="flex-1" loading={save.isPending} onClick={() => { setError(''); save.mutate({ branchId: branch!.id, ...f }, { onError: (e) => setError(e.message) }); }}>{tr("حفظ")}</Button>
+      onSubmit={() => { setError(''); save.mutate({ branchId: branch!.id, ...f }, { onError: (e) => setError(e.message) }); }} footer={<>
+        <Button type="submit" variant="primary" className="flex-1" loading={save.isPending}>{tr("حفظ")}</Button>
         <Button variant="ghost" onClick={() => save.mutate({ branchId: branch!.id, lat: '', lng: '' })}>{tr("إزالة الموقع")}</Button>
       </>}>
       <div className="flex flex-col gap-3">
         <Button icon="pin" loading={locating} onClick={here}>{tr("استخدم موقعي الحالي")}</Button>
         <p className="m-0 text-[13px] text-muted">{tr("قف داخل الفرع واضغط الزر، أو انسخ الإحداثيات من خرائط Google.")}</p>
         <div className="grid grid-cols-2 gap-3">
-          <TextInput label={tr("خط العرض")} ltr inputMode="decimal" value={f.lat} onChange={(e) => setF({ ...f, lat: e.target.value })} />
-          <TextInput label={tr("خط الطول")} ltr inputMode="decimal" value={f.lng} onChange={(e) => setF({ ...f, lng: e.target.value })} />
+          <TextInput label={tr("خط العرض")} required ltr inputMode="decimal" value={f.lat} onChange={(e) => setF({ ...f, lat: e.target.value })} />
+          <TextInput label={tr("خط الطول")} required ltr inputMode="decimal" value={f.lng} onChange={(e) => setF({ ...f, lng: e.target.value })} />
         </div>
-        <TextInput label={tr("نطاق البصمة (متر)")} type="number" min={20} max={5000} value={f.geoRadius} onChange={(e) => setF({ ...f, geoRadius: e.target.value })} hint={tr("150 متراً مناسبة لمبنى واحد")} />
+        <TextInput label={tr("نطاق البصمة (متر)")} type="number" required min={20} max={5000} value={f.geoRadius} onChange={(e) => setF({ ...f, geoRadius: e.target.value })} hint={tr("150 متراً مناسبة لمبنى واحد")} />
         {f.lat && f.lng && <a href={`https://maps.google.com/?q=${f.lat},${f.lng}`} target="_blank" rel="noreferrer" className="text-accent-fg no-underline">{tr("عرض على الخريطة")}</a>}
         {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
       </div>

@@ -63,7 +63,7 @@ test('notify: email is queued inside the request and sent by the minute trigger'
   eq(c.srv.processMailQueue(), 1, 'the trigger sends it');
   eq(c.gas.mail.length, 1);
   eq(c.srv.Db.view('core', 'MailQueue').length, 0, 'queue drained');
-  eq([c.gas.mail[0].to, c.gas.mail[0].subject], ['ahmad@example.com', 'أسند إليك سارة مهمة — بوابة KMK']);
+  eq([c.gas.mail[0].to, c.gas.mail[0].subject], ['ahmad@example.com', 'أسند إليك سارة مهمة — KMK One']);
   truthy(c.gas.mail[0].htmlBody.includes('https://mhmodahmd.github.io/kmk-portal/#/tasks/'));
   const tok = c.T.ahmad;
   eq(c.ok('notify.list', {}, tok).email, { on: true, available: true, address: 'ahmad@example.com' });

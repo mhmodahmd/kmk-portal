@@ -1,4 +1,4 @@
-# CLAUDE.md — بوابة KMK
+# CLAUDE.md — KMK One (بوابة KMK)
 
 نظام موحد لشركة KMK: واجهة React على GitHub Pages + خادم Google Apps Script + بيانات Google Sheets.
 

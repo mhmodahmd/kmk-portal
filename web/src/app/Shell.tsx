@@ -45,7 +45,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const inbox = summary.data?.inboxCount || 0;
   return (
     <nav aria-label={tr("القائمة الرئيسية")} className="flex h-full flex-col gap-1 bg-side px-3 py-5 text-side-fg">
-      <img src={BASE + 'logo-on-dark.png'} alt="KMK" className="mx-3 mb-5 mt-1 h-[26px] w-auto self-start" />
+      <img src={BASE + 'logo-one-on-dark.svg'} alt="KMK One" className="mx-3 mb-5 mt-1 h-[26px] w-auto self-start" />
       <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto">
         {groups.map((g) => (
           <div key={g.label} className="flex flex-col gap-0.5">
@@ -117,8 +117,8 @@ export default function Shell({ children }: { children: ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-line bg-surface/95 px-3 py-2.5 backdrop-blur sm:px-6 lg:py-3">
           <IconButton icon="menu" label={tr("القائمة")} className="lg:hidden" onClick={() => setDrawer(true)} />
-          <img src={BASE + 'logo.png'} alt="KMK" className="h-5 w-auto lg:hidden dark:hidden" />
-          <img src={BASE + 'logo-on-dark.png'} alt="KMK" className="hidden h-5 w-auto dark:inline lg:dark:hidden" />
+          <img src={BASE + 'logo-one.svg'} alt="KMK One" className="h-5 w-auto lg:hidden dark:hidden" />
+          <img src={BASE + 'logo-one-on-dark.svg'} alt="KMK One" className="hidden h-5 w-auto dark:inline lg:dark:hidden" />
           <div className="ms-auto flex items-center gap-1">
             <LangToggle />
             <IconButton icon={isDark ? 'sun' : 'moon'} label={isDark ? tr("الوضع النهاري") : tr("الوضع الليلي")} onClick={toggle} />

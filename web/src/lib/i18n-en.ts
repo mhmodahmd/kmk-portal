@@ -4,7 +4,7 @@
  */
 const EN: Record<string, string> = {
   // ───────── التطبيق والتنقل ─────────
-  'بوابة KMK': 'KMK Portal',
+  'KMK One': 'KMK One',
   'العهد والنثريات': 'Custody & Petty Cash',
   'المهام': 'Tasks',
   'العملاء': 'Clients',
@@ -59,7 +59,7 @@ const EN: Record<string, string> = {
   'أدخل اسم المستخدم وكلمة المرور.': 'Enter your username and password.',
   'تعذّر تسجيل الدخول.': 'Could not sign in.',
   'تسجيل الدخول': 'Sign in',
-  'ادخل بحسابك في بوابة KMK.': 'Sign in to your KMK Portal account.',
+  'ادخل بحسابك في KMK One.': 'Sign in to your KMK One account.',
   'الدخول بالبصمة': 'Sign in with biometrics',
   'أو بكلمة المرور': 'or with your password',
   'اسم المستخدم': 'Username',

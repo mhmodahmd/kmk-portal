@@ -24,7 +24,7 @@ function BrandPanel() {
   }
   return (
     <div className="hidden lg:flex flex-1 basis-[560px] flex-col justify-between bg-side p-14 text-white">
-      <img src={BASE + 'logo-on-dark.png'} alt="" className="h-[30px] w-auto self-start" />
+      <img src={BASE + 'logo-one-on-dark.svg'} alt="" className="h-[30px] w-auto self-start" />
       <div className="flex flex-col gap-9">
         <div aria-hidden="true" className="ltr grid self-start gap-1" style={{ gridTemplateColumns: 'repeat(10, 22px)' }}>{cells}</div>
         <div className="flex max-w-[460px] flex-col gap-3">
@@ -40,7 +40,7 @@ function BrandPanel() {
 function MobileBrand() {
   return (
     <div className="lg:hidden bg-side px-6 pt-12 pb-7">
-      <img src={BASE + 'logo-on-dark.png'} alt="KMK" className="h-7 w-auto" />
+      <img src={BASE + 'logo-one-on-dark.svg'} alt="KMK One" className="h-7 w-auto" />
     </div>
   );
 }
@@ -117,10 +117,10 @@ function LoginForm() {
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-5">
       <div className="flex flex-col gap-2">
-        <img src={BASE + 'logo.png'} alt="KMK" className="mb-4 hidden h-9 w-auto self-start lg:block lg:dark:hidden" />
-        <img src={BASE + 'logo-on-dark.png'} alt="KMK" className="mb-4 hidden h-9 w-auto self-start lg:dark:block" />
+        <img src={BASE + 'logo-one.svg'} alt="KMK One" className="mb-4 hidden h-9 w-auto self-start lg:block lg:dark:hidden" />
+        <img src={BASE + 'logo-one-on-dark.svg'} alt="KMK One" className="mb-4 hidden h-9 w-auto self-start lg:dark:block" />
         <h1 className="m-0 text-[28px] font-bold leading-tight">{tr("تسجيل الدخول")}</h1>
-        <p className="m-0 text-[15px] text-muted">{tr("ادخل بحسابك في بوابة KMK.")}</p>
+        <p className="m-0 text-[15px] text-muted">{tr("ادخل بحسابك في KMK One.")}</p>
       </div>
       {support === 'yes' && here && (
         <>

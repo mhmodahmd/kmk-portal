@@ -2,11 +2,11 @@
  * Service Worker: يحفظ هيكل الواجهة لتفتح فوراً.
  * طلبات البيانات (Apps Script) لا تُخزَّن هنا أبداً.
  */
-const CACHE = 'kmk-shell-v1';
+const CACHE = 'kmk-shell-v2';
 const BASE = '/kmk-portal/';
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll([BASE, BASE + 'index.html', BASE + 'icon-192.png', BASE + 'logo-on-dark.png', BASE + 'logo.png'])).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll([BASE, BASE + 'index.html', BASE + 'icon-192.png', BASE + 'logo-one-on-dark.svg', BASE + 'logo-one.svg'])).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {

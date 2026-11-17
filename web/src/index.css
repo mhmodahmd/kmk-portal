@@ -12,11 +12,12 @@
   --c-fg: #1F2328;
   --c-muted: #5B616B;
   --c-chip: #EEF0F3;
-  --c-side: #232323;
-  --c-side-fg: #C9CBD0;
-  --c-side-muted: #9A9DA3;
-  --c-side-active: #2E2E2E;
-  --c-side-border: #333333;
+  --c-side: #3A3D42;
+  --c-side-fg: #D7D9DD;
+  --c-side-muted: #AEB2B8;
+  --c-side-active: #4A4E55;
+  --c-side-border: #4A4E55;
+  --c-side-avatar: #5A5E66;
   --c-brand: #D30B0B;
   --c-accent: #1D5FD1;
   --c-accent-hover: #164AA6;
@@ -34,7 +35,6 @@
   /* ثوابت لا تتبع الوضع: لوحة الدخول الداكنة، حبر التوقيع، واتساب، المطبوعات */
   --c-logo-white: #FFFFFF;
   --c-logo-red: #D30B0B;
-  --c-side-avatar: #3A3A3A;
   --c-ink: #0B1F3A;
   --c-whatsapp: #25D366;
   --c-print-head: #F1F1F1;
@@ -61,6 +61,7 @@
   --c-side-muted: #8A8D93;
   --c-side-active: #222222;
   --c-side-border: #262626;
+  --c-side-avatar: #3A3A3A;
   --c-brand: #F04444;
   --c-accent: #4C8DF6;
   --c-accent-hover: #6B9FF8;

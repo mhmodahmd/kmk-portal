@@ -18,6 +18,8 @@ export interface ProjectView {
   remaining: number; overCollected: boolean; percent: number; spent: number; createdAt: string;
   billingCycle: '' | 'monthly' | 'quarterly' | 'yearly'; billingCycleLabel: string; cycleAmount: number;
   cycle: { start: string; end: string; paid: number; due: number; future: boolean } | null;
+  platformId: string; centerId: string; campaignId: string; revenueKind: '' | 'sponsorship' | 'contract';
+  platformName: string; centerName: string; campaignName: string; revenueKindLabel: string;
 }
 
 export interface PaymentView {
@@ -43,6 +45,11 @@ export interface CrmLookups {
   me: string; isManager: boolean; isAccountant: boolean; hasTeam: boolean; today: string; drive: boolean; people: { id: string; name: string }[];
   stages: Stage[]; clientTypes: Opt[]; categories: Opt[]; statuses: Opt[]; projectStatuses: Opt[]; billing: Opt[]; payKinds: Opt[]; payMethods: Opt[];
   proposalStatuses: Opt[]; activityTypes: Opt[]; cycles: Opt[]; projectTypes: string[];
+  /** خيارات الربط بوحدة المنصات (null إن لم تكن مفعّلة) */
+  platformLinks: {
+    platforms: { id: string; name: string }[]; centers: { id: string; platformId: string; name: string }[];
+    campaigns: { id: string; platformId: string; centerId: string; name: string }[]; revenueKinds: Opt[];
+  } | null;
 }
 
 export interface ClientDetail {

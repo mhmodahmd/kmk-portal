@@ -76,6 +76,13 @@ const CorReportPage = lazy(() => import('../modules/correspondence/CorPages').th
 const CorSettingsPage = lazy(() => import('../modules/correspondence/CorSettingsPage'));
 const CorDashboardPage = lazy(() => import('../modules/correspondence/CorDashboardPage'));
 const LetterDetailPage = lazy(() => import('../modules/correspondence/LetterDetailPage'));
+const PltLayout = lazy(() => import('../modules/platforms/shared').then((m) => ({ default: m.PltLayout })));
+const PltOverviewPage = lazy(() => import('../modules/platforms/OverviewPage'));
+const SalesMonthsPage = lazy(() => import('../modules/platforms/SalesPages').then((m) => ({ default: m.SalesMonthsPage })));
+const SalesMonthPage = lazy(() => import('../modules/platforms/SalesPages').then((m) => ({ default: m.SalesMonthPage })));
+const CentersPage = lazy(() => import('../modules/platforms/CentersPages').then((m) => ({ default: m.CentersPage })));
+const CampaignsPage = lazy(() => import('../modules/platforms/CentersPages').then((m) => ({ default: m.CampaignsPage })));
+const PltSettingsPage = lazy(() => import('../modules/platforms/PltSettingsPage'));
 
 const SOON: Record<string, { label: string; phase: number }> = {
   finance: { label: tr("المالية"), phase: 5 }
@@ -113,6 +120,8 @@ export default function App() {
   const crm = admin || !!roles.crm;
   const cor = admin || !!roles.correspondence;
   const corMgr = admin || roles.correspondence === 'manager';
+  const plt = admin || !!roles.platforms;
+  const pltMgr = admin || roles.platforms === 'manager';
   return (
     <HashRouter>
       {updateRequired && <UpdateBanner />}
@@ -197,6 +206,16 @@ export default function App() {
                 <Route path="report" element={<CorReportPage />} />
                 {corMgr && <Route path="settings" element={<CorSettingsPage />} />}
                 <Route path=":id" element={<LetterDetailPage />} />
+              </Route>
+            )}
+            {plt && (
+              <Route path="/platforms" element={<PltLayout />}>
+                <Route index element={<PltOverviewPage />} />
+                <Route path="sales" element={<SalesMonthsPage />} />
+                <Route path="sales/:month" element={<SalesMonthPage />} />
+                <Route path="centers" element={<CentersPage />} />
+                <Route path="campaigns" element={<CampaignsPage />} />
+                {pltMgr && <Route path="settings" element={<PltSettingsPage />} />}
               </Route>
             )}
             {admin && <Route path="/settings/users" element={<UsersPage />} />}

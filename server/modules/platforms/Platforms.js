@@ -472,7 +472,8 @@ var Platforms = {
       if (p.kind && s.kind !== p.kind) return false;
       if (p.method && s.method !== p.method) return false;
       if (p.channel && s.channel !== p.channel) return false;
-      if (p.country != null && p.country !== '' && Platforms.countryKey_(s.country) !== p.country) return false;
+      // الدولة: مفتاحها بأحرف صغيرة، و«-» لغير المحددة
+      if (p.country != null && p.country !== '' && Platforms.countryKey_(s.country) !== (p.country === '-' ? '' : p.country)) return false;
       if (p.buyer === 'new' && !flags.firstSale[s.id]) return false;
       if (p.buyer === 'returning' && (!s.buyerKey || flags.firstSale[s.id])) return false;
       if (p.buyer === 'upgrade' && !flags.upgrade[s.id]) return false;

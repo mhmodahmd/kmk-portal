@@ -232,7 +232,7 @@ export function ProjectPage() {
       <Card className="flex flex-col gap-4">
         <div className="flex flex-wrap items-start gap-3">
           <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <span className="flex flex-wrap items-center gap-2 text-[13px] text-muted"><ProjectBadge p={p} />{p.type}{p.parentName && <Link to={'/crm/projects/' + p.parentId} className="text-accent-fg no-underline">{tr("فرعي من {0}", p.parentName)}</Link>}</span>
+            <span className="flex flex-wrap items-center gap-2 text-[13px] text-muted"><ProjectBadge p={p} />{p.type}{p.parentName && <Link to={'/crm/projects/' + p.parentId} className="text-accent-fg no-underline">{tr("فرعي من {0}", p.parentName)}</Link>}{p.platformName && <Link to={'/platforms/centers' + (p.centerId ? '?center=' + p.centerId : '')} className="inline-flex items-center rounded-full bg-chip px-2 py-0.5 text-[12px] font-semibold text-fg no-underline">{[tr("ينفّذ في {0}", p.platformName), p.centerName, p.campaignName, p.revenueKindLabel].filter(Boolean).join(' · ')}</Link>}</span>
             <h2 className="m-0 text-[22px] font-bold">{p.name}</h2>
             <Link to={'/crm/clients/' + p.clientId} className="text-accent-fg no-underline">{p.clientName}</Link>
           </div>

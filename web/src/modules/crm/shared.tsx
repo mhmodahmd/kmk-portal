@@ -137,12 +137,15 @@ export function ProjectDialog({ open, onClose, project, clientId, clients, onSav
     name: project?.name || '', clientId: project?.clientId || clientId || '', type: project?.type || '', billing: project?.billing || 'fixed',
     contractValue: toInput(project?.contractValue || 0), startDate: project ? project.startDate : L?.today || '', endDate: project?.endDate || '',
     billingCycle: project?.billingCycle || '', cycleAmount: toInput(project?.cycleAmount || 0),
-    status: project?.status || 'ongoing', notes: project?.notes || '', reviewed: false
+    status: project?.status || 'ongoing', notes: project?.notes || '', reviewed: false,
+    platformId: project?.platformId || '', centerId: project?.centerId || '', campaignId: project?.campaignId || '', revenueKind: project?.revenueKind || ''
   }));
+  const PL = L?.platformLinks;
+  const setPlatform = (e: { target: { value: string } }) => setF({ ...f, platformId: e.target.value, centerId: '', campaignId: '', revenueKind: e.target.value ? f.revenueKind || 'sponsorship' : '' });
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   return (
     <FormDialog open={open} onClose={onClose} wide title={project ? tr("تعديل المشروع") : tr("مشروع جديد")} action="crm.project.save" success={tr("حُفظ المشروع")}
-      payload={() => ({ ...f, id: project?.id, parentId: project?.parentId })} onSaved={(r) => onSaved?.(r as ProjectView)}>
+      payload={() => { const { platformId, centerId, campaignId, revenueKind, ...rest } = f; return { ...rest, id: project?.id, parentId: project?.parentId, ...(PL ? { platformId, centerId, campaignId, revenueKind } : {}) }; }} onSaved={(r) => onSaved?.(r as ProjectView)}>
       {project?.needsReview && (
         <div className="rounded-lg bg-warn-bg px-3 py-2.5 text-warn">
           <p className="m-0">{project.reviewNote}</p>
@@ -165,6 +168,17 @@ export function ProjectDialog({ open, onClose, project, clientId, clients, onSav
         <TextInput label={tr("البداية")} type="date" required ltr value={f.startDate} onChange={set('startDate')} />
         <TextInput label={tr("النهاية")} type="date" ltr value={f.endDate} onChange={set('endDate')} />
       </Grid>
+      {PL && PL.platforms.length > 0 && (
+        <Grid>
+          <Select label={tr("ينفّذ في")} value={f.platformId} onChange={setPlatform} options={[{ value: '', label: tr("لا منصة") }, ...PL.platforms.map((p) => ({ value: p.id, label: p.name }))]}
+            hint={tr("اربط رعايات المراكز والمسابقات وعقود الجهات بالمنصة لتظهر في إيراداتها")} />
+          {f.platformId && <Select label={tr("نوع الإيراد")} value={f.revenueKind} onChange={set('revenueKind')} options={opts(PL.revenueKinds)} />}
+          {f.platformId && <Select label={tr("المركز")} value={f.centerId} onChange={(e) => setF({ ...f, centerId: e.target.value, campaignId: '' })}
+            options={[{ value: '', label: tr("بلا مركز") }, ...PL.centers.filter((c) => c.platformId === f.platformId).map((c) => ({ value: c.id, label: c.name }))]} />}
+          {f.platformId && <Select label={tr("المسابقة أو التحدي")} value={f.campaignId} onChange={set('campaignId')}
+            options={[{ value: '', label: tr("بلا مسابقة") }, ...PL.campaigns.filter((c) => c.platformId === f.platformId && (!f.centerId || !c.centerId || c.centerId === f.centerId)).map((c) => ({ value: c.id, label: c.name }))]} />}
+        </Grid>
+      )}
       <datalist id="crm-project-types">{(L?.projectTypes || []).map((t) => <option key={t} value={t} />)}</datalist>
       <Textarea label={tr("ملاحظات")} value={f.notes} onChange={set('notes')} />
     </FormDialog>

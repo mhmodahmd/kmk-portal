@@ -45,13 +45,18 @@ const ACTIONS: Record<string, string> = {
   // المراسلات
   'letter.create': tr("تسجيل خطاب"), 'letter.update': tr("تعديل خطاب"), 'letter.status': tr("تغيير حالة خطاب"), 'letter.forward': tr("إحالة خطاب"), 'letter.delete': tr("حذف خطاب"),
   'letter.file.upload': tr("إرفاق ملف بخطاب"), 'letter.file.delete': tr("حذف مرفق خطاب"), 'category.save': tr("حفظ تصنيف مراسلات"),
+  // المنصات
+  'import': tr("استيراد ملف بوابة الدفع"), 'month.clear': tr("تفريغ شهر مبيعات"), 'month.approve': tr("اعتماد شهر مبيعات"), 'month.reopen': tr("إعادة فتح شهر مبيعات"),
+  'fees.update': tr("تعديل عمولات البوابة"), 'package.create': tr("إضافة باقة"), 'package.update': tr("تعديل باقة"), 'package.remove': tr("حذف باقة"), 'platform.update': tr("تعديل منصة"),
+  'center.create': tr("إضافة مركز"), 'center.update': tr("تعديل مركز"), 'center.remove': tr("حذف مركز"),
+  'campaign.create': tr("إضافة مسابقة أو تحدٍّ"), 'campaign.update': tr("تعديل مسابقة أو تحدٍّ"), 'campaign.remove': tr("حذف مسابقة أو تحدٍّ"),
   // النظام
   'backup.run': tr("نسخة احتياطية يدوية"), 'migration.legacyAttendance': tr("نقل بيانات الحضور السابق"), 'migration.legacyCustody': tr("نقل بيانات العهد السابق"), 'migration.legacyCrm': tr("نقل بيانات العملاء السابق")
 };
 
 const MODULES: { value: string; label: string }[] = [
   { value: '', label: tr("الكل") }, { value: 'core', label: tr("النواة") }, { value: 'attendance', label: tr("الحضور") }, { value: 'hr', label: tr("الموارد البشرية") },
-  { value: 'custody', label: tr("العهد") }, { value: 'tasks', label: tr("المهام") }, { value: 'crm', label: tr("العملاء") }, { value: 'correspondence', label: tr("المراسلات") }, { value: 'system', label: tr("النظام") }
+  { value: 'custody', label: tr("العهد") }, { value: 'tasks', label: tr("المهام") }, { value: 'crm', label: tr("العملاء") }, { value: 'correspondence', label: tr("المراسلات") }, { value: 'platforms', label: tr("المنصات") }, { value: 'system', label: tr("النظام") }
 ];
 const MODULE_LABEL: Record<string, string> = Object.fromEntries(MODULES.filter((m) => m.value).map((m) => [m.value, m.label]));
 

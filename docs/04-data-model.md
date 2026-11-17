@@ -125,7 +125,7 @@
 | **Deals** | customerId, title, stage (`lead`/`quote`/`negotiation`/`won`/`lost`), value, probability, expectedClose, ownerId, lostReason, projectId |
 | **Quotes** | number, customerId, dealId, date, validUntil, items (json), subtotal, discount, total, status, notes |
 
-## 7ب. المنصات — `KMK-Platforms` 🆕 (مقترح للاعتماد · 2026-11-17)
+## 7ب. المنصات — `KMK-Platforms` (0.10.0 · 2026-11-17)
 
 > متابعة إيرادات التطبيقات التي تشغّلها الشركة: **صاد القرآني** (مبيعات باقات عبر بوابة دفع + رعاة للمراكز والمسابقات) و**مقرأة تراث** (عقود مع جهات ومؤسسات). قاعدة بيانات مستقلة (`DB_PLATFORMS` في Script Properties) تُنشأ عند أول استخدام، وتُزرع فيها المنصتان.
 
@@ -140,6 +140,8 @@
 | **Centers** | platformId, name (مركز المعلم المتقن…), status (`active`/`paused`/`closed`), startDate, endDate, managerName, notes |
 | **Campaigns** | platformId, centerId (اختياري), kind (`competition` مسابقة / `challenge` تحدٍّ), name (تحدي قراءة سورة القلم، مسابقة سورة الطور…), startDate, endDate, status (`planned`/`running`/`ended`/`cancelled`), participants (num، اختياري), notes |
 | **Sales** | عملية لكل سطر من ملف البوابة، **بلا بيانات شخصية**: gatewayId (رقم العملية، فريد يمنع التكرار عند تداخل ملفين), chargeRef, platformId, packageId, kind (`subscription`/`gift`/`test`), method (`knet`/`applepay`/`card`), channel (`app`/`web`), paidAt (بتوقيت الكويت), month (`YYYY-MM`), amount (money), fee (money: تقديرية من نسب الإعدادات أو فعلية من كشف التسوية), net (money), people (للإهداء: المبلغ ÷ قيمة رعاية الفرد), country, buyerKey (HMAC للجوال أو البريد بمفتاح سري في Script Properties، يكفي لمعرفة الجديد والعائد والترقية ولا يُسترجع منه الرقم), expiresAt (للاشتراك: paidAt + مدة الباقة), refunded (money), importId |
+| **Months** | platformId, month (`YYYY-MM`), status (`draft` مسودة / `approved` معتمد ومقفل), approvedBy, approvedAt, reopenedBy, reopenReason |
+| **Config** | key, value (json): عمولة كل وسيلة دفع `fees` = { knet: { pct, fixed } … } |
 | **Imports** | platformId, month, fileName, rows, accepted, duplicates, excluded (json: تجريبية، غير مقبوضة), unmatched (json: أسماء باقات غير معروفة), totals (json), status (`draft` مسودة قابلة للاستبدال / `approved` معتمد ومقفل), importedBy, approvedBy, approvedAt. **الملف الأصلي لا يُحفظ** افتراضياً لأنه يحوي أسماء المشترين وجوالاتهم وبريدهم (خيار بديل بانتظار القرار: حفظه في مجلد لمدير المنصات فقط مع حذف تلقائي بعد مدة) |
 
 **إضافات على `Projects` في وحدة العملاء** (يضيفها `Db.ensureSchema_` بلا حذف): `platformId` (ينفّذ في: صاد / المقرأة / فارغ)، `centerId`، `campaignId`، `revenueKind` (`sponsorship` رعاية / `contract` عقد خدمة). مشروع المعلم المتقن مثلاً: ينفّذ في صاد ← مركز المعلم المتقن ← رعاية.

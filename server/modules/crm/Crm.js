@@ -22,7 +22,9 @@ var CRM_SCHEMA = {
   Projects: [
     ['id', 'text'], ['name', 'text'], ['clientId', 'text'], ['type', 'text'], ['billing', 'text'], ['contractValue', 'num'], ['startDate', 'date'],
     ['endDate', 'date'], ['status', 'text'], ['parentId', 'text'], ['needsReview', 'bool'], ['reviewNote', 'text'], ['notes', 'text'],
-    ['proposalId', 'text'], ['createdBy', 'text'], ['createdAt', 'ts'], ['updatedAt', 'ts'], ['billingCycle', 'text'], ['cycleAmount', 'num']
+    ['proposalId', 'text'], ['createdBy', 'text'], ['createdAt', 'ts'], ['updatedAt', 'ts'], ['billingCycle', 'text'], ['cycleAmount', 'num'],
+    // ربط المشروع بوحدة المنصات (0.10.0): ينفّذ في منصة، ومركز، ومسابقة، ونوع الإيراد (رعاية/عقد)
+    ['platformId', 'text'], ['centerId', 'text'], ['campaignId', 'text'], ['revenueKind', 'text']
   ],
   Payments: [
     ['id', 'text'], ['projectId', 'text'], ['amount', 'num'], ['kind', 'text'], ['method', 'text'], ['status', 'text'], ['date', 'date'],
@@ -180,7 +182,8 @@ var Crm = {
     return {
       users: indexBy_(Db.view('core', 'Users')), clients: indexBy_(Crm.rows_('Clients')), projects: indexBy_(Crm.rows_('Projects')),
       stages: indexBy_(Crm.rows_('Stages')), contacts: indexBy_(Crm.rows_('Contacts')), pays: pays, spent: spent, paidList: paidList, today: localDate_(),
-      tasks: Crm.enabled_('tasks') ? indexBy_(Db.view('tasks', 'Tasks')) : {}
+      tasks: Crm.enabled_('tasks') ? indexBy_(Db.view('tasks', 'Tasks')) : {},
+      plt: Crm.enabled_('platforms') ? { platforms: indexBy_(Db.view('platforms', 'Platforms')), centers: indexBy_(Db.view('platforms', 'Centers')), campaigns: indexBy_(Db.view('platforms', 'Campaigns')) } : null
     };
   },
   userName_: function (m, id) { var u = id && m.users[id]; return u ? u.fullName : ''; },
@@ -220,7 +223,12 @@ var Crm = {
       percent: fixed && p.contractValue ? Math.round(x.paid * 100 / p.contractValue) : (cs && p.cycleAmount ? Math.min(100, Math.round(cs.paid * 100 / p.cycleAmount)) : 0),
       spent: m.spent[p.name] || 0, createdAt: p.createdAt,
       billingCycle: p.billingCycle || '', billingCycleLabel: CRM.CYCLE[p.billingCycle] || '', cycleAmount: p.cycleAmount || 0,
-      cycle: cs ? { start: cs.start, end: cs.end, paid: cs.paid, due: cs.due, future: cs.future } : null
+      cycle: cs ? { start: cs.start, end: cs.end, paid: cs.paid, due: cs.due, future: cs.future } : null,
+      platformId: p.platformId || '', centerId: p.centerId || '', campaignId: p.campaignId || '', revenueKind: p.revenueKind || '',
+      platformName: m.plt && p.platformId && m.plt.platforms[p.platformId] ? m.plt.platforms[p.platformId].name : '',
+      centerName: m.plt && p.centerId && m.plt.centers[p.centerId] ? m.plt.centers[p.centerId].name : '',
+      campaignName: m.plt && p.campaignId && m.plt.campaigns[p.campaignId] ? m.plt.campaigns[p.campaignId].name : '',
+      revenueKindLabel: p.revenueKind === 'sponsorship' ? 'رعاية' : p.revenueKind === 'contract' ? 'عقد خدمة' : ''
     };
   },
 
@@ -271,7 +279,8 @@ var Crm = {
       stages: Crm.rows_('Stages').slice().sort(function (a, b) { return a.sortOrder - b.sortOrder; }).map(function (s) { return { id: s.id, name: s.name, color: s.color, kind: s.kind }; }),
       clientTypes: dict(CRM.TYPE), categories: dict(CRM.CATEGORY), statuses: dict(CRM.STATUS), projectStatuses: dict(CRM.P_STATUS), billing: dict(CRM.BILLING),
       payKinds: dict(CRM.PAY_KIND), payMethods: dict(CRM.PAY_METHOD), proposalStatuses: dict(CRM.PR_STATUS), activityTypes: dict(CRM.ACT), cycles: dict(CRM.CYCLE),
-      projectTypes: Object.keys(types).sort(function (a, b) { return a.localeCompare(b, 'ar'); })
+      projectTypes: Object.keys(types).sort(function (a, b) { return a.localeCompare(b, 'ar'); }),
+      platformLinks: Crm.enabled_('platforms') ? Platforms.linkOptions_() : null
     };
   },
 
@@ -322,6 +331,9 @@ var Crm = {
       if (p.status && x.status !== p.status) return false;
       if (p.review && !x.needsReview) return false;
       if (p.clientId && x.clientId !== p.clientId) return false;
+      if (p.platformId && x.platformId !== p.platformId) return false;
+      if (p.centerId && x.centerId !== p.centerId) return false;
+      if (p.campaignId && x.campaignId !== p.campaignId) return false;
       if (q && (x.name + ' ' + ((m.clients[x.clientId] || {}).name || '')).toLowerCase().indexOf(q) < 0) return false;
       return true;
     }).map(function (x) { return Crm.projectView_(x, m); }).sort(function (a, b) {
@@ -549,6 +561,8 @@ var Crm = {
         rec.parentId = par.id;
       } else rec.parentId = '';
       if (p.reviewed) { rec.needsReview = false; rec.reviewNote = ''; }
+      // الربط بالمنصات يُحدَّث فقط حين يرسله النموذج (platformId موجود في الطلب)
+      if (Crm.enabled_('platforms') && Object.prototype.hasOwnProperty.call(p, 'platformId')) Object.assign(rec, Platforms.validateLink_(p));
       var saved;
       if (cur) {
         if (Crm.rows_('Projects').some(function (x) { return x.id !== cur.id && x.name === rec.name; })) throw appError('يوجد مشروع آخر بالاسم نفسه.');

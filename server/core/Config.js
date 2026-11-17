@@ -40,6 +40,9 @@ var MODULES = [
   // المراسلات (0.9.7): موظف مراسلات يسجّل ويؤرشف ويرى ما سجّله أو أُحيل إليه، ومدير يرى الكل ويحذف ويضبط التصنيفات
   { key: 'correspondence', label: 'المراسلات', enabled: true,
     roles: { clerk: 'موظف مراسلات', manager: 'مدير المراسلات' } },
+  // المنصات (0.10.0): إيرادات صاد القرآني ومقرأة تراث — مبيعات التطبيق من ملف البوابة، والرعايات والعقود من العملاء
+  { key: 'platforms', label: 'المنصات', enabled: true,
+    roles: { viewer: 'مشاهد', accountant: 'محاسب المنصات', manager: 'مدير المنصات' } },
   { key: 'finance', label: 'المالية', enabled: false,
     roles: { viewer: 'مشاهد', accountant: 'محاسب', fmanager: 'مدير مالي' } }
 ];

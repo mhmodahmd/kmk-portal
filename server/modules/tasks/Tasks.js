@@ -231,6 +231,7 @@ var Tasks = {
       if (view === 'team' && team.indexOf(t.assigneeId) < 0) return false;
       if (view === 'created' && t.createdBy !== u) return false;
       if (view === 'watching' && (t.watchers || []).indexOf(u) < 0) return false;
+      if (view === 'dash' && t.private) return false; // نطاق «نظرة عامة» نفسه: كل ما يراه المستخدم عدا الخاص
       if (p.status && t.status !== p.status) return false;
       if (p.assigneeId && t.assigneeId !== p.assigneeId) return false;
       if (p.projectId && t.projectId !== p.projectId) return false;

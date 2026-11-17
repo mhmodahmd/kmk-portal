@@ -22,7 +22,7 @@ const ACTIONS: Record<string, string> = {
   'employee.create': tr("إضافة موظف"), 'employee.update': tr("تعديل ملف موظف"), 'employee.account.create': tr("إنشاء حساب لموظف"), 'employee.account.link': tr("ربط موظف بحساب"), 'employee.account.unlink': tr("فك ربط موظف"),
   'departments.create': tr("إضافة قسم"), 'departments.update': tr("تعديل قسم"), 'branches.create': tr("إضافة فرع"), 'branches.update': tr("تعديل فرع"),
   'shifts.create': tr("إضافة وردية"), 'shifts.update': tr("تعديل وردية"), 'leavetypes.create': tr("إضافة نوع إجازة"), 'leavetypes.update': tr("تعديل نوع إجازة"),
-  'leave.request': tr("طلب إجازة"), 'leave.create': tr("تسجيل إجازة"), 'leave.approve': tr("اعتماد إجازة"), 'leave.reject': tr("رفض إجازة"), 'leave.cancel': tr("إلغاء طلب إجازة"), 'leave.adminCancel': tr("إلغاء إجازة معتمدة"), 'leave.adjust': tr("تسوية رصيد إجازة"),
+  'leave.request': tr("طلب إجازة"), 'leave.create': tr("تسجيل إجازة"), 'leave.approve': tr("اعتماد إجازة"), 'leave.reject': tr("رفض إجازة"), 'leave.cancel': tr("إلغاء طلب إجازة"), 'leave.adminCancel': tr("إلغاء إجازة معتمدة"), 'leave.remove': tr("حذف طلب إجازة نهائياً"), 'leave.adjust': tr("تسوية رصيد إجازة"),
   'ot.request': tr("طلب عمل إضافي"), 'ot.add': tr("تسجيل عمل إضافي"), 'ot.approve': tr("اعتماد عمل إضافي"), 'ot.reject': tr("رفض عمل إضافي"), 'ot.cancel': tr("إلغاء عمل إضافي"),
   'holiday.save': tr("حفظ عطلة"), 'holiday.delete': tr("حذف عطلة"),
   // العهد

@@ -34,21 +34,26 @@ export function Change({ now, prev, label = tr("عن الشهر الماضي"), 
 }
 
 /** خلايا صغيرة متلاصقة (إجمالي، نسبة…) */
-export function MiniStats({ items }: { items: { label: string; value: ReactNode; sub?: string }[] }) {
+export function MiniStats({ items }: { items: { label: string; value: ReactNode; sub?: string; to?: string }[] }) {
   return (
     <div className="grid gap-px overflow-hidden rounded-lg border border-line bg-line text-center" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
-      {items.map((x) => (
-        <div key={x.label} className="flex flex-col gap-0.5 bg-surface px-2 py-2.5">
-          <span className="text-[20px] font-bold leading-none num">{x.value}</span>
-          <span className="text-[12px] text-muted">{x.label}</span>
-          {x.sub && <span className="text-[11px] text-muted">{x.sub}</span>}
-        </div>
-      ))}
+      {items.map((x) => {
+        const body = (
+          <>
+            <span className="text-[20px] font-bold leading-none num">{x.value}</span>
+            <span className="text-[12px] text-muted">{x.label}</span>
+            {x.sub && <span className="text-[11px] text-muted">{x.sub}</span>}
+          </>
+        );
+        const cls = 'flex flex-col gap-0.5 bg-surface px-2 py-2.5 text-fg no-underline';
+        return x.to ? <Link key={x.label} to={x.to} className={cx(cls, 'hover:bg-chip')}>{body}</Link> : <div key={x.label} className={cls}>{body}</div>;
+      })}
     </div>
   );
 }
 
-export interface Segment { key: string; label: string; count: number; className: string }
+/** مع `to` يصبح سطر القائمة رابطاً يفتح ما يمثّله الرقم */
+export interface Segment { key: string; label: string; count: number; className: string; to?: string }
 
 /** شريط مكدّس مع قائمة نصية بالأعداد والنسب (فلا يُعتمد على اللون وحده) */
 export function StackBar({ items, total, label }: { items: Segment[]; total: number; label: string }) {
@@ -60,14 +65,23 @@ export function StackBar({ items, total, label }: { items: Segment[]; total: num
         </div>
       ) : <div className="h-3 rounded-full bg-chip" />}
       <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
-        {items.map((s) => (
-          <li key={s.key} className="flex items-center gap-2 text-[13px]">
-            <span className={cx('h-2.5 w-2.5 shrink-0 rounded-sm', s.className)} />
-            <span className="min-w-0 flex-1 truncate">{s.label}</span>
-            <span className="num font-semibold">{s.count}</span>
-            <span className="num w-10 text-end text-[12px] text-muted">{total ? Math.round(s.count * 100 / total) : 0}%</span>
-          </li>
-        ))}
+        {items.map((s) => {
+          const row = (
+            <>
+              <span className={cx('h-2.5 w-2.5 shrink-0 rounded-sm', s.className)} />
+              <span className="min-w-0 flex-1 truncate">{s.label}</span>
+              <span className="num font-semibold">{s.count}</span>
+              <span className="num w-10 text-end text-[12px] text-muted">{total ? Math.round(s.count * 100 / total) : 0}%</span>
+            </>
+          );
+          return (
+            <li key={s.key} className="text-[13px]">
+              {s.to
+                ? <Link to={s.to} className="-mx-1.5 flex items-center gap-2 rounded-md px-1.5 py-0.5 text-fg no-underline hover:bg-chip">{row}</Link>
+                : <span className="flex items-center gap-2">{row}</span>}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

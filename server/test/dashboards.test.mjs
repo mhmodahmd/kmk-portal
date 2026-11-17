@@ -84,6 +84,10 @@ test('tasks dashboard: open, overdue, review, weekly trend and per-assignee load
   eq(d.weekly[7].created, 3, 'private tasks are excluded');
   const mine = c.ok('tsk.dashboard', {}, c.T.ahmad);
   eq([mine.scope, mine.kpis.open, mine.kpis.mine], ['mine', 2, 2]);
+  // قائمة «dash» تطابق نطاق اللوحة، فتفتح أرقامها المهام نفسها
+  const list = c.ok('tsk.list', { view: 'dash', old: true }, c.T.sara);
+  eq(list.length, d.kpis.total, 'same tasks as the dashboard, private excluded');
+  eq(d.byStatus.map((s) => s.count), d.byStatus.map((s) => list.filter((t) => t.status === s.status).length));
   eq(c.fail('tsk.dashboard', {}, 'bad-token').code, 'SESSION_EXPIRED');
 });
 
@@ -122,4 +126,18 @@ test('home dashboard: attention items follow the user roles, with a personal mon
   const mgr = c.ok('home.dashboard', {}, c.T.sara);
   eq([mgr.inbox.length, mgr.inbox[0].refId], [1, r.id], 'the inbox head shows the team leave request');
   eq(c.ok('home.dashboard', {}, c.A).my.attendance, null, 'the admin has no employee file');
+});
+
+test('hr.leave.remove: the system admin deletes a test leave for good, the balance returns, HR cannot', () => {
+  const c = company();
+  const r = c.ok('hr.leave.request', { typeId: 'lt_annual', from: '2026-11-22', to: '2026-11-24', reason: 'تجربة' }, c.T.ahmad);
+  const used = () => c.ok('hr.me', {}, c.T.ahmad).balances.find((b) => b.typeId === 'lt_annual');
+  const before = used();
+  eq(c.ok('hr.leave.list', { status: 'all' }, c.T.huda).length, 1);
+  eq(c.fail('hr.leave.remove', { id: r.id }, c.T.huda).code, 'FORBIDDEN', 'the HR manager cannot hard-delete');
+  eq(c.ok('hr.leave.remove', { id: r.id }, c.A), true);
+  eq(c.ok('hr.leave.list', { status: 'all' }, c.T.huda).length, 0);
+  eq(c.fail('hr.leave.remove', { id: r.id }, c.A).code, 'NOT_FOUND');
+  truthy(JSON.stringify(used()) !== JSON.stringify(before), 'the pending days no longer hold the balance');
+  truthy(c.ok('audit.list', { module: 'hr' }, c.A).rows.some((x) => x.action === 'leave.remove'), 'audited');
 });

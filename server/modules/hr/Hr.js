@@ -665,6 +665,15 @@ var Hr = {
     return true;
   },
 
+  /** حذف نهائي لطلب إجازة (للبيانات التجريبية أو المدخلة خطأً). لمدير النظام فقط، ويبقى أثره في السجل */
+  leaveRemove: function (ctx, p) {
+    var r = Db.getOrThrow('hr', 'LeaveRequests', p.id, 'طلب الإجازة');
+    Db.remove('hr', 'LeaveRequests', r.id);
+    Audit.log(ctx.user, 'hr', 'leave.remove', 'LeaveRequest', r.id,
+      { employeeId: r.employeeId, typeId: r.typeId, from: r.from, to: r.to, days: r.days, status: r.status });
+    return true;
+  },
+
   leaveBalances: function (ctx, p) {
     var emp = Staff.getOrThrow_(p.employeeId);
     var year = String(p.year || localDate_().slice(0, 4));
@@ -815,6 +824,7 @@ var Hr = {
       'hr.leave.list': { perm: hr, fn: Hr.leaveList },
       'hr.leave.create': { perm: hr, fn: Hr.leaveCreate },
       'hr.leave.adminCancel': { perm: hr, fn: Hr.leaveAdminCancel },
+      'hr.leave.remove': { perm: 'super', fn: Hr.leaveRemove },
       'hr.leave.balances': { perm: hr, fn: Hr.leaveBalances },
       'hr.leave.adjust': { perm: hr, fn: Hr.leaveAdjust },
       'hr.ot.list': { perm: hr, fn: Hr.otList }

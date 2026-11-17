@@ -28,6 +28,7 @@ const AttSettingsPage = lazy(() => import('../modules/attendance/SettingsPage'))
 const AttOverviewPage = lazy(() => import('../modules/attendance/OverviewPage'));
 
 const HrLayout = lazy(() => import('../modules/hr/HrLayout'));
+const HrIndex = lazy(() => import('../modules/hr/HrLayout').then((m) => ({ default: m.HrIndex })));
 const MyProfilePage = lazy(() => import('../modules/hr/MyHrPages').then((m) => ({ default: m.MyProfilePage })));
 const MyLeavePage = lazy(() => import('../modules/hr/MyHrPages').then((m) => ({ default: m.MyLeavePage })));
 const MyOvertimePage = lazy(() => import('../modules/hr/MyHrPages').then((m) => ({ default: m.MyOvertimePage })));
@@ -55,6 +56,7 @@ const TaskListPage = lazy(() => import('../modules/tasks/TasksPages').then((m) =
 const TaskBoardPage = lazy(() => import('../modules/tasks/BoardPage'));
 const TaskDetailPage = lazy(() => import('../modules/tasks/TaskDetailPage'));
 const TasksOverviewPage = lazy(() => import('../modules/tasks/OverviewPage'));
+const TaskBrowsePage = lazy(() => import('../modules/tasks/TasksPages').then((m) => ({ default: m.TaskBrowsePage })));
 
 const CrmLayout = lazy(() => import('../modules/crm/CrmPages').then((m) => ({ default: m.CrmLayout })));
 const CrmHomePage = lazy(() => import('../modules/crm/CrmPages').then((m) => ({ default: m.CrmHomePage })));
@@ -135,7 +137,8 @@ export default function App() {
             )}
             {hr && (
               <Route path="/hr" element={<HrLayout />}>
-                <Route index element={<MyProfilePage />} />
+                <Route index element={<HrIndex />} />
+                <Route path="me" element={<MyProfilePage />} />
                 <Route path="leave" element={<MyLeavePage />} />
                 <Route path="overtime" element={<MyOvertimePage />} />
                 <Route path="team" element={<TeamPage />} />
@@ -163,6 +166,7 @@ export default function App() {
                 <Route index element={<MyTasksPage />} />
                 <Route path="board" element={<TaskBoardPage />} />
                 <Route path="overview" element={<TasksOverviewPage />} />
+                <Route path="browse" element={<TaskBrowsePage />} />
                 <Route path="assigned" element={<TaskListPage view="created" />} />
                 <Route path="watching" element={<TaskListPage view="watching" />} />
                 <Route path="team" element={<TaskListPage view="team" />} />

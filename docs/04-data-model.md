@@ -125,6 +125,30 @@
 | **Deals** | customerId, title, stage (`lead`/`quote`/`negotiation`/`won`/`lost`), value, probability, expectedClose, ownerId, lostReason, projectId |
 | **Quotes** | number, customerId, dealId, date, validUntil, items (json), subtotal, discount, total, status, notes |
 
+## 7ب. المنصات — `KMK-Platforms` 🆕 (مقترح للاعتماد · 2026-11-17)
+
+> متابعة إيرادات التطبيقات التي تشغّلها الشركة: **صاد القرآني** (مبيعات باقات عبر بوابة دفع + رعاة للمراكز والمسابقات) و**مقرأة تراث** (عقود مع جهات ومؤسسات). قاعدة بيانات مستقلة (`DB_PLATFORMS` في Script Properties) تُنشأ عند أول استخدام، وتُزرع فيها المنصتان.
+
+**مصدران للإيراد، لا يُجمع المبلغ مرتين:**
+1. **مبيعات التطبيق** — من ملف بوابة الدفع الشهري، تُلخَّص في `MonthlySales` (هذه الوحدة تملكها).
+2. **العقود والرعايات** — كل رعاية (لمركز أو مسابقة) وكل عقد مع جهة هو **مشروع في وحدة العملاء** بعميله (الراعي أو الجهة) ودفعاته المجدولة والمحصّلة كما هي اليوم. المشروع يشير إلى المنصة والمركز والمسابقة؛ وحدة المنصات تقرأ الدفعات عبر واجهة العملاء العامة ولا تكتب فيها.
+
+| الجدول | الأعمدة الرئيسية |
+|---|---|
+| **Platforms** | key (`saad`/`maqraa`), name, hasAppSales (bool: صاد نعم، المقرأة لا), gateway (اسم بوابة الدفع), currency (`KWD`), active, sortOrder |
+| **Packages** | platformId, name (باقة الإهداء، الباقة البرونزية…), code (كما يظهر في ملف البوابة، للمطابقة عند الاستيراد), price (money، سعر مرجعي), period (`one_time`/`monthly`/`yearly`), active, sortOrder |
+| **Centers** | platformId, name (مركز المعلم المتقن…), status (`active`/`paused`/`closed`), startDate, endDate, managerName, notes |
+| **Campaigns** | platformId, centerId (اختياري), kind (`competition` مسابقة / `challenge` تحدٍّ), name (تحدي قراءة سورة القلم، مسابقة سورة الطور…), startDate, endDate, status (`planned`/`running`/`ended`/`cancelled`), participants (num، اختياري), notes |
+| **MonthlySales** | platformId, month (`YYYY-MM`), packageId, count, gross (money), fees (money: عمولة البوابة), refunds (money), net (money = gross − fees − refunds), importId |
+| **Imports** | platformId, month, fileName, driveFileId (الملف الأصلي على Drive في «بوابة KMK — الملفات/المنصات/YYYY»), rows, matchedRows, unmatched (json: رموز باقات غير معروفة), totals (json), status (`draft` مسودة قابلة للاستبدال / `approved` معتمد ومقفل), importedBy, approvedBy, approvedAt |
+
+**إضافات على `Projects` في وحدة العملاء** (يضيفها `Db.ensureSchema_` بلا حذف): `platformId` (ينفّذ في: صاد / المقرأة / فارغ)، `centerId`، `campaignId`، `revenueKind` (`sponsorship` رعاية / `contract` عقد خدمة). مشروع المعلم المتقن مثلاً: ينفّذ في صاد ← مركز المعلم المتقن ← رعاية.
+
+**التعريفات في اللوحات:**
+- **إيراد الشهر** = صافي مبيعات الشهر (`MonthlySales.net`) + المحصّل في الشهر من دفعات مشاريع المنصة (`Payments` بحالة `paid` وتاريخها في الشهر).
+- **المستحق** = الدفعات المجدولة + مستحق دورة الاشتراك الحالية للمشاريع المفتوحة (القاعدة الحالية في العملاء). **نسبة التحصيل** = المحصّل ÷ (المحصّل + المستحق حتى اليوم).
+- شهر المبيعات المعتمد لا يُستبدل إلا بإعادة فتحه من مدير المنصات (يُسجَّل في السجل).
+
 ## 8. المالية — `KMK-Finance` 🆕
 
 | الجدول | الأعمدة الرئيسية |
@@ -147,6 +171,9 @@
 | `custody.opened` / `custody.settled` | العهد | المالية (قيد صرف أو تسوية) |
 | `crm.deal.won` | العملاء | المهام (مهمة بدء)، المالية (فاتورة مسودة) |
 | `finance.invoice.overdue` | المالية | المهام (متابعة تحصيل)، الإشعارات |
+| `plt.month.missing` (اليوم 5 من الشهر) | المنصات | الإشعارات: محاسب المنصات «لم تُستورد مبيعات الشهر الماضي» |
+| `plt.month.approved` | المنصات | المالية لاحقاً (قيد إيراد بمصدره `platforms`) |
+| `plt.campaign.ending` (قبل 7 أيام) | المنصات | الإشعارات: مدير المنصات إن كان للمسابقة رعاية لم تُحصَّل كاملة |
 
 ## 10. نقل البيانات من النظامين الحاليين
 

@@ -130,22 +130,22 @@
 > متابعة إيرادات التطبيقات التي تشغّلها الشركة: **صاد القرآني** (مبيعات باقات عبر بوابة دفع + رعاة للمراكز والمسابقات) و**مقرأة تراث** (عقود مع جهات ومؤسسات). قاعدة بيانات مستقلة (`DB_PLATFORMS` في Script Properties) تُنشأ عند أول استخدام، وتُزرع فيها المنصتان.
 
 **مصدران للإيراد، لا يُجمع المبلغ مرتين:**
-1. **مبيعات التطبيق** — من ملف بوابة الدفع الشهري، تُلخَّص في `MonthlySales` (هذه الوحدة تملكها).
+1. **مبيعات التطبيق** — من ملف بوابة الدفع الشهري، تُحفظ عملية بعملية في `Sales` (هذه الوحدة تملكها).
 2. **العقود والرعايات** — كل رعاية (لمركز أو مسابقة) وكل عقد مع جهة هو **مشروع في وحدة العملاء** بعميله (الراعي أو الجهة) ودفعاته المجدولة والمحصّلة كما هي اليوم. المشروع يشير إلى المنصة والمركز والمسابقة؛ وحدة المنصات تقرأ الدفعات عبر واجهة العملاء العامة ولا تكتب فيها.
 
 | الجدول | الأعمدة الرئيسية |
 |---|---|
 | **Platforms** | key (`saad`/`maqraa`), name, hasAppSales (bool: صاد نعم، المقرأة لا), gateway (اسم بوابة الدفع), currency (`KWD`), active, sortOrder |
-| **Packages** | platformId, name (باقة الإهداء، الباقة البرونزية…), code (كما يظهر في ملف البوابة، للمطابقة عند الاستيراد), price (money، سعر مرجعي), period (`one_time`/`monthly`/`yearly`), active, sortOrder |
+| **Packages** | platformId, name (الباقة البرونزية…), code (كما يظهر في ملف البوابة، للمطابقة عند الاستيراد), kind (`subscription` اشتراك له مدة / `gift` إهداء / `test` تجريبية تُستبعد), price (money، سعر مرجعي), durationDays (للاشتراك), unitPrice (للإهداء: قيمة رعاية الفرد), rank (لحساب الترقية), active, sortOrder. البذرة لصاد: برونزي 6 د.ك 30 يوماً · فضي 15 د.ك 90 يوماً · ذهبي 30 د.ك 120 يوماً · «علم وتعلم» باقة الإهداء (يشتريها شخص لغيره من الويب، رعاية الفرد 10 د.ك، فالمبلغ ÷ 10 = عدد الأفراد) · «باقة تجريبية» 1 د.ك تُستبعد |
 | **Centers** | platformId, name (مركز المعلم المتقن…), status (`active`/`paused`/`closed`), startDate, endDate, managerName, notes |
 | **Campaigns** | platformId, centerId (اختياري), kind (`competition` مسابقة / `challenge` تحدٍّ), name (تحدي قراءة سورة القلم، مسابقة سورة الطور…), startDate, endDate, status (`planned`/`running`/`ended`/`cancelled`), participants (num، اختياري), notes |
-| **MonthlySales** | platformId, month (`YYYY-MM`), packageId, count, gross (money), fees (money: عمولة البوابة), refunds (money), net (money = gross − fees − refunds), importId |
-| **Imports** | platformId, month, fileName, driveFileId (الملف الأصلي على Drive في «بوابة KMK — الملفات/المنصات/YYYY»), rows, matchedRows, unmatched (json: رموز باقات غير معروفة), totals (json), status (`draft` مسودة قابلة للاستبدال / `approved` معتمد ومقفل), importedBy, approvedBy, approvedAt |
+| **Sales** | عملية لكل سطر من ملف البوابة، **بلا بيانات شخصية**: gatewayId (رقم العملية، فريد يمنع التكرار عند تداخل ملفين), chargeRef, platformId, packageId, kind (`subscription`/`gift`/`test`), method (`knet`/`applepay`/`card`), channel (`app`/`web`), paidAt (بتوقيت الكويت), month (`YYYY-MM`), amount (money), fee (money: تقديرية من نسب الإعدادات أو فعلية من كشف التسوية), net (money), people (للإهداء: المبلغ ÷ قيمة رعاية الفرد), country, buyerKey (HMAC للجوال أو البريد بمفتاح سري في Script Properties، يكفي لمعرفة الجديد والعائد والترقية ولا يُسترجع منه الرقم), expiresAt (للاشتراك: paidAt + مدة الباقة), refunded (money), importId |
+| **Imports** | platformId, month, fileName, rows, accepted, duplicates, excluded (json: تجريبية، غير مقبوضة), unmatched (json: أسماء باقات غير معروفة), totals (json), status (`draft` مسودة قابلة للاستبدال / `approved` معتمد ومقفل), importedBy, approvedBy, approvedAt. **الملف الأصلي لا يُحفظ** افتراضياً لأنه يحوي أسماء المشترين وجوالاتهم وبريدهم (خيار بديل بانتظار القرار: حفظه في مجلد لمدير المنصات فقط مع حذف تلقائي بعد مدة) |
 
 **إضافات على `Projects` في وحدة العملاء** (يضيفها `Db.ensureSchema_` بلا حذف): `platformId` (ينفّذ في: صاد / المقرأة / فارغ)، `centerId`، `campaignId`، `revenueKind` (`sponsorship` رعاية / `contract` عقد خدمة). مشروع المعلم المتقن مثلاً: ينفّذ في صاد ← مركز المعلم المتقن ← رعاية.
 
 **التعريفات في اللوحات:**
-- **إيراد الشهر** = صافي مبيعات الشهر (`MonthlySales.net`) + المحصّل في الشهر من دفعات مشاريع المنصة (`Payments` بحالة `paid` وتاريخها في الشهر).
+- **إيراد الشهر** = صافي مبيعات الشهر (مجموع `Sales.net` للشهر) + المحصّل في الشهر من دفعات مشاريع المنصة (`Payments` بحالة `paid` وتاريخها في الشهر).
 - **المستحق** = الدفعات المجدولة + مستحق دورة الاشتراك الحالية للمشاريع المفتوحة (القاعدة الحالية في العملاء). **نسبة التحصيل** = المحصّل ÷ (المحصّل + المستحق حتى اليوم).
 - شهر المبيعات المعتمد لا يُستبدل إلا بإعادة فتحه من مدير المنصات (يُسجَّل في السجل).
 

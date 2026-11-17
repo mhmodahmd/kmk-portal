@@ -22,7 +22,7 @@ const GROUPS: { label: string; items: NavItem[] }[] = [
   { label: tr("عام"), items: [{ to: '/', label: tr("الرئيسية"), icon: 'home' }, { to: '/inbox', label: tr("الموافقات"), icon: 'inbox' }] },
   { label: tr("الموظفون"), items: [{ to: '/attendance', label: tr("الحضور والانصراف"), icon: 'clock', module: 'attendance' }, { to: '/hr', label: tr("الموارد البشرية"), icon: 'users', module: 'hr' }] },
   { label: tr("العمل"), items: [{ to: '/tasks', label: tr("المهام"), icon: 'tasks', module: 'tasks' }, { to: '/crm', label: tr("العملاء"), icon: 'crm', module: 'crm' }, { to: '/correspondence', label: tr("المراسلات"), icon: 'mail', module: 'correspondence' }] },
-  { label: tr("المالية"), items: [{ to: '/custody', label: tr("العهد والنثريات"), icon: 'wallet', module: 'custody' }, { to: '/platforms', label: tr("المنصات"), icon: 'grid', module: 'platforms' }, { to: '/finance', label: tr("المالية"), icon: 'finance', module: 'finance', soon: true }] },
+  { label: tr("المالية"), items: [{ to: '/custody', label: tr("العهد والنثريات"), icon: 'wallet', module: 'custody' }, { to: '/platforms', label: tr("المنصات"), icon: 'grid', module: 'platforms' }, { to: '/subscribers', label: tr("المشتركون"), icon: 'user', module: 'subscribers' }, { to: '/finance', label: tr("المالية"), icon: 'finance', module: 'finance', soon: true }] },
   { label: tr("النظام"), items: [{ to: '/settings/users', label: tr("المستخدمون والأدوار"), icon: 'shield', superOnly: true }, { to: '/settings/company', label: tr("بيانات الشركة"), icon: 'building', superOnly: true }, { to: '/settings/audit', label: tr("سجل العمليات"), icon: 'history', superOnly: true }, { to: '/settings/crm-import', label: tr("نقل بيانات العملاء"), icon: 'download', superOnly: true }] }
 ];
 

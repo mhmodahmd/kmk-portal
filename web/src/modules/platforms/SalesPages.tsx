@@ -85,8 +85,8 @@ function ImportDialog({ onClose, platforms }: { onClose: () => void; platforms: 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const input = useRef<HTMLInputElement>(null);
-  const commit = useAction<Record<string, unknown>, { months: string[]; stats: { accepted: number } }>('plt.import.commit', {
-    invalidate: PLT_KEYS, silentError: true, success: (r) => tr("استُورد {0} عملية كمسودة", r.stats.accepted), onSuccess: onClose
+  const commit = useAction<Record<string, unknown>, { months: string[]; stats: { accepted: number }; contacts?: number }>('plt.import.commit', {
+    invalidate: PLT_KEYS, silentError: true, success: (r) => (r.stats.accepted ? tr("استُورد {0} عملية كمسودة", r.stats.accepted) : tr("لا عمليات جديدة، وحُدّثت بيانات تواصل {0} مشتركاً", r.contacts || 0)), onSuccess: onClose
   });
   const pick = async (f: File | undefined) => {
     if (!f) return;
@@ -103,7 +103,7 @@ function ImportDialog({ onClose, platforms }: { onClose: () => void; platforms: 
   return (
     <Dialog open onClose={onClose} wide title={tr("استيراد ملف بوابة الدفع")}
       footer={<>
-        <Button variant="primary" className="flex-1" disabled={!preview || !file || unmatchedLeft > 0 || !preview.stats.accepted && !preview.unmatched.length} loading={commit.isPending}
+        <Button variant="primary" className="flex-1" disabled={!preview || !file || unmatchedLeft > 0 || !preview.stats.accepted && !preview.unmatched.length && !preview.contacts} loading={commit.isPending}
           onClick={() => { setError(''); commit.mutate({ platform, rows: file!.rows, map, fileName: file!.name }, { onError: (e) => setError(e.message) }); }}>{tr("حفظ كمسودة")}</Button>
         <Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button>
       </>}>
@@ -125,6 +125,7 @@ function ImportDialog({ onClose, platforms }: { onClose: () => void; platforms: 
             <p className="m-0 text-[13px]">{tr("المبلغ: {0} · العمولة التقديرية: {1}", kwd(preview.stats.amount), kwd(preview.fee))} · {preview.months.map((m) => (
               <span key={m.month} className="ms-1">{monthLabel(m.month)} <span className="num">({m.count})</span>{m.status === 'approved' && <Badge tone="bad">{tr("معتمد ومقفل")}</Badge>}</span>
             ))}</p>
+            {preview.contacts > 0 && <p className="m-0 text-[13px] text-muted">{tr("تُحدَّث بيانات تواصل {0} مشتركاً في «المشتركون» (مشفّرة).", preview.contacts)}</p>}
             {preview.packages.length > 0 && (
               <table className="w-full border-collapse text-right text-[13px]">
                 <thead><tr className="text-muted [&>th]:py-1.5 [&>th]:font-semibold"><th>{tr("الباقة")}</th><th>{tr("العمليات")}</th><th>{tr("المبلغ")}</th></tr></thead>

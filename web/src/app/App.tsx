@@ -83,6 +83,11 @@ const SalesMonthPage = lazy(() => import('../modules/platforms/SalesPages').then
 const CentersPage = lazy(() => import('../modules/platforms/CentersPages').then((m) => ({ default: m.CentersPage })));
 const CampaignsPage = lazy(() => import('../modules/platforms/CentersPages').then((m) => ({ default: m.CampaignsPage })));
 const PltSettingsPage = lazy(() => import('../modules/platforms/PltSettingsPage'));
+const SubLayout = lazy(() => import('../modules/subscribers/SubPages').then((m) => ({ default: m.SubLayout })));
+const SubOverviewPage = lazy(() => import('../modules/subscribers/SubPages').then((m) => ({ default: m.SubOverviewPage })));
+const SubListPage = lazy(() => import('../modules/subscribers/SubPages').then((m) => ({ default: m.SubListPage })));
+const SubDetailPage = lazy(() => import('../modules/subscribers/SubPages').then((m) => ({ default: m.SubDetailPage })));
+const SubSettingsPage = lazy(() => import('../modules/subscribers/SubPages').then((m) => ({ default: m.SubSettingsPage })));
 
 const SOON: Record<string, { label: string; phase: number }> = {
   finance: { label: tr("المالية"), phase: 5 }
@@ -122,6 +127,9 @@ export default function App() {
   const corMgr = admin || roles.correspondence === 'manager';
   const plt = admin || !!roles.platforms;
   const pltMgr = admin || roles.platforms === 'manager';
+  const sub = admin || !!roles.subscribers;
+  const subStaff = admin || roles.subscribers === 'agent' || roles.subscribers === 'manager';
+  const subMgr = admin || roles.subscribers === 'manager';
   return (
     <HashRouter>
       {updateRequired && <UpdateBanner />}
@@ -216,6 +224,14 @@ export default function App() {
                 <Route path="centers" element={<CentersPage />} />
                 <Route path="campaigns" element={<CampaignsPage />} />
                 {pltMgr && <Route path="settings" element={<PltSettingsPage />} />}
+              </Route>
+            )}
+            {sub && (
+              <Route path="/subscribers" element={<SubLayout />}>
+                <Route index element={<SubOverviewPage />} />
+                {subStaff && <Route path="list" element={<SubListPage />} />}
+                {subStaff && <Route path="s/:ref" element={<SubDetailPage />} />}
+                {subMgr && <Route path="settings" element={<SubSettingsPage />} />}
               </Route>
             )}
             {admin && <Route path="/settings/users" element={<UsersPage />} />}

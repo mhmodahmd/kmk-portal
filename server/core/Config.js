@@ -4,7 +4,7 @@
  */
 var APP = {
   NAME: 'KMK One',
-  VERSION: '0.10.0',
+  VERSION: '0.11.0',
   // أقدم إصدار واجهة مسموح به. الواجهة الأقدم تُطلب منها إعادة التحميل.
   MIN_CLIENT: '0.1.0',
   TZ: 'Asia/Kuwait',
@@ -43,6 +43,9 @@ var MODULES = [
   // المنصات (0.10.0): إيرادات صاد القرآني ومقرأة تراث — مبيعات التطبيق من ملف البوابة، والرعايات والعقود من العملاء
   { key: 'platforms', label: 'المنصات', enabled: true,
     roles: { viewer: 'مشاهد', accountant: 'محاسب المنصات', manager: 'مدير المنصات' } },
+  // متابعة المشتركين (0.11.0): من جدّد ومن لم يجدد، وبيانات التواصل مشفّرة
+  { key: 'subscribers', label: 'المشتركون', enabled: true,
+    roles: { viewer: 'مشاهد', agent: 'موظف متابعة', manager: 'مدير المتابعة' } },
   { key: 'finance', label: 'المالية', enabled: false,
     roles: { viewer: 'مشاهد', accountant: 'محاسب', fmanager: 'مدير مالي' } }
 ];

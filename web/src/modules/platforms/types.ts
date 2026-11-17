@@ -55,6 +55,8 @@ export interface ImportPreview {
   months: { month: string; count: number; status: 'draft' | 'approved' }[];
   packages: { packageId: string; name: string; kind: PackageKind; count: number; amount: number; people: number }[];
   fee: number;
+  /** عدد المشتركين الذين تُمرَّر بيانات تواصلهم لوحدة المتابعة (0 إن لم تكن مفعّلة) */
+  contacts: number;
   packageOptions: { id: string; name: string; kind: PackageKind }[];
 }
 

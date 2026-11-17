@@ -204,6 +204,7 @@ var Platforms = {
     var personalTo = cols.type > 0 ? cols.type : width;
     cols.mobile = best(/^\+?[\d\s-]{7,16}$/, cols.id + 1, personalTo, 0.02);
     cols.email = best(/@/, cols.id + 1, personalTo, 0.02);
+    cols.name = cols.id >= 0 && cols.id + 1 < personalTo && cols.id + 1 !== cols.mobile && cols.id + 1 !== cols.email ? cols.id + 1 : -1;
     cols.country = cols.type > 0 && cols.type - 1 !== cols.email && cols.type - 1 !== cols.mobile ? cols.type - 1 : -1;
     cols.pkg = cols.type >= 0 ? cols.type + 1 : -1;
     // المبلغ: العمود الرقمي قبل العملة
@@ -265,13 +266,20 @@ var Platforms = {
     var have = {};
     Platforms.rows_('Sales').forEach(function (s) { have[s.gatewayId] = s; });
     var fees = Platforms.fees_(), secret = Platforms.secret_();
-    var seen = {}, items = [], unmatched = {}, months = {};
+    var seen = {}, items = [], unmatched = {}, months = {}, contacts = [];
     var stats = { rows: 0, accepted: 0, duplicates: 0, notCaptured: 0, test: 0, invalid: 0, amount: 0 };
     rows.forEach(function (r) {
       var gid = r[cols.id];
       if (!/^\d{1,12}$/.test(gid)) return; // سطر عناوين أو فارغ
       stats.rows++;
       if (String(r[cols.status]).toUpperCase() !== 'CAPTURED') { stats.notCaptured++; return; }
+      // بيانات التواصل لعمليات الاشتراك (الجديدة والمكررة) تُمرَّر في الذاكرة لوحدة المتابعة إن كانت مفعّلة، ولا تُحفظ هنا
+      var pn = r[cols.pkg] || '', pp = pk[pn] || (map[pn] && pkById[map[pn]]);
+      var isSub = have[gid] ? have[gid].kind === 'subscription' : !!(pp && pp.platformId === platform.id && pp.kind === 'subscription');
+      if (isSub && !seen[gid]) {
+        var mob = cols.mobile >= 0 ? r[cols.mobile] : '', mail = cols.email >= 0 ? r[cols.email] : '', bk = Platforms.buyerKey_(mob, mail, secret);
+        if (bk) contacts.push({ buyerKey: bk, name: cols.name >= 0 ? r[cols.name] : '', mobile: mob, email: mail, country: cols.country >= 0 ? r[cols.country] : '' });
+      }
       if (seen[gid] || have[gid]) { stats.duplicates++; return; }
       seen[gid] = true;
       var name = r[cols.pkg] || '';
@@ -302,7 +310,12 @@ var Platforms = {
       stats.amount += amount;
       months[month] = (months[month] || 0) + 1;
     });
-    return { cols: cols, items: items, stats: stats, unmatched: Object.keys(unmatched).map(function (k) { return unmatched[k]; }), months: months };
+    return { cols: cols, items: items, stats: stats, unmatched: Object.keys(unmatched).map(function (k) { return unmatched[k]; }), months: months, contacts: contacts };
+  },
+
+  /** الوحدات التي تستقبل بيانات التواصل من الاستيراد (ModuleProviders_.platformContacts) */
+  contactHooks_: function () {
+    return ModuleProviders_().filter(function (p) { var m = moduleDef_(p.key); return p.platformContacts && m && m.enabled; });
   },
 
   /** ملخص المعاينة: حسب الشهر والباقة */
@@ -317,6 +330,7 @@ var Platforms = {
       months: Object.keys(a.months).sort().map(function (m) { return { month: m, count: a.months[m], status: Platforms.monthStatus_(platform.id, m) }; }),
       packages: Object.keys(byPkg).map(function (k) { return byPkg[k]; }).sort(function (x, y) { return y.amount - x.amount; }),
       fee: a.items.reduce(function (s, x) { return s + x.fee; }, 0),
+      contacts: Platforms.contactHooks_().length ? Object.keys(a.contacts.reduce(function (o, c) { o[c.buyerKey] = 1; return o; }, {})).length : 0,
       packageOptions: Platforms.rows_('Packages').filter(function (p) { return p.platformId === platform.id && p.active; }).sort(Platforms.sortOrder_)
         .map(function (p) { return { id: p.id, name: p.name, kind: p.kind }; })
     };
@@ -685,7 +699,13 @@ var Platforms = {
       if (a.unmatched.length) throw appError('طابق الباقات غير المعروفة أولاً: ' + a.unmatched.map(function (u) { return u.name || '(بلا اسم)'; }).join('، ') + '.');
       var locked = Object.keys(a.months).filter(function (m) { return Platforms.monthStatus_(platform.id, m) === 'approved'; });
       if (locked.length) throw appError('شهر ' + locked.join('، ') + ' معتمد ومقفل. أعد فتحه أولاً لإضافة عمليات إليه.');
-      if (!a.items.length) throw appError('لا عمليات جديدة في الملف: ' + (a.stats.duplicates ? 'كل العمليات المقبوضة مستوردة من قبل.' : 'لا عمليات مقبوضة.'));
+      var hooks = Platforms.contactHooks_();
+      var passContacts = function () { var n = 0; hooks.forEach(function (h) { n += h.platformContacts(ctx, platform, a.contacts) || 0; }); return n; };
+      if (!a.items.length) {
+        // ملف مستورد من قبل: لا مبيعات جديدة، لكن يُمرَّر التواصل لوحدة المتابعة (لملء سجلها من الأشهر السابقة)
+        if (a.contacts.length && hooks.length) return { importId: '', months: [], stats: a.stats, matched: [], contacts: passContacts() };
+        throw appError('لا عمليات جديدة في الملف: ' + (a.stats.duplicates ? 'كل العمليات المقبوضة مستوردة من قبل.' : 'لا عمليات مقبوضة.'));
+      }
       // الأسماء البديلة من المطابقة اليدوية
       var map = p.map || {}, matched = [];
       Object.keys(map).forEach(function (name) {
@@ -713,7 +733,7 @@ var Platforms = {
         platform: platform.name, file: imp.fileName, months: months.join('، '), accepted: a.stats.accepted, duplicates: a.stats.duplicates,
         excluded: a.stats.notCaptured + a.stats.test + a.stats.invalid, amount: kwd_(a.stats.amount)
       });
-      return { importId: imp.id, months: months, stats: a.stats, matched: matched };
+      return { importId: imp.id, months: months, stats: a.stats, matched: matched, contacts: hooks.length ? passContacts() : 0 };
     });
   },
 

@@ -78,6 +78,36 @@ function optionalEmail(value) {
 
 function bool_(v) { return v === true || v === 'true' || v === 1 || v === '1'; }
 
+// ───────── تشفير متماثل لنصوص قصيرة (بيانات التواصل) ─────────
+// Apps Script لا يوفّر AES: تدفق مفتاح من HMAC-SHA256 بوضع العدّاد وقيمة عشوائية لكل نص، ثم رمز تحقق HMAC
+// على الناتج (encrypt-then-MAC). الصيغة: v1:nonce:cipherHex:tag. المفتاح من Script Properties ولا يغادر الخادم.
+function keystream_(key, nonce, n) {
+  var out = [];
+  for (var i = 0; out.length < n; i++) {
+    var h = hmacHex_('ks:' + nonce + ':' + i, key);
+    for (var j = 0; j < h.length && out.length < n; j += 2) out.push(parseInt(h.substr(j, 2), 16));
+  }
+  return out;
+}
+
+function sealText_(text, key) {
+  if (text == null || text === '') return '';
+  var bin = unescape(encodeURIComponent(String(text)));
+  var nonce = Utilities.getUuid().replace(/-/g, '');
+  var ks = keystream_(key, nonce, bin.length), hex = '';
+  for (var i = 0; i < bin.length; i++) { var b = bin.charCodeAt(i) ^ ks[i]; hex += (b < 16 ? '0' : '') + b.toString(16); }
+  return 'v1:' + nonce + ':' + hex + ':' + hmacHex_('tag:' + nonce + ':' + hex, key).slice(0, 32);
+}
+
+function openText_(sealed, key) {
+  if (!sealed) return '';
+  var p = String(sealed).split(':');
+  if (p.length !== 4 || p[0] !== 'v1' || !safeEquals_(hmacHex_('tag:' + p[1] + ':' + p[2], key).slice(0, 32), p[3])) throw new Error('sealed text tampered');
+  var ks = keystream_(key, p[1], p[2].length / 2), bin = '';
+  for (var i = 0; i < p[2].length; i += 2) bin += String.fromCharCode(parseInt(p[2].substr(i, 2), 16) ^ ks[i / 2]);
+  return decodeURIComponent(escape(bin));
+}
+
 function intIn_(v, min, max, label) {
   var n = Math.round(Number(normalizeDigits(v)));
   if (isNaN(n) || n < min || n > max) throw appError(label + ' يجب أن يكون بين ' + min + ' و ' + max + '.');

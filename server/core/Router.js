@@ -110,12 +110,12 @@ var Router = {
 
 /** مسارات الوحدات. كل وحدة تعلن مساراتها في routes_() */
 function ModuleRoutes_() {
-  return Object.assign({}, Hr.routes_(), Attendance.routes_(), Custody.routes_(), Tasks.routes_(), Crm.routes_(), Correspondence.routes_(), Platforms.routes_());
+  return Object.assign({}, Hr.routes_(), Attendance.routes_(), Custody.routes_(), Tasks.routes_(), Crm.routes_(), Correspondence.routes_(), Platforms.routes_(), Subscribers.routes_());
 }
 
 /** مخططات ملفات بيانات الوحدات (النواة في Db.js) */
 function ModuleSchemas_() {
-  return { hr: HR_SCHEMA, attendance: ATT_SCHEMA, custody: CUS_SCHEMA, tasks: TSK_SCHEMA, crm: CRM_SCHEMA, correspondence: COR_SCHEMA, platforms: PLT_SCHEMA };
+  return { hr: HR_SCHEMA, attendance: ATT_SCHEMA, custody: CUS_SCHEMA, tasks: TSK_SCHEMA, crm: CRM_SCHEMA, correspondence: COR_SCHEMA, platforms: PLT_SCHEMA, subscribers: SUB_SCHEMA };
 }
 
 /** الوحدات التي تقدّم بطاقات للرئيسية وعناصر لصندوق الموافقات. prefix: بادئة أنواع طلباتها */
@@ -126,7 +126,9 @@ function ModuleProviders_() {
     { key: 'custody', prefix: 'cus.', summary: Custody.summary_, inbox: Custody.inbox_, decide: Custody.decide_, offboard: Custody.offboardBlock_, notify: Custody.notify_, approvalActions: Custody.approvalActions_, approvers: Custody.approvers_ },
     { key: 'tasks', prefix: 'tsk.', summary: Tasks.summary_, inbox: Tasks.inbox_, decide: Tasks.decide_, notify: Tasks.notify_, approvalActions: Tasks.approvalActions_, approvers: Tasks.approvers_ },
     { key: 'crm', prefix: 'crm.', summary: Crm.summary_, notify: Crm.notify_ },
-    { key: 'correspondence', prefix: 'cor.', summary: Correspondence.summary_, notify: Correspondence.notify_ }
+    { key: 'correspondence', prefix: 'cor.', summary: Correspondence.summary_, notify: Correspondence.notify_ },
+    // يستقبل بيانات التواصل من استيراد المنصات في الذاكرة (المنصات لا تحفظها)
+    { key: 'subscribers', prefix: 'sub.', platformContacts: Subscribers.onPlatformImport_ }
   ];
 }
 
@@ -145,7 +147,7 @@ function doGet() {
 /** شغّلها من المحرر مرة واحدة للموافقة على الصلاحيات وإنشاء ملف البيانات. */
 function setup() {
   Custody.seed_();
-  var urls = ['core', 'hr', 'attendance', 'custody', 'tasks', 'crm', 'correspondence', 'platforms'].map(function (k) { return k + ': ' + Db.spreadsheet_(k).getUrl(); });
+  var urls = ['core', 'hr', 'attendance', 'custody', 'tasks', 'crm', 'correspondence', 'platforms', 'subscribers'].map(function (k) { return k + ': ' + Db.spreadsheet_(k).getUrl(); });
   Logger.log('KMK databases:\n' + urls.join('\n'));
   return urls.join('\n');
 }

@@ -50,13 +50,16 @@ const ACTIONS: Record<string, string> = {
   'fees.update': tr("تعديل عمولات البوابة"), 'package.create': tr("إضافة باقة"), 'package.update': tr("تعديل باقة"), 'package.remove': tr("حذف باقة"), 'platform.update': tr("تعديل منصة"),
   'center.create': tr("إضافة مركز"), 'center.update': tr("تعديل مركز"), 'center.remove': tr("حذف مركز"),
   'campaign.create': tr("إضافة مسابقة أو تحدٍّ"), 'campaign.update': tr("تعديل مسابقة أو تحدٍّ"), 'campaign.remove': tr("حذف مسابقة أو تحدٍّ"),
+  // المشتركون
+  'contacts.import': tr("تحديث بيانات تواصل المشتركين"), 'reveal': tr("إظهار تواصل مشترك"), 'note': tr("ملاحظة على مشترك"), 'optout': tr("إيقاف رسائل مشترك"), 'optin': tr("إعادة تفعيل رسائل مشترك"),
+  'assign': tr("إسناد مشتركين"), 'forget': tr("حذف بيانات مشترك بطلبه"), 'export': tr("تنزيل قائمة مشتركين"), 'retention.forget': tr("مسح تواصل بعد مدة الاحتفاظ"),
   // النظام
   'backup.run': tr("نسخة احتياطية يدوية"), 'migration.legacyAttendance': tr("نقل بيانات الحضور السابق"), 'migration.legacyCustody': tr("نقل بيانات العهد السابق"), 'migration.legacyCrm': tr("نقل بيانات العملاء السابق")
 };
 
 const MODULES: { value: string; label: string }[] = [
   { value: '', label: tr("الكل") }, { value: 'core', label: tr("النواة") }, { value: 'attendance', label: tr("الحضور") }, { value: 'hr', label: tr("الموارد البشرية") },
-  { value: 'custody', label: tr("العهد") }, { value: 'tasks', label: tr("المهام") }, { value: 'crm', label: tr("العملاء") }, { value: 'correspondence', label: tr("المراسلات") }, { value: 'platforms', label: tr("المنصات") }, { value: 'system', label: tr("النظام") }
+  { value: 'custody', label: tr("العهد") }, { value: 'tasks', label: tr("المهام") }, { value: 'crm', label: tr("العملاء") }, { value: 'correspondence', label: tr("المراسلات") }, { value: 'platforms', label: tr("المنصات") }, { value: 'subscribers', label: tr("المشتركون") }, { value: 'system', label: tr("النظام") }
 ];
 const MODULE_LABEL: Record<string, string> = Object.fromEntries(MODULES.filter((m) => m.value).map((m) => [m.value, m.label]));
 

@@ -76,7 +76,10 @@ test('platforms: commit stores payments without personal data; the dashboard rep
   const stored = JSON.stringify(['Sales', 'Imports', 'Months'].map((t) => c.srv.Db.view('platforms', t)));
   ['مشترك تجريبي', '50000001', 'b@example.com', 'B@Example.com', '50000003'].forEach((s) => truthy(!stored.includes(s), 'personal data must not be stored: ' + s));
   // إعادة الملف نفسه لا تضيف شيئاً
-  truthy(c.fail('plt.import.commit', { platform: 'saad', rows: FILE }, c.T.sara).message.includes('مستوردة من قبل'));
+  // (مع وحدة المتابعة المفعّلة يُمرَّر التواصل فقط، ولا تُضاف مبيعات)
+  const again = c.ok('plt.import.commit', { platform: 'saad', rows: FILE }, c.T.sara);
+  eq([again.importId, again.stats.accepted, again.stats.duplicates, again.contacts], ['', 0, 10, 5]);
+  eq(c.srv.Db.view('platforms', 'Sales').length, 9, 'no sales added on re-import');
 
   const d = c.ok('plt.dashboard', { platform: 'saad', month: '2026-10' }, c.T.ahmad);
   eq([d.summary.count, d.summary.amount, d.summary.fee, d.summary.net, d.summary.prevCount], [8, 132000, 0, 132000, 0]);

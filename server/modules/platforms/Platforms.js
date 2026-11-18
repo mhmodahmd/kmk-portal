@@ -77,7 +77,37 @@ var PLT = {
 
 var Platforms = {
   // ───────── أساسيات ─────────
-  rows_: function (t) { return Db.view('platforms', t); },
+  rows_: function (t) {
+    var rows = Db.view('platforms', t);
+    // الشهر نص «YYYY-MM»، وقد يحوّله Sheets إلى تاريخ فيعود «YYYY-MM-DD»: يُوحَّد هنا
+    if (t === 'Sales' || t === 'Months' || t === 'Imports') rows.forEach(function (r) { if (r.month && r.month.length !== 7) r.month = Platforms.monthOf_(r.month); });
+    return rows;
+  },
+  monthOf_: function (v) { var m = /^(\d{4})-(\d{2})/.exec(String(v || '')); return m ? m[1] + '-' + m[2] : ''; },
+  shiftMonth_: function (m, n) {
+    var p = m.split('-').map(Number), t = p[0] * 12 + (p[1] - 1) + n, mm = t % 12 + 1;
+    return Math.floor(t / 12) + '-' + (mm < 10 ? '0' : '') + mm;
+  },
+  /** الفترة: شهر «YYYY-MM»، أو سنة «YYYY»، أو أشهر مفصولة بفواصل، أو مصفوفة منها. تعيد الأشهر مرتبة */
+  period_: function (v) {
+    var out = {};
+    (Array.isArray(v) ? v : String(v == null ? '' : v).split(',')).forEach(function (x) {
+      x = String(x).trim();
+      if (!x) return;
+      if (/^\d{4}$/.test(x)) { for (var i = 1; i <= 12; i++) out[x + '-' + (i < 10 ? '0' : '') + i] = true; }
+      else out[requireMonth_(x)] = true;
+    });
+    var keys = Object.keys(out).sort();
+    if (!keys.length) throw appError('اختر شهراً واحداً على الأقل.');
+    if (keys.length > 36) throw appError('اختر 36 شهراً على الأكثر.');
+    return keys;
+  },
+  /** مفتاح الفترة في الروابط: «2026» للسنة كاملة، وإلا الأشهر مفصولة بفواصل */
+  periodKey_: function (months) {
+    var y = months[0].slice(0, 4);
+    if (months.length === 12 && months.every(function (m) { return m.slice(0, 4) === y; })) return y;
+    return months.join(',');
+  },
   isMgr_: function (ctx) { return Permissions.has(ctx, 'platforms', ['manager']); },
   isAcc_: function (ctx) { return Permissions.has(ctx, 'platforms', ['manager', 'accountant']); },
   enabled_: function (key) { var m = moduleDef_(key); return !!(m && m.enabled); },
@@ -162,7 +192,9 @@ var Platforms = {
   },
 
   monthRow_: function (platformId, month) {
-    return Platforms.rows_('Months').filter(function (r) { return r.platformId === platformId && r.month === month; })[0] || null;
+    // الأحدث تعديلاً: قد تتكرر صفوف الشهر نفسه إن لم يُتعرَّف على شهر حوّله Sheets إلى تاريخ (قبل 0.11.2)
+    return Platforms.rows_('Months').filter(function (r) { return r.platformId === platformId && r.month === month; })
+      .sort(function (a, b) { return String(b.updatedAt || b.approvedAt || '').localeCompare(String(a.updatedAt || a.approvedAt || '')); })[0] || null;
   },
   monthStatus_: function (platformId, month) {
     var r = Platforms.monthRow_(platformId, month);
@@ -455,7 +487,7 @@ var Platforms = {
       x.count++; x.amount += s.amount; x.fee += s.fee; x.net += s.net; x.refunded += s.refunded || 0; x.people += s.people || 0;
     });
     Platforms.rows_('Months').forEach(function (m) {
-      if (pf && m.platformId !== pf) return;
+      if ((pf && m.platformId !== pf) || !m.month) return;
       var k = m.platformId + '|' + m.month;
       agg[k] = agg[k] || { platformId: m.platformId, month: m.month, count: 0, amount: 0, fee: 0, net: 0, refunded: 0, people: 0 };
     });
@@ -474,14 +506,15 @@ var Platforms = {
     }).sort(function (a, b) { return b.month.localeCompare(a.month) || a.platformName.localeCompare(b.platformName, 'ar'); });
   },
 
-  /** العمليات لعرض ما وراء الرقم: month مطلوب، والتصفية packageId, kind, method, channel, country, buyer (new|returning|upgrade) */
+  /** العمليات لعرض ما وراء الرقم: month مطلوب (شهر أو سنة أو أشهر بفواصل)، والتصفية packageId, kind, method, channel, country, buyer (new|returning|upgrade) */
   sales: function (ctx, p) {
     p = p || {};
-    var month = requireMonth_(p.month), pf = Platforms.platformFilter_(p.platform);
+    var inPeriod = {}, pf = Platforms.platformFilter_(p.platform);
+    Platforms.period_(p.month).forEach(function (m) { inPeriod[m] = true; });
     var pkById = indexBy_(Platforms.rows_('Packages')), all = Platforms.rows_('Sales').filter(function (s) { return !pf || s.platformId === pf; });
     var flags = Platforms.buyerFlags_(all);
     var rows = all.filter(function (s) {
-      if (s.month !== month) return false;
+      if (!inPeriod[s.month]) return false;
       if (p.packageId && s.packageId !== p.packageId) return false;
       if (p.kind && s.kind !== p.kind) return false;
       if (p.method && s.method !== p.method) return false;
@@ -544,20 +577,31 @@ var Platforms = {
     var pf = Platforms.platformFilter_(p.platform);
     var all = Platforms.rows_('Sales').filter(function (s) { return !pf || s.platformId === pf; });
     var latest = all.reduce(function (m, s) { return s.month > m ? s.month : m; }, '');
-    var month = p.month ? requireMonth_(p.month) : (latest || localMonth_());
-    var prev = Platforms.prevMonth_(month), next = Platforms.nextMonth_(month), after = Platforms.nextMonth_(next);
+    // الفترة: شهر أو عدة أشهر أو سنة كاملة. المقارنة بالفترة السابقة بالطول نفسه (الشهر بالشهر السابق، والسنة بالسنة السابقة)
+    var period = p.period || p.month ? Platforms.period_(p.period || p.month) : [latest || localMonth_()];
+    var first = period[0], last = period[period.length - 1];
+    var span = Number(last.slice(0, 4)) * 12 + Number(last.slice(5)) - (Number(first.slice(0, 4)) * 12 + Number(first.slice(5))) + 1;
+    var prevPeriod = period.map(function (m) { return Platforms.shiftMonth_(m, -span); });
+    // نهاية الفترة الفعلية: لا تتجاوز الشهر الحالي (سنة جارية لم تنتهِ)
+    var nowM = localMonth_();
+    var month = last > nowM && first <= nowM ? nowM : last;
+    var prev = prevPeriod[prevPeriod.length - 1], next = Platforms.nextMonth_(month), after = Platforms.nextMonth_(next);
     var nextStart = next + '-01', afterStart = after + '-01';
-    var cur = all.filter(function (s) { return s.month === month; }), before = all.filter(function (s) { return s.month === prev; });
+    var inCur = {}, inPrev = {};
+    period.forEach(function (m) { inCur[m] = true; });
+    prevPeriod.forEach(function (m) { inPrev[m] = true; });
+    var cur = all.filter(function (s) { return inCur[s.month]; }), before = all.filter(function (s) { return inPrev[s.month]; });
     var pkById = indexBy_(Platforms.rows_('Packages')), flags = Platforms.buyerFlags_(all);
 
     // الرعايات والعقود (العملاء)
     var crm = Platforms.crm_();
     var crmPaid = crm.paid.filter(function (x) { return !pf || x.project.platformId === pf; });
     var sponsorIn = function (m) { return crmPaid.filter(function (x) { return x.date.slice(0, 7) === m; }).reduce(function (s, x) { return s + x.amount; }, 0); };
+    var sponsorOf = function (set) { return crmPaid.filter(function (x) { return set[x.date.slice(0, 7)]; }).reduce(function (s, x) { return s + x.amount; }, 0); };
     var year = month.slice(0, 4);
 
     var t = Platforms.totals_(cur), tp = Platforms.totals_(before);
-    var spNow = sponsorIn(month), spPrev = sponsorIn(prev);
+    var spNow = sponsorOf(inCur), spPrev = sponsorOf(inPrev);
     var ytdSales = all.filter(function (s) { return s.month.slice(0, 4) === year && s.month <= month; }).reduce(function (s, x) { return s + x.net; }, 0);
     var ytdSponsor = crmPaid.filter(function (x) { return x.date.slice(0, 4) === year && x.date.slice(0, 7) <= month; }).reduce(function (s, x) { return s + x.amount; }, 0);
 
@@ -624,11 +668,14 @@ var Platforms = {
       b.scheduled += x.amount;
       if (x.date && x.date < localDate_()) b.overdue += x.amount;
     });
-    var monthRow = pf ? Platforms.monthRow_(pf, month) : null;
+    // حالة الفترة: معتمدة إن اعتُمدت كل أشهرها التي فيها مبيعات، ومسودة إن بقي منها شهر غير معتمد
+    var withSales = Object.keys(cur.reduce(function (o, s) { o[s.month] = true; return o; }, {}));
+    var statuses = pf ? withSales.map(function (m) { var r = Platforms.monthRow_(pf, m); return r ? r.status : 'draft'; }) : [];
     return {
       platform: pf ? Platforms.platform_(pf).key : 'all', month: month, prevMonth: prev,
+      period: period, periodKey: Platforms.periodKey_(period), prevPeriod: prevPeriod, prevKey: Platforms.periodKey_(prevPeriod),
       months: Object.keys(all.reduce(function (o, s) { o[s.month] = true; return o; }, {})).sort().reverse(),
-      monthStatus: pf ? (monthRow ? monthRow.status : (cur.length ? 'draft' : '')) : '',
+      monthStatus: !statuses.length ? '' : statuses.every(function (s) { return s === 'approved'; }) ? 'approved' : 'draft',
       summary: {
         count: t.count, prevCount: tp.count, amount: t.amount, prevAmount: tp.amount, fee: t.fee, prevFee: tp.fee, net: t.net, prevNet: tp.net,
         avg: t.avg, prevAvg: tp.avg, people: t.people, prevPeople: tp.people,

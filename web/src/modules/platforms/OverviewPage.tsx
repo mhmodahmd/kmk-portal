@@ -5,9 +5,9 @@ import { useApi } from '../../lib/useApi';
 import { dmy, monthLabel } from '../../lib/format';
 import { Badge, Card, CardHeader, EmptyState, ErrorBox } from '../../ui/Display';
 import { Bars, Change, Kpi, Legend, MiniStats, PanelTitle, TrendBars } from '../../ui/Dashboard';
-import { MonthPicker } from '../../ui/Controls';
 import { kwd } from '../custody/shared';
 import { DashboardSkeleton } from '../correspondence/CorDashboardPage';
+import { PeriodPicker, periodLabel } from './PeriodPicker';
 import { pltLink, usePlatform } from './shared';
 import type { PltDashboard } from './types';
 
@@ -17,30 +17,34 @@ const short = (f: number) => (f / 1000).toLocaleString('en-US', { maximumFractio
 /** لوحة المنصات: أقسام التقرير الشهري الستة + الرعايات والعقود. كل رقم رابط إلى ما وراءه */
 export default function PltOverviewPage() {
   const [platform] = usePlatform();
-  const [month, setMonth] = useState('');
-  const q = useApi<PltDashboard>('plt.dashboard', { platform, month: month || undefined }, { staleTime: 30_000 });
+  const [period, setPeriod] = useState('');
+  const q = useApi<PltDashboard>('plt.dashboard', { platform, period: period || undefined }, { staleTime: 30_000 });
   if (q.isError) return <ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} />;
   const d = q.data;
   if (!d) return <DashboardSkeleton />;
-  const s = d.summary, m = d.month;
-  const sales = (extra: Record<string, string | undefined> = {}) => pltLink('/platforms/sales/' + m, platform, extra);
+  const s = d.summary;
+  const multi = d.period.length > 1, label = periodLabel(d.periodKey);
+  const vs = /^\d{4}$/.test(d.periodKey) ? tr("عن السنة السابقة") : multi ? tr("عن الفترة السابقة") : tr("عن الشهر الماضي");
+  const sales = (extra: Record<string, string | undefined> = {}) => pltLink('/platforms/sales/' + d.periodKey, platform, extra);
   const hasSales = s.count > 0 || s.prevCount > 0;
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <MonthPicker value={m} onChange={setMonth} />
+        <PeriodPicker value={d.periodKey} onChange={setPeriod} withData={d.months} />
         <span className="flex items-center gap-2 text-[13px] text-muted">
-          {d.monthStatus === 'approved' ? <Badge tone="ok">{tr("شهر معتمد")}</Badge> : d.monthStatus === 'draft' ? <Badge tone="warn">{tr("مسودة لم تُعتمد")}</Badge> : null}
+          {d.monthStatus === 'approved' ? <Badge tone="ok">{multi ? tr("أشهر الفترة معتمدة") : tr("شهر معتمد")}</Badge>
+            : d.monthStatus === 'draft' ? <Badge tone="warn">{multi ? tr("فيها أشهر لم تُعتمد") : tr("مسودة لم تُعتمد")}</Badge> : null}
           {tr("المبالغ بالدينار الكويتي · بتوقيت الكويت")}
         </span>
       </div>
+      {multi && <p className="-mt-2 m-0 text-[12px] text-muted">{tr("المقارنة بـ {0}", periodLabel(d.prevKey))}</p>}
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Kpi label={tr("إيراد الشهر")} value={kwd(s.revenue, false)} icon="finance" strong foot={<Change now={s.revenue} prev={s.prevRevenue} format={(n) => kwd(n)} />} />
+        <Kpi label={multi ? tr("إيراد الفترة") : tr("إيراد الشهر")} value={kwd(s.revenue, false)} icon="finance" strong foot={<Change now={s.revenue} prev={s.prevRevenue} label={vs} format={(n) => kwd(n)} />} />
         <Kpi label={tr("صافي مبيعات التطبيق")} value={kwd(s.net, false)} icon="wallet" to={sales()}
-          foot={<>{tr("{0} عملية", s.count)} · <Change now={s.net} prev={s.prevNet} format={(n) => kwd(n)} /></>} />
+          foot={<>{tr("{0} عملية", s.count)} · <Change now={s.net} prev={s.prevNet} label={vs} format={(n) => kwd(n)} /></>} />
         <Kpi label={tr("الرعايات والعقود المحصّلة")} value={kwd(s.sponsorship, false)} icon="briefcase" to={pltLink('/platforms/campaigns', platform)}
-          foot={<Change now={s.sponsorship} prev={s.prevSponsorship} format={(n) => kwd(n)} />} />
+          foot={<Change now={s.sponsorship} prev={s.prevSponsorship} label={vs} format={(n) => kwd(n)} />} />
         <Kpi label={tr("منذ بداية السنة")} value={kwd(s.ytd, false)} icon="calendar" foot={tr("مبيعات {0} · رعايات {1}", kwd(s.ytdSales), kwd(s.ytdSponsorship))} />
       </div>
 
@@ -50,14 +54,14 @@ export default function PltOverviewPage() {
       </Card>
 
       {!hasSales ? (
-        <Card><EmptyState title={tr("لا مبيعات تطبيق لهذا الشهر")} body={tr("استورد ملف بوابة الدفع من «المبيعات الشهرية» لتظهر الباقات والمشترون ووسائل الدفع.")} /></Card>
+        <Card><EmptyState title={multi ? tr("لا مبيعات تطبيق في هذه الفترة") : tr("لا مبيعات تطبيق لهذا الشهر")} body={tr("استورد ملف بوابة الدفع من «المبيعات الشهرية» لتظهر الباقات والمشترون ووسائل الدفع.")} /></Card>
       ) : (
         <>
           <Card className="flex flex-col gap-3">
-            <PanelTitle title={tr("ملخص المبيعات · {0}", monthLabel(m))} />
+            <PanelTitle title={tr("ملخص المبيعات · {0}", label)} />
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {[
-                { label: tr("العمليات"), value: String(s.count), sub: tr("الشهر السابق {0}", s.prevCount), to: sales() },
+                { label: tr("العمليات"), value: String(s.count), sub: multi ? tr("الفترة السابقة {0}", s.prevCount) : tr("الشهر السابق {0}", s.prevCount), to: sales() },
                 { label: tr("الإجمالي"), value: kwd(s.amount), sub: '', to: sales() },
                 { label: tr("عمولة البوابة"), value: kwd(s.fee), sub: s.fee ? '' : tr("لم تُضبط نسب العمولة") },
                 { label: tr("متوسط العملية"), value: kwd(s.avg), sub: '' }
@@ -100,7 +104,7 @@ export default function PltOverviewPage() {
             ]} />
             <MiniStats items={[
               { label: tr("ترقيات لباقة أعلى"), value: d.buyers.upgrades, to: sales({ buyer: 'upgrade' }) },
-              { label: tr("اشتراكات سارية آخر الشهر"), value: d.buyers.active },
+              { label: multi ? tr("اشتراكات سارية آخر الفترة") : tr("اشتراكات سارية آخر الشهر"), value: d.buyers.active },
               { label: tr("تنتهي الشهر القادم"), value: d.buyers.expiring, sub: tr("فرص تجديد") }
             ]} />
             <p className="m-0 text-[12px] text-muted">{tr("المشتري يُعرف برمز مشفّر من جواله أو بريده، ولا يُحفظ رقمه. البيانات تبدأ من {0}، فالسارية والعائدون تكتمل بعد استيراد الأشهر الأربعة السابقة.", d.buyers.historyFrom ? monthLabel(d.buyers.historyFrom) : '—')}</p>

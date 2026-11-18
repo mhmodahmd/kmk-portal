@@ -20,7 +20,9 @@ export interface PltLookups {
 export interface Group { key: string; label: string; count: number; amount: number; fee: number; net: number }
 
 export interface PltDashboard {
+  /** month: آخر شهر فعلي في الفترة. period: أشهر الفترة، periodKey: مفتاحها في الروابط («2026» أو «2026-10» أو أشهر بفواصل) */
   platform: string; month: string; prevMonth: string; months: string[]; monthStatus: '' | 'draft' | 'approved';
+  period: string[]; periodKey: string; prevPeriod: string[]; prevKey: string;
   summary: {
     count: number; prevCount: number; amount: number; prevAmount: number; fee: number; prevFee: number; net: number; prevNet: number;
     avg: number; prevAvg: number; people: number; prevPeople: number; sponsorship: number; prevSponsorship: number; revenue: number; prevRevenue: number;

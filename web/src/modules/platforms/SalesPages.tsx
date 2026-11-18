@@ -15,6 +15,7 @@ import { Icon } from '../../ui/Icon';
 import { kwd } from '../custody/shared';
 import { PLT_KEYS, pltLink, usePlatform, usePltLookups } from './shared';
 import { PackageDialog } from './PltSettingsPage';
+import { periodLabel } from './PeriodPicker';
 import type { ImportPreview, MonthRow, PackageView, SaleRow } from './types';
 
 /** جدول الأشهر لكل منصة لها مبيعات، والاستيراد والاعتماد */
@@ -207,7 +208,7 @@ export function SalesMonthPage() {
       <div className="flex flex-wrap items-center gap-2">
         <Link to={pltLink('/platforms/sales', platform)} className="text-[13px] font-semibold text-accent-fg no-underline">{tr("المبيعات الشهرية")}</Link>
         <span className="text-muted">/</span>
-        <b>{monthLabel(month)}</b>
+        <b>{periodLabel(month)}</b>
         {active.map((k) => (
           <button key={k} type="button" onClick={() => drop(k)} className="inline-flex cursor-pointer items-center gap-1 rounded-full border-0 bg-chip px-2.5 py-1 text-[12px] text-fg">
             {label(k, params.get(k) || '')}<Icon name="x" size={12} />

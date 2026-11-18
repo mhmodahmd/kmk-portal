@@ -149,7 +149,8 @@ var Db = {
     if (Object.prototype.toString.call(v) === '[object Date]') {
       if (type === 'date') return localDate_(v.getTime());
       if (type === 'ts') return v.toISOString();
-      if (type === 'text') return localHm_(v.getTime());
+      // وقت فقط (يحفظه Sheets بتاريخ 1899) يعود «HH:mm»، وتاريخ كامل (مثل شهر «2026-10» حوّله Sheets) يعود «YYYY-MM-DD»
+      if (type === 'text') return v.getFullYear() < 1900 ? localHm_(v.getTime()) : localDate_(v.getTime());
     }
     switch (type) {
       case 'bool': return v === true || String(v).toUpperCase() === 'TRUE' || String(v) === '1';

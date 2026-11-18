@@ -4,7 +4,7 @@
  */
 var APP = {
   NAME: 'KMK One',
-  VERSION: '0.11.0',
+  VERSION: '0.11.2',
   // أقدم إصدار واجهة مسموح به. الواجهة الأقدم تُطلب منها إعادة التحميل.
   MIN_CLIENT: '0.1.0',
   TZ: 'Asia/Kuwait',

@@ -135,6 +135,33 @@ test('platforms: fees recalculate draft months only; approve, reopen with a reas
   ['import', 'fees.update', 'month.approve', 'month.reopen', 'month.clear'].forEach((a) => truthy(audit.includes(a), 'audited: ' + a));
 });
 
+test('platforms: approval survives Sheets turning the month into a date; dashboards and sales take several months or a year', () => {
+  const c = setup();
+  const gold = c.ok('plt.lookups', {}, c.T.sara).packages.find((p) => p.code === 'ذهبي').id;
+  c.ok('plt.import.commit', { platform: 'saad', rows: FILE, map: { 'ماسي': gold } }, c.T.sara);
+  // خلية نصية حوّلها Sheets إلى تاريخ: التاريخ الكامل يعود «YYYY-MM-DD» والوقت وحده «HH:mm»
+  eq(c.srv.Db.fromCell_(new Date(Date.UTC(2026, 9, 1, 9)), 'text'), '2026-10-01');
+  eq(c.srv.Db.fromCell_(new Date(Date.UTC(1899, 11, 30, 5, 30)), 'text'), '08:30');
+  // صفوف الأشهر كما تُقرأ بعد التحويل، مع صف مكرر قديم من محاولات اعتماد سابقة
+  c.srv.Db.updateWhere('platforms', 'Months', (r) => ({ month: r.month + '-01' }));
+  c.srv.Db.insert('platforms', 'Months', { platformId: c.ok('plt.lookups', {}, c.T.sara).platforms[0].id, month: '2026-10-01', status: 'draft', updatedAt: '2026-01-01T00:00:00.000Z' });
+  c.ok('plt.month.approve', { platform: 'saad', month: '2026-10' }, c.T.huda);
+  eq(c.ok('plt.months', { platform: 'saad' }, c.T.sara).map((m) => [m.month, m.status]), [['2026-11', 'draft'], ['2026-10', 'approved']], 'the approval shows, with no stray rows');
+  truthy(c.fail('plt.month.approve', { platform: 'saad', month: '2026-10' }, c.T.huda).message.includes('مسبقاً'));
+  eq(c.ok('plt.dashboard', { platform: 'saad', month: '2026-10' }, c.T.huda).monthStatus, 'approved');
+
+  // السنة كاملة: تنتهي الفترة الفعلية بالشهر الحالي، والمقارنة بالسنة السابقة
+  const y = c.ok('plt.dashboard', { platform: 'saad', period: '2026' }, c.T.ahmad);
+  eq([y.periodKey, y.period.length, y.prevKey, y.month, y.summary.count, y.summary.amount, y.monthStatus], ['2026', 12, '2025', '2026-11', 9, 138000, 'draft']);
+  eq(y.trend[11].month, '2026-11');
+  // عدة أشهر: المقارنة بالأشهر السابقة بالعدد نفسه
+  const two = c.ok('plt.dashboard', { platform: 'saad', period: ['2026-11', '2026-10'] }, c.T.ahmad);
+  eq([two.periodKey, two.prevKey, two.summary.count, two.byPackage.reduce((s, p) => s + p.count, 0)], ['2026-10,2026-11', '2026-08,2026-09', 9, 9]);
+  eq(c.ok('plt.sales', { platform: 'saad', month: '2026' }, c.T.ahmad).length, 9);
+  eq(c.ok('plt.sales', { platform: 'saad', month: '2026-10,2026-11', buyer: 'new' }, c.T.ahmad).length, 5);
+  truthy(c.fail('plt.sales', { platform: 'saad', month: '2026-13' }, c.T.ahmad).message.includes('الشهر'));
+});
+
 test('platforms: centers, campaigns and CRM projects linked to them feed sponsorship revenue', () => {
   const c = setup();
   const lk = c.ok('plt.lookups', {}, c.T.sara);

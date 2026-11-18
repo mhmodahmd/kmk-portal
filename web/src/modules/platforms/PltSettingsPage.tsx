@@ -66,20 +66,24 @@ export default function PltSettingsPage() {
   );
 }
 
-function PackageDialog({ item, onClose }: { item: PackageView | null; onClose: () => void }) {
+/** preset: تعبئة مسبقة عند تسجيل باقة ظهرت في ملف البوابة ولا يعرفها النظام. onSaved يستلم الباقة المحفوظة */
+export function PackageDialog({ item, onClose, preset, onSaved }: {
+  item: PackageView | null; onClose: () => void;
+  preset?: { platformId: string; code: string; price: number }; onSaved?: (p: PackageView) => void;
+}) {
   const L = usePltLookups().data;
   const sales = L?.platforms.filter((p) => p.hasAppSales) || [];
   const [f, setF] = useState({
-    platformId: item?.platformId || sales[0]?.id || '', name: item?.name || '', code: item?.code || '', kind: item?.kind || 'subscription',
-    price: toInput(item?.price || 0), durationDays: item?.durationDays ? String(item.durationDays) : '', unitPrice: toInput(item?.unitPrice || 0),
+    platformId: item?.platformId || preset?.platformId || sales[0]?.id || '', name: item?.name || preset?.code || '', code: item?.code || preset?.code || '', kind: item?.kind || 'subscription',
+    price: toInput(item?.price || preset?.price || 0), durationDays: item?.durationDays ? String(item.durationDays) : '', unitPrice: toInput(item?.unitPrice || 0),
     rank: item?.rank ? String(item.rank) : '', active: String(item ? item.active : true)
   });
   const [error, setError] = useState('');
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
-  const save = useAction('plt.package.save', { invalidate: PLT_KEYS, success: tr("حُفظت الباقة"), silentError: true, onSuccess: onClose });
+  const save = useAction<Record<string, unknown>, PackageView>('plt.package.save', { invalidate: PLT_KEYS, success: tr("حُفظت الباقة"), silentError: true, onSuccess: (r) => { onSaved?.(r); onClose(); } });
   const remove = useAction('plt.package.remove', { invalidate: PLT_KEYS, success: tr("حُذفت الباقة"), silentError: true, onSuccess: onClose });
   return (
-    <Dialog open onClose={onClose} title={item ? tr("تعديل الباقة") : tr("باقة جديدة")}
+    <Dialog open onClose={onClose} title={item ? tr("تعديل الباقة") : preset ? tr("تسجيل باقة جديدة") : tr("باقة جديدة")}
       onSubmit={() => { setError(''); save.mutate({ ...f, id: item?.id, active: f.active === 'true' }, { onError: (e) => setError(e.message) }); }}
       footer={<>
         <Button type="submit" variant="primary" className="flex-1" loading={save.isPending}>{tr("حفظ")}</Button>
@@ -87,7 +91,8 @@ function PackageDialog({ item, onClose }: { item: PackageView | null; onClose: (
         <Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button>
       </>}>
       <div className="flex flex-col gap-3">
-        {sales.length > 1 && <Select label={tr("المنصة")} value={f.platformId} onChange={set('platformId')} options={sales.map((p) => ({ value: p.id, label: p.name }))} />}
+        {preset && <p className="m-0 text-[13px] text-muted">{tr("ظهرت هذه الباقة في ملف البوابة ولا يعرفها النظام. أكمل بياناتها، فتُطابَق عملياتها في هذا الاستيراد وما بعده. السعر المقترح هو متوسط عملياتها في الملف.")}</p>}
+        {sales.length > 1 && !preset && <Select label={tr("المنصة")} value={f.platformId} onChange={set('platformId')} options={sales.map((p) => ({ value: p.id, label: p.name }))} />}
         <TextInput label={tr("اسم الباقة في التقارير")} required value={f.name} onChange={set('name')} maxLength={80} autoFocus />
         <TextInput label={tr("الاسم في ملف البوابة")} required value={f.code} onChange={set('code')} maxLength={80} hint={tr("كما يظهر في عمود الباقة في ملف المدفوعات")} />
         <div className="grid gap-3 sm:grid-cols-2">

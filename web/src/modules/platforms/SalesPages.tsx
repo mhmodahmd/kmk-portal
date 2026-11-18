@@ -14,7 +14,8 @@ import { ReasonDialog } from '../../ui/Decide';
 import { Icon } from '../../ui/Icon';
 import { kwd } from '../custody/shared';
 import { PLT_KEYS, pltLink, usePlatform, usePltLookups } from './shared';
-import type { ImportPreview, MonthRow, SaleRow } from './types';
+import { PackageDialog } from './PltSettingsPage';
+import type { ImportPreview, MonthRow, PackageView, SaleRow } from './types';
 
 /** جدول الأشهر لكل منصة لها مبيعات، والاستيراد والاعتماد */
 export function SalesMonthsPage() {
@@ -99,6 +100,19 @@ function ImportDialog({ onClose, platforms }: { onClose: () => void; platforms: 
       setError(e instanceof Error && e.message === 'bad-xlsx' ? tr("تعذّرت قراءة الملف. ارفع ملف Excel (.xlsx) أو CSV كما نزل من البوابة.") : errorText(e));
     } finally { setBusy(false); }
   };
+  // تسجيل باقة غير معروفة من داخل الاستيراد (لمدير المنصات): تُحفظ ثم تُعاد المعاينة بها
+  const L = usePltLookups().data;
+  const [adding, setAdding] = useState<{ name: string; price: number } | null>(null);
+  const added = async (name: string, pkg: PackageView) => {
+    const next = { ...map, [name]: pkg.id };
+    setMap(next);
+    if (!file) return;
+    setBusy(true);
+    try { setPreview(await api<ImportPreview>('plt.import.preview', { platform, rows: file.rows, map: next })); }
+    catch (e) { setError(errorText(e)); }
+    finally { setBusy(false); }
+  };
+  const platformId = L?.platforms.find((p) => p.key === platform)?.id || '';
   const unmatchedLeft = (preview?.unmatched || []).filter((u) => !map[u.name]).length;
   return (
     <Dialog open onClose={onClose} wide title={tr("استيراد ملف بوابة الدفع")}
@@ -138,17 +152,27 @@ function ImportDialog({ onClose, platforms }: { onClose: () => void; platforms: 
               <div className="flex flex-col gap-2 rounded-lg bg-warn-bg p-3">
                 <b className="text-warn">{tr("باقات غير معروفة: اختر ما يقابلها، فتُحفظ للمرات القادمة")}</b>
                 {preview.unmatched.map((u) => (
-                  <Select key={u.name} label={tr("«{0}» · {1} عملية · {2}", u.name || tr("بلا اسم"), u.count, kwd(u.amount))} value={map[u.name] || ''}
-                    onChange={(e) => setMap({ ...map, [u.name]: e.target.value })}
-                    options={[{ value: '', label: tr("اختر الباقة") }, ...preview.packageOptions.map((o) => ({ value: o.id, label: o.name }))]} />
+                  <div key={u.name} className="flex flex-wrap items-end gap-2">
+                    <div className="min-w-[200px] flex-1">
+                      <Select label={tr("«{0}» · {1} عملية · {2}", u.name || tr("بلا اسم"), u.count, kwd(u.amount))} value={map[u.name] || ''}
+                        onChange={(e) => setMap({ ...map, [u.name]: e.target.value })}
+                        options={[{ value: '', label: tr("اختر الباقة") }, ...preview.packageOptions.map((o) => ({ value: o.id, label: o.name }))]} />
+                    </div>
+                    {L?.isManager && u.name && <Button variant="secondary" icon="plus" disabled={busy}
+                      onClick={() => setAdding({ name: u.name, price: u.count ? Math.round(u.amount / u.count) : 0 })}>{tr("تسجيل كباقة جديدة")}</Button>}
+                  </div>
                 ))}
-                <p className="m-0 text-[12px] text-muted">{tr("إن كانت باقة جديدة فعلاً، يضيفها مدير المنصات من «الإعدادات» ثم أعد اختيار الملف.")}</p>
+                <p className="m-0 text-[12px] text-muted">{L?.isManager
+                  ? tr("إن كانت باقة جديدة فعلاً، اضغط «تسجيل كباقة جديدة» وأكمل بياناتها، فتُطابَق تلقائياً.")
+                  : tr("إن كانت باقة جديدة فعلاً، يضيفها مدير المنصات من «الإعدادات» ثم أعد اختيار الملف.")}</p>
               </div>
             )}
           </>
         )}
         {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
       </div>
+      {adding && <PackageDialog item={null} preset={{ platformId, code: adding.name, price: adding.price }}
+        onClose={() => setAdding(null)} onSaved={(p) => added(adding.name, p)} />}
     </Dialog>
   );
 }

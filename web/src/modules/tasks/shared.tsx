@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { IS_EN, tr } from '../../lib/i18n';
 import { useAction, useApi } from '../../lib/useApi';
 import { dmy } from '../../lib/format';
@@ -17,6 +17,44 @@ export const TODAY = IS_EN ? 'Today' : 'اليوم';
 export const TASK_KEYS = ['tsk.list', 'tsk.get', 'home.summary', 'inbox.list'];
 
 export const useTaskLookups = () => useApi<TaskLookups>('tsk.lookups', {}, { staleTime: 5 * 60_000 });
+
+/** البحث في المهام: العنوان، الرقم، المسؤول، المشروع، المرتبط به، الوصف */
+export const matchTask = (t: TaskView, search: string) => {
+  const s = search.trim().toLowerCase();
+  return !s || [t.title, t.number, t.assigneeName, t.projectName, t.linkedLabel, t.description].join(' ').toLowerCase().includes(s);
+};
+
+export type TaskMode = 'list' | 'board';
+const MODE_STORE = 'kmk.tasks.mode';
+const rememberedMode = (): TaskMode => { try { return localStorage.getItem(MODE_STORE) === 'board' ? 'board' : 'list'; } catch { return 'list'; } };
+
+/** طريقة العرض (قائمة أو لوحة): من الرابط ?mode=board أولاً، ثم آخر اختيار في هذا المتصفح */
+export function useTaskMode(): [TaskMode, (m: TaskMode) => void] {
+  const [params, setParams] = useSearchParams();
+  const p = params.get('mode');
+  const mode: TaskMode = p === 'board' || p === 'list' ? p : rememberedMode();
+  const set = (m: TaskMode) => {
+    try { localStorage.setItem(MODE_STORE, m); } catch { /* المتصفح يمنع التخزين */ }
+    const n = new URLSearchParams(params); n.set('mode', m); setParams(n, { replace: true });
+  };
+  return [mode, set];
+}
+
+/** زرّا تبديل طريقة العرض */
+export function ModeToggle({ value, onChange }: { value: TaskMode; onChange: (m: TaskMode) => void }) {
+  const opts: { v: TaskMode; icon: 'menu' | 'grid'; label: string }[] = [{ v: 'list', icon: 'menu', label: tr("قائمة") }, { v: 'board', icon: 'grid', label: tr("لوحة") }];
+  return (
+    <div role="radiogroup" aria-label={tr("طريقة العرض")} className="inline-flex shrink-0 rounded-lg border border-line bg-surface p-0.5">
+      {opts.map((o) => (
+        <button key={o.v} type="button" role="radio" aria-checked={value === o.v} onClick={() => onChange(o.v)}
+          className={cx('inline-flex h-[38px] cursor-pointer items-center gap-1.5 rounded-md px-3 text-[14px] font-medium sm:h-[34px]',
+            value === o.v ? 'bg-fg text-bg' : 'text-muted hover:text-fg')}>
+          <Icon name={o.icon} size={16} />{o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 const S_TONE: Record<TaskStatus, 'neutral' | 'info' | 'warn' | 'ok' | 'bad'> = { todo: 'neutral', doing: 'info', review: 'warn', done: 'ok', cancelled: 'bad' };
 export const StatusBadge = ({ t }: { t: Pick<TaskView, 'status' | 'statusLabel'> }) => <Badge tone={S_TONE[t.status]}>{t.statusLabel}</Badge>;

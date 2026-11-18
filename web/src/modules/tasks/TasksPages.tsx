@@ -7,7 +7,8 @@ import { Card, CardHeader, EmptyState, ErrorBox, Loader, PageHeader } from '../.
 import { Button } from '../../ui/Button';
 import { SearchBox, Segmented, TabNav } from '../../ui/Controls';
 import { Select } from '../../ui/Field';
-import { TODAY, TaskDialog, TaskRow, useTaskLookups, useToggleDone } from './shared';
+import { ModeToggle, TODAY, TaskDialog, TaskRow, matchTask, useTaskLookups, useTaskMode, useToggleDone } from './shared';
+import { TaskBoard } from './BoardPage';
 import type { TaskView } from './types';
 
 export function TasksLayout() {
@@ -17,7 +18,6 @@ export function TasksLayout() {
   const items = [
     { to: '/tasks', label: tr("مهامي"), end: true },
     { to: '/tasks/overview', label: tr("نظرة عامة") },
-    { to: '/tasks/board', label: tr("اللوحة") },
     { to: '/tasks/assigned', label: tr("أسندتها") },
     { to: '/tasks/watching', label: tr("أتابعها") },
     ...(L?.hasTeam || L?.isManager ? [{ to: '/tasks/team', label: tr("مهام فريقي") }] : []),
@@ -33,32 +33,53 @@ export function TasksLayout() {
   );
 }
 
-/** مهامي: المتأخرة، اليوم، القادمة، بلا موعد، بانتظار مراجعة، المنجزة مؤخراً */
+const SEARCH_HINT = tr("بحث بالعنوان أو الرقم أو المسؤول");
+
+/**
+ * مهامي، بطريقتي عرض: قائمة مجمّعة حسب الموعد (المتأخرة، اليوم، القادمة، بلا موعد، بانتظار مراجعة، المنجزة مؤخراً)
+ * أو لوحة كانبان بالحالة. البحث يعمل في الطريقتين.
+ */
 export function MyTasksPage() {
   const q = useApi<TaskView[]>('tsk.list', { view: 'mine' });
   const lk = useTaskLookups();
   const toggle = useToggleDone();
+  const [mode, setMode] = useTaskMode();
+  const [search, setSearch] = useState('');
   const [allDone, setAllDone] = useState(false);
   const today = lk.data?.today || '';
-  if (q.isError) return <ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} />;
-  if (!q.data) return <Loader />;
-  const open = q.data.filter((t) => t.status === 'todo' || t.status === 'doing');
+  const all = q.data || [];
+  const found = useMemo(() => all.filter((t) => matchTask(t, search)), [all, search]);
+  const toolbar = (
+    <div className="flex flex-wrap items-center gap-3">
+      <SearchBox id="tsk-mine-search" value={search} onChange={setSearch} placeholder={SEARCH_HINT} />
+      <ModeToggle value={mode} onChange={setMode} />
+    </div>
+  );
+  if (q.isError) return <div className="flex flex-col gap-3">{toolbar}<ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} /></div>;
+  if (!q.data) return <div className="flex flex-col gap-3">{toolbar}<Loader /></div>;
+  if (!all.length) return <div className="flex flex-col gap-3">{toolbar}<Card><EmptyState title={tr("لا مهام لديك")} body={tr("المهام التي تُسند إليك تظهر هنا مرتبة حسب موعدها.")} /></Card></div>;
+  const searching = search.trim().length > 0;
+  const noMatch = searching && !found.length ? <Card><EmptyState title={tr("لا نتائج لـ «{0}»", search.trim())} body={tr("جرّب كلمة أخرى، أو ابحث في «كل المهام» و«أسندتها».")} /></Card> : null;
+  if (mode === 'board') return <div className="flex flex-col gap-3">{toolbar}{noMatch || <TaskBoard tasks={found} />}</div>;
+
+  const open = found.filter((t) => t.status === 'todo' || t.status === 'doing');
   const groups: { key: string; title: string; rows: TaskView[] }[] = [
     { key: 'overdue', title: tr("متأخرة"), rows: open.filter((t) => t.overdue) },
     { key: 'today', title: TODAY, rows: open.filter((t) => t.dueDate === today) },
     { key: 'next', title: tr("القادمة"), rows: open.filter((t) => t.dueDate > today) },
     { key: 'none', title: tr("بلا موعد"), rows: open.filter((t) => !t.dueDate) },
-    { key: 'review', title: tr("بانتظار مراجعة"), rows: q.data.filter((t) => t.status === 'review') },
-    { key: 'done', title: tr("المنجزة مؤخراً"), rows: q.data.filter((t) => t.status === 'done') }
+    { key: 'review', title: tr("بانتظار مراجعة"), rows: found.filter((t) => t.status === 'review') },
+    { key: 'done', title: tr("المنجزة مؤخراً"), rows: found.filter((t) => t.status === 'done') }
   ].filter((g) => g.rows.length);
   const DONE_LIMIT = 10;
-  if (!groups.length) return <Card><EmptyState title={tr("لا مهام لديك")} body={tr("المهام التي تُسند إليك تظهر هنا مرتبة حسب موعدها.")} /></Card>;
   return (
     <div className="flex flex-col gap-4">
+      {toolbar}
+      {noMatch}
       {groups.map((g) => (
         <Card key={g.key} padded={false}>
-          <CardHeader title={`${g.title} · ${g.rows.length}`} action={g.key === 'done' && g.rows.length > DONE_LIMIT ? <Button size="sm" variant="ghost" onClick={() => setAllDone(!allDone)}>{allDone ? tr("أقل") : tr("عرض الكل")}</Button> : undefined} />
-          {(g.key === 'done' && !allDone ? g.rows.slice(0, DONE_LIMIT) : g.rows).map((t) => <TaskRow key={t.id} t={t} today={today} onToggle={toggle} />)}
+          <CardHeader title={`${g.title} · ${g.rows.length}`} action={g.key === 'done' && !searching && g.rows.length > DONE_LIMIT ? <Button size="sm" variant="ghost" onClick={() => setAllDone(!allDone)}>{allDone ? tr("أقل") : tr("عرض الكل")}</Button> : undefined} />
+          {(g.key === 'done' && !allDone && !searching ? g.rows.slice(0, DONE_LIMIT) : g.rows).map((t) => <TaskRow key={t.id} t={t} today={today} onToggle={toggle} />)}
         </Card>
       ))}
     </div>
@@ -72,22 +93,25 @@ export function TaskListPage({ view }: { view: 'created' | 'watching' | 'team' |
   const [assignee, setAssignee] = useState('');
   const [project, setProject] = useState('');
   const [search, setSearch] = useState('');
-  const q = useApi<TaskView[]>('tsk.list', { view, old: status === 'done' || status === 'all', assigneeId: assignee || undefined, projectId: project || undefined });
+  const [mode, setMode] = useTaskMode();
+  const board = mode === 'board';
+  // اللوحة تعرض الحالات كلها أعمدةً (والمنجزة الحديثة فقط)، فلا تُطبَّق عليها تصفية الحالة
+  const q = useApi<TaskView[]>('tsk.list', { view, old: !board && (status === 'done' || status === 'all'), assigneeId: assignee || undefined, projectId: project || undefined });
   const toggle = useToggleDone();
   const rows = useMemo(() => (q.data || []).filter((t) => {
+    if (board) return matchTask(t, search);
     if (status === 'open' && !(t.status === 'todo' || t.status === 'doing' || t.status === 'review')) return false;
     if (status === 'review' && t.status !== 'review') return false;
     if (status === 'done' && t.status !== 'done') return false;
-    const s = search.trim().toLowerCase();
-    return !s || (t.title + ' ' + t.number + ' ' + t.assigneeName).toLowerCase().includes(s);
-  }), [q.data, status, search]);
+    return matchTask(t, search);
+  }), [q.data, status, search, board]);
   const L = lk.data;
   const people = view === 'all' ? L?.everyone : L?.people;
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-end gap-3">
-        <Segmented label={tr("الحالة")} value={status} onChange={setStatus}
-          options={[{ value: 'open', label: tr("المفتوحة") }, { value: 'review', label: tr("بانتظار مراجعة") }, { value: 'done', label: tr("المنجزة") }, { value: 'all', label: tr("الكل") }]} />
+        {!board && <Segmented label={tr("الحالة")} value={status} onChange={setStatus}
+          options={[{ value: 'open', label: tr("المفتوحة") }, { value: 'review', label: tr("بانتظار مراجعة") }, { value: 'done', label: tr("المنجزة") }, { value: 'all', label: tr("الكل") }]} />}
         {view !== 'watching' && (people?.length || 0) > 1 && (
           <Select label={tr("المسؤول")} className="w-44" value={assignee} onChange={(e) => setAssignee(e.target.value)}
             options={[{ value: '', label: tr("الكل") }, ...(people || []).map((p) => ({ value: p.id, label: p.name }))]} />
@@ -96,14 +120,18 @@ export function TaskListPage({ view }: { view: 'created' | 'watching' | 'team' |
           <Select label={tr("المشروع")} className="w-44" value={project} onChange={(e) => setProject(e.target.value)}
             options={[{ value: '', label: tr("الكل") }, ...(L?.projects || []).map((p) => ({ value: p.id, label: p.name }))]} />
         )}
-        <div className="min-w-[200px] flex-1"><SearchBox id="tsk-search" value={search} onChange={setSearch} placeholder={tr("بحث بالعنوان أو الرقم")} /></div>
+        <div className="min-w-[200px] flex-1"><SearchBox id="tsk-search" value={search} onChange={setSearch} placeholder={SEARCH_HINT} /></div>
+        <ModeToggle value={mode} onChange={setMode} />
       </div>
-      <Card padded={false}>
-        {q.isError ? <ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} /> : !q.data ? <Loader /> : rows.length === 0 ? (
-          <EmptyState title={tr("لا مهام هنا")} />
-        ) : rows.map((t) => <TaskRow key={t.id} t={t} today={L?.today} showAssignee onToggle={toggle} />)}
-      </Card>
-      {view === 'team' && <p className="m-0 text-[13px] text-muted">{tr("مهام من يعملون تحت إدارتك في الهيكل الوظيفي.")} <Link to="/tasks/board" className="text-accent-fg no-underline">{tr("عرضها على اللوحة")}</Link></p>}
+      {q.isError ? <ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} /> : !q.data ? <Loader /> : board && rows.length ? (
+        <TaskBoard tasks={rows} showAssignee />
+      ) : (
+        <Card padded={false}>
+          {rows.length === 0 ? <EmptyState title={search.trim() ? tr("لا نتائج لـ «{0}»", search.trim()) : tr("لا مهام هنا")} />
+            : rows.map((t) => <TaskRow key={t.id} t={t} today={L?.today} showAssignee onToggle={toggle} />)}
+        </Card>
+      )}
+      {view === 'team' && <p className="m-0 text-[13px] text-muted">{tr("مهام من يعملون تحت إدارتك في الهيكل الوظيفي.")}</p>}
     </div>
   );
 }
@@ -131,7 +159,6 @@ export function TaskBrowsePage() {
   const L = lk.data, today = L?.today || '';
   const rows = useMemo(() => {
     const f = Object.fromEntries(new URLSearchParams(key).entries()) as Record<string, string>;
-    const s = search.trim().toLowerCase();
     const since = f.days ? new Date(Date.now() - Number(f.days) * 86400000).toISOString() : '';
     return (q.data || []).filter((t) => {
       const open = OPEN_STATUSES.includes(t.status), p = t.priority || 'normal';
@@ -145,7 +172,7 @@ export function TaskBrowsePage() {
       if (f.assignee !== undefined && t.assigneeId !== f.assignee) return false;
       if (f.project && t.projectId !== f.project) return false;
       if (since && !(t.status === 'done' && (t.completedAt || '') >= since)) return false;
-      return !s || (t.title + ' ' + t.number + ' ' + t.assigneeName).toLowerCase().includes(s);
+      return matchTask(t, search);
     });
   }, [q.data, key, search, today]);
 
@@ -175,7 +202,7 @@ export function TaskBrowsePage() {
         ))}
         {chips.length > 0 && <button type="button" onClick={() => setParams({}, { replace: true })} className="cursor-pointer border-0 bg-transparent p-1 text-[13px] text-muted hover:text-fg">{tr("مسح التصفية")}</button>}
       </div>
-      <div><SearchBox id="tsk-browse-search" value={search} onChange={setSearch} placeholder={tr("بحث بالعنوان أو الرقم")} /></div>
+      <div><SearchBox id="tsk-browse-search" value={search} onChange={setSearch} placeholder={SEARCH_HINT} /></div>
       <Card padded={false}>
         {q.isError ? <ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} /> : !q.data ? <Loader /> : rows.length === 0 ? (
           <EmptyState title={tr("لا مهام هنا")} />

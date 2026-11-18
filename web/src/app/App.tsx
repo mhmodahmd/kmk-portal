@@ -53,7 +53,6 @@ const SignPage = lazy(() => import('../modules/custody/SignPage'));
 const TasksLayout = lazy(() => import('../modules/tasks/TasksPages').then((m) => ({ default: m.TasksLayout })));
 const MyTasksPage = lazy(() => import('../modules/tasks/TasksPages').then((m) => ({ default: m.MyTasksPage })));
 const TaskListPage = lazy(() => import('../modules/tasks/TasksPages').then((m) => ({ default: m.TaskListPage })));
-const TaskBoardPage = lazy(() => import('../modules/tasks/BoardPage'));
 const TaskDetailPage = lazy(() => import('../modules/tasks/TaskDetailPage'));
 const TasksOverviewPage = lazy(() => import('../modules/tasks/OverviewPage'));
 const TaskBrowsePage = lazy(() => import('../modules/tasks/TasksPages').then((m) => ({ default: m.TaskBrowsePage })));
@@ -181,7 +180,7 @@ export default function App() {
             {tasks && (
               <Route path="/tasks" element={<TasksLayout />}>
                 <Route index element={<MyTasksPage />} />
-                <Route path="board" element={<TaskBoardPage />} />
+                <Route path="board" element={<Navigate to="/tasks?mode=board" replace />} />
                 <Route path="overview" element={<TasksOverviewPage />} />
                 <Route path="browse" element={<TaskBrowsePage />} />
                 <Route path="assigned" element={<TaskListPage view="created" />} />

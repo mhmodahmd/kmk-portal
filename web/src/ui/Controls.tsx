@@ -1,7 +1,7 @@
 import { tr } from '../lib/i18n';
 import { NavLink } from 'react-router-dom';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Icon } from './Icon';
+import { Icon, type IconName } from './Icon';
 import { cx } from './cx';
 import { monthLabel, shiftMonth } from '../lib/format';
 
@@ -55,6 +55,28 @@ export function MonthPicker({ value, onChange, max }: { value: string; onChange:
       <button type="button" className={btn} aria-label={tr("الشهر التالي")} disabled={!canNext} onClick={() => onChange(next)}><Icon name="chevron" /></button>
     </div>
   );
+}
+
+/** تبديل طريقة العرض (قائمة/لوحة، بطاقات/سطور): أزرار بأيقونة ونص، 44px على الجوال */
+export function ViewToggle<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: { value: T; icon: IconName; label: string }[] }) {
+  return (
+    <div role="radiogroup" aria-label={tr("طريقة العرض")} className="inline-flex shrink-0 rounded-lg border border-line bg-surface p-0.5">
+      {options.map((o) => (
+        <button key={o.value} type="button" role="radio" aria-checked={value === o.value} onClick={() => onChange(o.value)}
+          className={cx('inline-flex h-[38px] cursor-pointer items-center gap-1.5 rounded-md px-3 text-[14px] font-medium sm:h-[34px]',
+            value === o.value ? 'bg-fg text-bg' : 'text-muted hover:text-fg')}>
+          <Icon name={o.icon} size={16} />{o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** طريقة عرض محفوظة في هذا المتصفح (تفضيل شخصي، لا يضر فقدانه) */
+export function useStoredView<T extends string>(key: string, allowed: readonly T[], fallback: T): [T, (v: T) => void] {
+  const [v, setV] = useState<T>(() => { try { const s = localStorage.getItem(key) as T | null; return s && allowed.includes(s) ? s : fallback; } catch { return fallback; } });
+  const set = (n: T) => { setV(n); try { localStorage.setItem(key, n); } catch { /* المتصفح يمنع التخزين */ } };
+  return [v, set];
 }
 
 export function SearchBox({ value, onChange, placeholder, id }: { value: string; onChange: (v: string) => void; placeholder: string; id: string }) {

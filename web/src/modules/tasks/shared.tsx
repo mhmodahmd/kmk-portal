@@ -7,6 +7,7 @@ import { Badge, ListRow } from '../../ui/Display';
 import { Button } from '../../ui/Button';
 import { Checkbox, Select, TextInput, Textarea } from '../../ui/Field';
 import { Dialog } from '../../ui/Overlay';
+import { ViewToggle } from '../../ui/Controls';
 import { Icon } from '../../ui/Icon';
 import { cx } from '../../ui/cx';
 import type { LinkType, Priority, TaskLookups, TaskStatus, TaskView } from './types';
@@ -42,18 +43,7 @@ export function useTaskMode(): [TaskMode, (m: TaskMode) => void] {
 
 /** زرّا تبديل طريقة العرض */
 export function ModeToggle({ value, onChange }: { value: TaskMode; onChange: (m: TaskMode) => void }) {
-  const opts: { v: TaskMode; icon: 'menu' | 'grid'; label: string }[] = [{ v: 'list', icon: 'menu', label: tr("قائمة") }, { v: 'board', icon: 'grid', label: tr("لوحة") }];
-  return (
-    <div role="radiogroup" aria-label={tr("طريقة العرض")} className="inline-flex shrink-0 rounded-lg border border-line bg-surface p-0.5">
-      {opts.map((o) => (
-        <button key={o.v} type="button" role="radio" aria-checked={value === o.v} onClick={() => onChange(o.v)}
-          className={cx('inline-flex h-[38px] cursor-pointer items-center gap-1.5 rounded-md px-3 text-[14px] font-medium sm:h-[34px]',
-            value === o.v ? 'bg-fg text-bg' : 'text-muted hover:text-fg')}>
-          <Icon name={o.icon} size={16} />{o.label}
-        </button>
-      ))}
-    </div>
-  );
+  return <ViewToggle value={value} onChange={onChange} options={[{ value: 'list', icon: 'menu', label: tr("قائمة") }, { value: 'board', icon: 'grid', label: tr("لوحة") }]} />;
 }
 
 const S_TONE: Record<TaskStatus, 'neutral' | 'info' | 'warn' | 'ok' | 'bad'> = { todo: 'neutral', doing: 'info', review: 'warn', done: 'ok', cancelled: 'bad' };

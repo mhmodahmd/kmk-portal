@@ -27,7 +27,8 @@ var PLT_SCHEMA = {
   ],
   Campaigns: [
     ['id', 'text'], ['platformId', 'text'], ['centerId', 'text'], ['kind', 'text'], ['name', 'text'], ['startDate', 'date'], ['endDate', 'date'],
-    ['status', 'text'], ['participants', 'num'], ['notes', 'text'], ['createdBy', 'text'], ['createdAt', 'ts'], ['updatedAt', 'ts']
+    ['status', 'text'], ['participants', 'num'], ['notes', 'text'], ['createdBy', 'text'], ['createdAt', 'ts'], ['updatedAt', 'ts'],
+    ['registered', 'num']
   ],
   Sales: [
     ['id', 'text'], ['gatewayId', 'text'], ['chargeRef', 'text'], ['platformId', 'text'], ['packageId', 'text'], ['kind', 'text'],
@@ -416,7 +417,7 @@ var Platforms = {
     return {
       id: x.id, platformId: x.platformId, centerId: x.centerId || '', centerName: center ? center.name : '', kind: x.kind, kindLabel: PLT.CAMPAIGN_KIND[x.kind] || '',
       name: x.name, startDate: x.startDate || '', endDate: x.endDate || '', status: x.status, statusLabel: PLT.CAMPAIGN_STATUS[x.status] || '',
-      participants: x.participants || 0, notes: x.notes || '', pledged: pledged, collected: collected, remaining: Math.max(0, pledged - collected),
+      participants: x.participants || 0, registered: x.registered || 0, notes: x.notes || '', pledged: pledged, collected: collected, remaining: Math.max(0, pledged - collected),
       sponsors: projects.map(function (p) { return { projectId: p.id, projectName: p.name, clientName: (crm.clients[p.clientId] || {}).name || '' }; })
     };
   },
@@ -958,6 +959,7 @@ var Platforms = {
         platformId: platform.id, kind: Platforms.enum_(p.kind, PLT.CAMPAIGN_KIND, 'النوع', 'competition'), name: requireText(p.name, 'الاسم', 160),
         status: Platforms.enum_(p.status, PLT.CAMPAIGN_STATUS, 'الحالة', 'planned'), startDate: optionalDate_(p.startDate, 'تاريخ البداية'),
         endDate: optionalDate_(p.endDate, 'تاريخ النهاية'), participants: p.participants == null || p.participants === '' ? 0 : intIn_(p.participants, 0, 10000000, 'عدد المشاركين'),
+        registered: p.registered == null || p.registered === '' ? 0 : intIn_(p.registered, 0, 10000000, 'عدد المسجلين'),
         notes: optionalText(p.notes, 1000), centerId: '', updatedAt: nowIso()
       };
       if (rec.startDate && rec.endDate && rec.endDate < rec.startDate) throw appError('تاريخ النهاية قبل البداية.');
@@ -966,6 +968,8 @@ var Platforms = {
         if (!c || c.platformId !== platform.id) throw appError('المركز غير موجود في هذه المنصة.');
         rec.centerId = c.id;
       }
+      // المشاريع الراعية تُحدَّث فقط حين يرسلها النموذج، ويُتحقق منها قبل أي حفظ
+      var link = Array.isArray(p.projectIds) ? Platforms.campaignLinkPlan_(ctx, cur, rec, p.projectIds) : null;
       var saved;
       if (cur) {
         if (cur.platformId !== platform.id && Platforms.linkedProjects_('campaignId', cur.id).length) throw appError('للمسابقة رعاة مربوطون، فلا تُنقل إلى منصة أخرى.');
@@ -975,8 +979,74 @@ var Platforms = {
         saved = Db.insert('platforms', 'Campaigns', Object.assign(rec, { createdBy: ctx.user.id, createdAt: nowIso() }));
         Audit.log(ctx.user, 'platforms', 'campaign.create', 'Campaign', saved.id, { name: rec.name, kind: PLT.CAMPAIGN_KIND[rec.kind], platform: platform.name });
       }
+      if (link) Platforms.applyCampaignLinks_(ctx, saved, link);
       return Platforms.campaignView_(saved, Platforms.crm_(), indexBy_(Platforms.rows_('Centers')));
     });
+  },
+
+  /**
+   * المشاريع الراعية للمسابقة (مشاريع «العملاء»): ما يُربط وما يُفك.
+   * الربط يضبط في المشروع المنصة والمسابقة ومركزها، ونوع الإيراد «رعاية» إن كان فارغاً.
+   * يلزم أن يملك المستخدم تعديل عميل المشروع في «العملاء».
+   */
+  campaignLinkPlan_: function (ctx, cur, rec, ids) {
+    if (!Platforms.enabled_('crm')) throw appError('وحدة العملاء غير مفعّلة، فلا تُربط مشاريع.');
+    var want = {};
+    ids.map(String).filter(String).forEach(function (id) { want[id] = true; });
+    var linked = cur ? Platforms.linkedProjects_('campaignId', cur.id) : [];
+    var had = {};
+    linked.forEach(function (x) { had[x.id] = true; });
+    var editable = function (id) {
+      var pr = Crm.project_(ctx, id);
+      if (!Crm.canEdit_(ctx, Db.get('crm', 'Clients', pr.clientId))) throw appError('لا يمكنك تعديل المشروع «' + pr.name + '» في العملاء.', 'FORBIDDEN');
+      return pr;
+    };
+    var add = Object.keys(want).map(function (id) {
+      // مربوط أصلاً ولا يتغير مركزه: لا يُمسّ (ولا يلزم صلاحية تعديله)
+      var old = had[id] && linked.filter(function (x) { return x.id === id; })[0];
+      if (old && (!rec.centerId || old.centerId === rec.centerId)) return null;
+      var pr = editable(id);
+      if (pr.platformId && pr.platformId !== rec.platformId) throw appError('المشروع «' + pr.name + '» مربوط بمنصة أخرى.');
+      return pr;
+    }).filter(Boolean);
+    var drop = linked.filter(function (x) { return !want[x.id]; }).map(function (x) { return editable(x.id); });
+    return { add: add, drop: drop, had: had };
+  },
+
+  applyCampaignLinks_: function (ctx, camp, link) {
+    var now = nowIso(), added = [], moved = [];
+    link.add.forEach(function (pr) {
+      var patch = {
+        platformId: camp.platformId, campaignId: camp.id,
+        centerId: camp.centerId || (pr.platformId === camp.platformId ? pr.centerId || '' : ''),
+        revenueKind: pr.revenueKind || 'sponsorship'
+      };
+      if (pr.platformId === patch.platformId && pr.campaignId === patch.campaignId && (pr.centerId || '') === patch.centerId && pr.revenueKind === patch.revenueKind) return;
+      Db.update('crm', 'Projects', pr.id, Object.assign(patch, { updatedAt: now }));
+      if (!link.had[pr.id]) (pr.campaignId ? moved : added).push(pr.name);
+    });
+    link.drop.forEach(function (pr) { Db.update('crm', 'Projects', pr.id, { campaignId: '', updatedAt: now }); });
+    if (added.length || moved.length || link.drop.length) {
+      Audit.log(ctx.user, 'platforms', 'campaign.sponsors', 'Campaign', camp.id, { name: camp.name, linked: added.join('، '), movedFromOther: moved.join('، '), unlinked: link.drop.map(function (x) { return x.name; }).join('، ') });
+    }
+  },
+
+  /** خيارات نموذج المسابقة: مشاريع «العملاء» التي يمكن ربطها، والعملاء لإضافة مشروع سريع */
+  campaignOptions: function (ctx) {
+    if (!Platforms.enabled_('crm') || !Permissions.has(ctx, 'crm')) return { crm: false, projects: [], clients: [] };
+    var clients = Crm.visibleClients_(ctx).filter(function (c) { return Crm.canEdit_(ctx, c); });
+    var byId = indexBy_(clients), campaigns = indexBy_(Platforms.rows_('Campaigns'));
+    var projects = Db.view('crm', 'Projects').filter(function (x) { return byId[x.clientId] && x.status !== 'cancelled'; }).map(function (x) {
+      var k = x.campaignId && campaigns[x.campaignId];
+      return {
+        id: x.id, name: x.name, clientId: x.clientId, clientName: byId[x.clientId].name, status: x.status, platformId: x.platformId || '',
+        campaignId: x.campaignId || '', campaignName: k ? k.name : '', contractValue: x.billing === 'fixed' ? x.contractValue || 0 : 0
+      };
+    }).sort(function (a, b) { return a.name.localeCompare(b.name, 'ar'); });
+    return {
+      crm: true, projects: projects,
+      clients: clients.map(function (c) { return { id: c.id, name: c.name }; }).sort(function (a, b) { return a.name.localeCompare(b.name, 'ar'); })
+    };
   },
 
   campaignRemove: function (ctx, p) {
@@ -1006,6 +1076,7 @@ var Platforms = {
       'plt.center.save': { perm: acc, fn: Platforms.centerSave },
       'plt.center.remove': { perm: acc, fn: Platforms.centerRemove },
       'plt.campaign.save': { perm: acc, fn: Platforms.campaignSave },
+      'plt.campaign.options': { perm: acc, fn: Platforms.campaignOptions },
       'plt.campaign.remove': { perm: acc, fn: Platforms.campaignRemove },
       'plt.fees.save': { perm: mgr, fn: Platforms.feesSave },
       'plt.package.save': { perm: mgr, fn: Platforms.packageSave },

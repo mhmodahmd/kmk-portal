@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { tr } from '../../lib/i18n';
-import { useAction, useApi } from '../../lib/useApi';
+import { errorText, useAction, useApi } from '../../lib/useApi';
+import { api } from '../../lib/api';
+import { useQueryClient } from '@tanstack/react-query';
+import { Icon } from '../../ui/Icon';
 import { dmy } from '../../lib/format';
 import { Badge, Card, EmptyState, ErrorBox, Loader } from '../../ui/Display';
 import { Button } from '../../ui/Button';
@@ -217,7 +220,7 @@ export function CampaignsPage() {
           <DataTable minWidth={820} head={[tr("الاسم"), tr("المركز"), tr("المدة"), tr("الحالة"), tr("المتعهَّد به"), tr("المحصّل"), tr("المتبقي"), tr("الرعاة"), '']}>
             {q.data.map((c) => (
               <tr key={c.id}>
-                <td><span className="font-semibold">{c.name}</span><div className="text-[12px] text-muted">{c.kindLabel}{c.participants ? ' · ' + tr("{0} مشارك", c.participants) : ''}</div></td>
+                <td><span className="font-semibold">{c.name}</span><div className="text-[12px] text-muted">{c.kindLabel}{c.registered ? ' · ' + tr("{0} مسجل", c.registered) : ''}{c.participants ? ' · ' + tr("{0} مشارك", c.participants) : ''}</div></td>
                 <td className="text-[13px]">{c.centerName || '—'}</td>
                 <td className="num whitespace-nowrap text-[12px]">{c.startDate ? dmy(c.startDate) : '—'}{c.endDate ? ' ← ' + dmy(c.endDate) : ''}</td>
                 <td><Badge tone={K_TONE[c.status]}>{c.statusLabel}</Badge></td>
@@ -236,38 +239,155 @@ export function CampaignsPage() {
   );
 }
 
+interface CampaignOptions {
+  crm: boolean;
+  projects: { id: string; name: string; clientId: string; clientName: string; status: string; platformId: string; campaignId: string; campaignName: string; contractValue: number }[];
+  clients: { id: string; name: string }[];
+}
+type ProjectOpt = CampaignOptions['projects'][number];
+const NEW_CLIENT = '__new';
+
+/**
+ * مسابقة أو تحدٍّ: بياناته وعدد المسجلين والمشاركين، والمشاريع الراعية من «العملاء» تُربط من هنا مباشرة
+ * (أو يُنشأ مشروع سريع للراعي إن لم يكن له مشروع).
+ */
 function CampaignDialog({ item, platformId, onClose }: { item: CampaignView | null; platformId: string; onClose: () => void }) {
   const L = usePltLookups().data;
+  const o = useApi<CampaignOptions>('plt.campaign.options', {}, { staleTime: 0 });
   const [f, setF] = useState({
     platformId, centerId: item?.centerId || '', kind: item?.kind || 'competition', name: item?.name || '', status: item?.status || 'planned',
-    startDate: item?.startDate || '', endDate: item?.endDate || '', participants: item?.participants ? String(item.participants) : '', notes: item?.notes || ''
+    startDate: item?.startDate || '', endDate: item?.endDate || '', registered: item?.registered ? String(item.registered) : '',
+    participants: item?.participants ? String(item.participants) : '', notes: item?.notes || ''
   });
+  const [picked, setPicked] = useState<string[]>(() => (item?.sponsors || []).map((s) => s.projectId));
+  const [quick, setQuick] = useState(false);
   const [error, setError] = useState('');
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
-  const save = useAction('plt.campaign.save', { invalidate: PLT_KEYS, success: tr("حُفظ"), silentError: true, onSuccess: onClose });
+  const save = useAction('plt.campaign.save', { invalidate: [...PLT_KEYS, 'crm.projects', 'crm.project', 'crm.client'], success: tr("حُفظ"), silentError: true, onSuccess: onClose });
   const remove = useAction('plt.campaign.remove', { invalidate: PLT_KEYS, success: tr("حُذف"), silentError: true, onSuccess: onClose });
+  const O = o.data;
+  const canLink = !!O?.crm;
+  const all = O?.projects || [];
+  const known = (id: string): ProjectOpt | undefined => all.find((p) => p.id === id);
+  // من لا يرى المشروع في «العملاء» يرى اسمه كما في الرعاة
+  const sponsorOf = (id: string) => item?.sponsors.find((s) => s.projectId === id);
+  const candidates = all.filter((p) => !picked.includes(p.id) && (!p.platformId || p.platformId === f.platformId));
+  const pledged = picked.reduce((n, id) => n + (known(id)?.contractValue || 0), 0);
+  const submit = () => {
+    setError('');
+    // لا تُرسل المشاريع قبل تحميل الخيارات أو دون صلاحية «العملاء»، فتبقى كما هي
+    save.mutate({ ...f, id: item?.id, ...(canLink ? { projectIds: picked } : {}) }, { onError: (e) => setError(e.message) });
+  };
   return (
-    <Dialog open onClose={onClose} title={item ? tr("تعديل المسابقة أو التحدي") : tr("مسابقة أو تحدٍّ جديد")}
-      onSubmit={() => { setError(''); save.mutate({ ...f, id: item?.id }, { onError: (e) => setError(e.message) }); }}
+    <>
+      <Dialog open onClose={onClose} title={item ? tr("تعديل المسابقة أو التحدي") : tr("مسابقة أو تحدٍّ جديد")} onSubmit={submit}
+        footer={<>
+          <Button type="submit" variant="primary" className="flex-1" loading={save.isPending}>{tr("حفظ")}</Button>
+          {item && item.sponsors.length === 0 && picked.length === 0 && <Button variant="danger-outline" loading={remove.isPending} onClick={() => remove.mutate({ id: item.id }, { onError: (e) => setError(e.message) })}>{tr("حذف")}</Button>}
+          <Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button>
+        </>}>
+        <div className="flex flex-col gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Select label={tr("المنصة")} value={f.platformId} onChange={(e) => setF({ ...f, platformId: e.target.value, centerId: '' })} options={(L?.platforms || []).map((p) => ({ value: p.id, label: p.name }))}
+              disabled={picked.length > 0} hint={picked.length > 0 ? tr("فك ربط المشاريع أولاً لتغيير المنصة") : undefined} />
+            <Select label={tr("النوع")} value={f.kind} onChange={set('kind')} options={opts(L?.campaignKinds || [])} />
+          </div>
+          <TextInput label={tr("الاسم")} required value={f.name} onChange={set('name')} maxLength={160} autoFocus placeholder={tr("مثال: تحدي قراءة سورة القلم")} />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Select label={tr("المركز")} value={f.centerId} onChange={set('centerId')} options={[{ value: '', label: tr("بلا مركز") }, ...(L?.centers || []).filter((c) => c.platformId === f.platformId).map((c) => ({ value: c.id, label: c.name }))]} />
+            <Select label={tr("الحالة")} value={f.status} onChange={set('status')} options={opts(L?.campaignStatuses || [])} />
+            <TextInput label={tr("البداية")} type="date" ltr value={f.startDate} onChange={set('startDate')} />
+            <TextInput label={tr("النهاية")} type="date" ltr value={f.endDate} onChange={set('endDate')} />
+            <TextInput label={tr("عدد المسجلين")} ltr inputMode="numeric" value={f.registered} onChange={set('registered')} hint={tr("من سجّلوا في المسابقة أو التحدي")} />
+            <TextInput label={tr("عدد المشاركين")} ltr inputMode="numeric" value={f.participants} onChange={set('participants')} hint={tr("من شاركوا فعلاً")} />
+          </div>
+
+          <fieldset className="m-0 flex min-w-0 flex-col gap-2 rounded-xl border border-line p-3">
+            <legend className="px-1 text-[14px] font-semibold">{tr("المشاريع الراعية")}</legend>
+            {picked.length > 0 ? (
+              <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+                {picked.map((id) => {
+                  const p = known(id), s = sponsorOf(id), name = p?.name || s?.projectName || '';
+                  return (
+                    <li key={id} className="flex items-center gap-2 rounded-lg bg-chip ps-3 text-[13px]">
+                      <span className="min-w-0 flex-1 py-1.5"><b className="font-semibold">{name}</b> <span className="text-muted">· {p?.clientName || s?.clientName}</span></span>
+                      {p && p.contractValue > 0 && <span className="num shrink-0 text-muted">{kwd(p.contractValue)}</span>}
+                      {canLink && <button type="button" onClick={() => setPicked(picked.filter((x) => x !== id))} aria-label={tr("فك ربط {0}", name)} title={tr("فك الربط")}
+                        className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted hover:text-bad sm:h-9 sm:w-9"><Icon name="x" size={16} /></button>}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : <p className="m-0 text-[13px] text-muted">{tr("لا مشاريع راعية بعد. الراعي مشروع في «العملاء»: قيمة عقده هي المتعهَّد به، ودفعاته المحصّلة تُحسب هنا.")}</p>}
+            {o.isLoading ? <Loader /> : !canLink ? (
+              <p className="m-0 text-[12px] text-muted">{tr("ربط المشاريع يحتاج صلاحية في «العملاء». اطلبها من مدير النظام، أو اربطها من نموذج المشروع هناك.")}</p>
+            ) : (
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="min-w-[200px] flex-1">
+                  <Select label={tr("ربط مشروع موجود")} value="" onChange={(e) => { if (e.target.value) setPicked([...picked, e.target.value]); }} disabled={!candidates.length}
+                    options={[{ value: '', label: candidates.length ? tr("اختر المشروع") : tr("لا مشاريع أخرى متاحة") },
+                      ...candidates.map((p) => ({ value: p.id, label: p.name + ' · ' + p.clientName + (p.campaignId && p.campaignId !== item?.id ? ' — ' + tr("مربوط بـ «{0}»", p.campaignName) : '') }))]} />
+                </div>
+                <Button variant="secondary" icon="plus" onClick={() => setQuick(true)}>{tr("مشروع سريع")}</Button>
+              </div>
+            )}
+            {canLink && picked.length > 0 && <p className="m-0 text-[12px] text-muted">{tr("المتعهَّد به من المشاريع المختارة: {0}", kwd(pledged))}</p>}
+          </fieldset>
+
+          <Textarea label={tr("ملاحظات")} value={f.notes} onChange={set('notes')} />
+          {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
+        </div>
+      </Dialog>
+      {quick && O && (
+        <QuickProjectDialog clients={O.clients} campaignName={f.name} platformId={f.platformId} centerId={f.centerId} startDate={f.startDate || L?.today || ''}
+          onClose={() => setQuick(false)} onCreated={(id) => { setPicked((x) => [...x, id]); setQuick(false); o.refetch(); }} />
+      )}
+    </>
+  );
+}
+
+/**
+ * مشروع رعاية سريع في «العملاء» لراعٍ ليس له مشروع: العميل (أو عميل جديد بالاسم فقط)، واسم المشروع، وقيمة الرعاية.
+ * يُنشأ مربوطاً بالمنصة والمركز (والمسابقة إن كانت محفوظة)، ويُضاف إلى رعاة المسابقة.
+ */
+function QuickProjectDialog({ clients, campaignName, platformId, centerId, startDate, onClose, onCreated }: {
+  clients: { id: string; name: string }[]; campaignName: string; platformId: string; centerId: string; startDate: string;
+  onClose: () => void; onCreated: (projectId: string) => void;
+}) {
+  const qc = useQueryClient();
+  const [f, setF] = useState({ clientId: clients.length ? '' : NEW_CLIENT, clientName: '', name: campaignName.trim() ? tr("رعاية {0}", campaignName.trim()) : '', value: '', startDate });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
+  const isNew = f.clientId === NEW_CLIENT;
+  const submit = async () => {
+    setError(''); setBusy(true);
+    try {
+      const clientId = isNew ? (await api<{ id: string }>('crm.client.save', { name: f.clientName, category: 'current' })).id : f.clientId;
+      const pr = await api<{ id: string }>('crm.project.save', {
+        clientId, name: f.name, billing: 'fixed', contractValue: f.value, startDate: f.startDate, status: 'ongoing',
+        platformId, centerId, campaignId: '', revenueKind: 'sponsorship'
+      });
+      [...PLT_KEYS, 'crm.projects', 'crm.clients'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+      onCreated(pr.id);
+    } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
+  };
+  return (
+    <Dialog open onClose={onClose} title={tr("مشروع رعاية سريع")} onSubmit={submit}
       footer={<>
-        <Button type="submit" variant="primary" className="flex-1" loading={save.isPending}>{tr("حفظ")}</Button>
-        {item && item.sponsors.length === 0 && <Button variant="danger-outline" loading={remove.isPending} onClick={() => remove.mutate({ id: item.id }, { onError: (e) => setError(e.message) })}>{tr("حذف")}</Button>}
+        <Button type="submit" variant="primary" className="flex-1" loading={busy}>{tr("إنشاء وإضافة للرعاة")}</Button>
         <Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button>
       </>}>
       <div className="flex flex-col gap-3">
+        <p className="m-0 text-[13px] text-muted">{tr("يُنشأ المشروع في «العملاء» بعقد ثابت ونوع إيراد «رعاية»، وتُكمل بياناته ودفعاته من هناك. يُربط بالمسابقة عند حفظها.")}</p>
+        <Select label={tr("الراعي (العميل)")} required value={f.clientId} onChange={set('clientId')} autoFocus
+          options={[...(clients.length ? [{ value: '', label: tr("اختر العميل") }] : []), ...clients.map((c) => ({ value: c.id, label: c.name })), { value: NEW_CLIENT, label: tr("+ عميل جديد") }]} />
+        {isNew && <TextInput label={tr("اسم العميل الجديد")} required value={f.clientName} onChange={set('clientName')} maxLength={120} />}
+        <TextInput label={tr("اسم المشروع")} required value={f.name} onChange={set('name')} maxLength={160} />
         <div className="grid gap-3 sm:grid-cols-2">
-          <Select label={tr("المنصة")} value={f.platformId} onChange={(e) => setF({ ...f, platformId: e.target.value, centerId: '' })} options={(L?.platforms || []).map((p) => ({ value: p.id, label: p.name }))} />
-          <Select label={tr("النوع")} value={f.kind} onChange={set('kind')} options={opts(L?.campaignKinds || [])} />
+          <TextInput label={tr("قيمة الرعاية (د.ك)")} required ltr inputMode="decimal" value={f.value} onChange={set('value')} />
+          <TextInput label={tr("البداية")} type="date" required ltr value={f.startDate} onChange={set('startDate')} />
         </div>
-        <TextInput label={tr("الاسم")} required value={f.name} onChange={set('name')} maxLength={160} autoFocus placeholder={tr("مثال: تحدي قراءة سورة القلم")} />
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Select label={tr("المركز")} value={f.centerId} onChange={set('centerId')} options={[{ value: '', label: tr("بلا مركز") }, ...(L?.centers || []).filter((c) => c.platformId === f.platformId).map((c) => ({ value: c.id, label: c.name }))]} />
-          <Select label={tr("الحالة")} value={f.status} onChange={set('status')} options={opts(L?.campaignStatuses || [])} />
-          <TextInput label={tr("البداية")} type="date" ltr value={f.startDate} onChange={set('startDate')} />
-          <TextInput label={tr("النهاية")} type="date" ltr value={f.endDate} onChange={set('endDate')} />
-          <TextInput label={tr("عدد المشاركين")} ltr inputMode="numeric" value={f.participants} onChange={set('participants')} />
-        </div>
-        <Textarea label={tr("ملاحظات")} value={f.notes} onChange={set('notes')} />
         {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
       </div>
     </Dialog>

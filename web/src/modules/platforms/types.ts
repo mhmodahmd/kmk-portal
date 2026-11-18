@@ -70,6 +70,6 @@ export interface CenterView {
 
 export interface CampaignView {
   id: string; platformId: string; centerId: string; centerName: string; kind: 'competition' | 'challenge'; kindLabel: string; name: string;
-  startDate: string; endDate: string; status: 'planned' | 'running' | 'ended' | 'cancelled'; statusLabel: string; participants: number; notes: string;
+  startDate: string; endDate: string; status: 'planned' | 'running' | 'ended' | 'cancelled'; statusLabel: string; participants: number; registered: number; notes: string;
   pledged: number; collected: number; remaining: number; sponsors: { projectId: string; projectName: string; clientName: string }[];
 }

@@ -209,3 +209,34 @@ test('platforms: package settings are manager-only and gateway names stay unique
   truthy(c.fail('plt.package.save', { platformId: lk.platforms[0].id, name: 'إهداء', code: 'هدية', kind: 'gift', price: '0' }, c.T.huda).message.includes('رعاية الفرد'));
   eq(c.ok('plt.package.remove', { id: p.id }, c.T.huda).removed, true);
 });
+
+test('platforms: a campaign links its sponsor projects from its own form, and counts registrations', () => {
+  const c = setup();
+  const lk = c.ok('plt.lookups', {}, c.A);
+  const saad = lk.platforms[0].id, maqraa = lk.platforms[1].id;
+  const center = c.ok('plt.center.save', { platformId: saad, name: 'مركز جود' }, c.A);
+  const client = c.ok('crm.client.save', { name: 'وقف الخير', category: 'current' }, c.A);
+  const p1 = c.ok('crm.project.save', { clientId: client.id, name: 'رعاية تحدي الطور', billing: 'fixed', contractValue: '300' }, c.A);
+  const p2 = c.ok('crm.project.save', { clientId: client.id, name: 'عقد المقرأة', billing: 'fixed', contractValue: '100', platformId: maqraa }, c.A);
+  // الخيارات: من لا يدخل «العملاء» لا يرى مشاريعها
+  eq(c.ok('plt.campaign.options', {}, c.T.sara).crm, false);
+  const opt = c.ok('plt.campaign.options', {}, c.A);
+  eq([opt.crm, opt.clients.map((x) => x.name), opt.projects.map((x) => [x.name, x.contractValue])], [true, ['وقف الخير'], [['رعاية تحدي الطور', 300000], ['عقد المقرأة', 100000]]]);
+  // مشروع منصة أخرى يُرفض ولا يُحفظ شيء
+  truthy(c.fail('plt.campaign.save', { platformId: saad, name: 'x', projectIds: [p2.id] }, c.A).message.includes('منصة أخرى'));
+  eq(c.ok('plt.campaigns', { platform: 'saad' }, c.A).length, 0, 'nothing saved when a link fails');
+  eq(c.fail('plt.campaign.save', { platformId: saad, name: 'y', projectIds: [p1.id] }, c.T.sara).code, 'NOT_FOUND', 'no CRM access');
+  truthy(c.fail('plt.campaign.save', { platformId: saad, name: 'z', registered: '-1' }, c.A).message.includes('المسجلين'));
+  // الربط من نموذج المسابقة يضبط المنصة والمركز ونوع الإيراد في المشروع
+  const camp = c.ok('plt.campaign.save', { platformId: saad, centerId: center.id, kind: 'challenge', name: 'تحدي سورة الطور', registered: '120', participants: '85', projectIds: [p1.id] }, c.A);
+  eq([camp.registered, camp.participants, camp.pledged, camp.sponsors.map((s) => s.projectName)], [120, 85, 300000, ['رعاية تحدي الطور']]);
+  const linked = c.ok('crm.projects', { campaignId: camp.id }, c.A);
+  eq(linked.map((x) => [x.name, x.platformName, x.centerName, x.campaignName, x.revenueKindLabel]), [['رعاية تحدي الطور', 'صاد القرآني', 'مركز جود', 'تحدي سورة الطور', 'رعاية']]);
+  // تعديل المسابقة دون المشاريع، أو بالمشاريع نفسها، لا يمسّها ولا يحتاج صلاحية «العملاء»
+  eq(c.ok('plt.campaign.save', { id: camp.id, platformId: saad, centerId: center.id, name: 'تحدي سورة الطور', registered: '130' }, c.T.sara).sponsors.length, 1);
+  eq(c.ok('plt.campaign.save', { id: camp.id, platformId: saad, centerId: center.id, name: 'تحدي سورة الطور', registered: '130', projectIds: [p1.id] }, c.T.sara).registered, 130);
+  // فك الربط يُبقي المشروع على المنصة
+  eq(c.ok('plt.campaign.save', { id: camp.id, platformId: saad, centerId: center.id, name: 'تحدي سورة الطور', projectIds: [] }, c.A).sponsors.length, 0);
+  eq(c.ok('crm.projects', { centerId: center.id }, c.A).map((x) => [x.name, x.campaignName]), [['رعاية تحدي الطور', '']]);
+  eq(c.ok('plt.campaign.remove', { id: camp.id }, c.A).removed, true);
+});

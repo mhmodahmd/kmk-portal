@@ -33,22 +33,27 @@ export interface VoucherView {
   approved: boolean; approvedByName: string; approvedAt: string; signed: boolean; signedAt: string; signedNote: string; mgrSigned: boolean; hasSignedFile: boolean;
   signedByName: string; isOpening: boolean; requestedBy: string; requestedByName: string; requestedAt: string;
   rejectReason: string; rejectedByName: string; rejectedAt: string; signLink: SignLinkInfo | null;
+  /** في القائمة: هل يعتمده المستخدم الحالي (محاسب الشركة، أو أي محاسب إن لم يُحدَّد) */
+  canApprove?: boolean;
 }
 
 export interface CustodyDetail {
   custody: CustodyView; requestReason: string; stages: StageStep[]; expenses: ExpenseView[]; vouchers: VoucherView[];
-  can: { edit: boolean; requestClose: boolean; review: boolean; note: boolean; correct: boolean; confirmReceipt: boolean; signOpen: boolean; signStatement: boolean; delete: boolean };
+  can: { edit: boolean; requestClose: boolean; review: boolean; note: boolean; correct: boolean; confirmReceipt: boolean; signOpen: boolean; approveOpen: boolean; signStatement: boolean; delete: boolean };
+  openVoucherStatus: '' | VoucherView['status']; companyAccountantName: string;
   signLinks: { statement: SignLinkInfo | null; openVoucher: SignLinkInfo | null };
 }
 
 export interface CusRequest {
-  id: string; employeeId: string; employeeName: string; amount: number; reason: string; status: 'pending' | 'signing' | 'approved' | 'rejected' | 'cancelled';
+  id: string; employeeId: string; employeeName: string; amount: number; reason: string; status: 'pending' | 'accountant' | 'signing' | 'approved' | 'rejected' | 'cancelled';
   statusLabel: string; custodyId: string; handledByName: string; handledAt: string; rejectReason: string; createdAt: string; activeCustodyId: string;
 }
 
 export interface Lookups {
   categories: string[]; projects: { name: string; type: string; typeLabel: string }[]; docTypes: string[];
   paymentMethods: { id: string; label: string }[]; alertPercent: number; defaultAmount: number; today: string; managerName: string; drive: boolean;
+  /** محاسب الشركة الذي يعتمد السندات قبل المدير ('' = أي محاسب) */
+  companyAccountantName: string; isCompanyAccountant: boolean;
 }
 
 export interface CusHome {

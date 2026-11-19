@@ -213,7 +213,12 @@ export function VoucherFormDialog({ open, onClose, request }: { open: boolean; o
   const [f, setF] = useState({ type: 'payment', partyName: '', amount: '', reason: '', date: '', paymentMethod: 'cash', chequeNo: '' });
   const [error, setError] = useState('');
   useEffect(() => { if (open) { setError(''); setF({ type: 'payment', partyName: '', amount: '', reason: '', date: lk.data?.today || '', paymentMethod: 'cash', chequeNo: '' }); } }, [open, lk.data?.today]);
-  const act = useAction(request ? 'cus.voucher.request' : 'cus.voucher.create', { invalidate: ['cus.voucher.list', 'cus.home'], success: request ? tr("أُرسل طلب السند إلى المحاسب") : tr("صدر السند"), silentError: true, onSuccess: onClose });
+  const ca = lk.data?.companyAccountantName || '';
+  const viaCa = !request && !!ca && !lk.data?.isCompanyAccountant;
+  const act = useAction<Record<string, unknown>, VoucherView>(request ? 'cus.voucher.request' : 'cus.voucher.create', {
+    invalidate: ['cus.voucher.list', 'cus.home'], silentError: true, onSuccess: onClose,
+    success: (v) => (v.status === 'requested' ? (ca ? tr("أُرسل السند إلى محاسب الشركة ({0}) لاعتماده", ca) : tr("أُرسل طلب السند إلى المحاسب")) : tr("صدر السند، وهو بانتظار اعتماد المدير"))
+  });
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   return (
     <Dialog open={open} onClose={onClose} title={request ? tr("طلب سند") : tr("إصدار سند")}
@@ -238,7 +243,9 @@ export function VoucherFormDialog({ open, onClose, request }: { open: boolean; o
           <Select label={tr("طريقة الدفع")} value={f.paymentMethod} onChange={set('paymentMethod')} options={(lk.data?.paymentMethods || []).map((m) => ({ value: m.id, label: m.label }))} />
           {f.paymentMethod === 'cheque' && <TextInput label={tr("رقم الشيك")} value={f.chequeNo} onChange={set('chequeNo')} />}
         </div>
-        <p className="m-0 text-[13px] text-muted">{request ? tr("يحصل السند على رقمه بعد اعتماد المحاسب، ثم يعتمده المدير عبر رابط فيصبح سارياً.") : tr("يصدر السند باعتمادك وتوقيعك، ثم يعتمده المدير عبر رابط فيصبح سارياً.")}</p>
+        <p className="m-0 text-[13px] text-muted">{request || viaCa
+          ? (ca ? tr("يحصل السند على رقمه بعد اعتماد محاسب الشركة ({0})، ثم يعتمده المدير عبر رابط فيصبح سارياً.", ca) : tr("يحصل السند على رقمه بعد اعتماد المحاسب، ثم يعتمده المدير عبر رابط فيصبح سارياً."))
+          : tr("يصدر السند باعتمادك وتوقيعك، ثم يعتمده المدير عبر رابط فيصبح سارياً.")}</p>
         {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
       </div>
     </Dialog>

@@ -9,7 +9,8 @@ import { toInput } from './shared';
 
 interface Item { id: string; name: string; type: string; active: boolean }
 interface Data {
-  settings: { managerName: string; managerPhone: string; alertPercent: number; defaultAmount: number };
+  settings: { managerName: string; managerPhone: string; alertPercent: number; defaultAmount: number; companyAccountantId: string };
+  accountants: { id: string; name: string }[];
   lists: { categories: Item[]; docTypes: Item[]; projects: Item[] };
   projectTypes: Record<string, string>;
 }
@@ -17,11 +18,11 @@ type ListKey = keyof Data['lists'];
 
 export default function CusSettingsPage() {
   const q = useApi<Data>('cus.settings.get');
-  const [f, setF] = useState({ managerName: '', managerPhone: '', alertPercent: '80', defaultAmount: '100' });
+  const [f, setF] = useState({ managerName: '', managerPhone: '', alertPercent: '80', defaultAmount: '100', companyAccountantId: '' });
   useEffect(() => {
-    if (q.data) setF({ managerName: q.data.settings.managerName, managerPhone: q.data.settings.managerPhone, alertPercent: String(q.data.settings.alertPercent), defaultAmount: toInput(q.data.settings.defaultAmount) });
+    if (q.data) setF({ managerName: q.data.settings.managerName, managerPhone: q.data.settings.managerPhone, alertPercent: String(q.data.settings.alertPercent), defaultAmount: toInput(q.data.settings.defaultAmount), companyAccountantId: q.data.settings.companyAccountantId || '' });
   }, [q.data]);
-  const save = useAction('cus.settings.save', { invalidate: ['cus.settings.get', 'cus.lookups'], success: tr("حُفظت الإعدادات") });
+  const save = useAction('cus.settings.save', { invalidate: ['cus.settings.get', 'cus.lookups', 'cus.voucher.list'], success: tr("حُفظت الإعدادات") });
   const [editing, setEditing] = useState<{ list: ListKey; item: Item | null } | null>(null);
   const move = useAction('cus.list.move', { invalidate: ['cus.settings.get', 'cus.lookups'] });
   if (q.isError) return <ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} />;
@@ -34,6 +35,9 @@ export default function CusSettingsPage() {
       <Card>
         <Form className="flex flex-col gap-3" onSubmit={() => save.mutate(f)}>
           <h2 className="m-0 text-[16px] font-semibold">{tr("الإدارة والتنبيهات")}</h2>
+          <Select label={tr("محاسب الشركة (يعتمد السندات قبل المدير)")} value={f.companyAccountantId} onChange={set('companyAccountantId')}
+            options={[{ value: '', label: tr("أي محاسب (غير مقدّم الطلب)") }, ...q.data.accountants.map((a) => ({ value: a.id, label: a.name }))]}
+            hint={tr("السند: الطلب ← اعتماد محاسب الشركة ← اعتماد المدير عبر رابط ← ساري. إن كان محاسب الشركة هو مقدّم الطلب أو صاحب العهدة يعتمده محاسب آخر.")} />
           <div className="grid gap-3 sm:grid-cols-2">
             <TextInput label={tr("اسم المدير (يوقّع السندات والكشوف)")} required value={f.managerName} onChange={set('managerName')} />
             <TextInput label={tr("جوال المدير لواتساب")} ltr inputMode="tel" value={f.managerPhone} onChange={set('managerPhone')} hint={tr("بالمفتاح الدولي، مثل 9655xxxxxxx")} />

@@ -9,10 +9,10 @@ import { DataTable, Pager, SearchBox, Segmented, useTable } from '../../ui/Contr
 import { ReasonDialog } from '../../ui/Decide';
 import { Dialog } from '../../ui/Overlay';
 import { Icon } from '../../ui/Icon';
-import { Money, OpenCustodyDialog, SignActions, V_TONE, VoucherFormDialog, dateLabel, kwd, useCustodyRole } from './shared';
+import { Money, OpenCustodyDialog, SignActions, V_TONE, VoucherFormDialog, dateLabel, kwd, useCustodyRole, useLookups } from './shared';
 import type { CusRequest, VoucherView } from './types';
 
-const REQ_TONE = { pending: 'warn', signing: 'info', approved: 'ok', rejected: 'bad', cancelled: 'neutral' } as const;
+const REQ_TONE = { pending: 'warn', accountant: 'warn', signing: 'info', approved: 'ok', rejected: 'bad', cancelled: 'neutral' } as const;
 
 /** طلبات العهد الجديدة: الموظف يرى طلباته، والمحاسب يعتمد بفتح العهدة أو يرفض */
 export function CusRequestsPage() {
@@ -52,6 +52,7 @@ export function VouchersPage() {
   const [form, setForm] = useState<'' | 'request' | 'create'>('');
   const [acting, setActing] = useState<{ v: VoucherView; kind: 'reject' | 'cancel' } | null>(null);
   const [signingId, setSigningId] = useState('');
+  const lk = useLookups();
   const q = useApi<VoucherView[]>('cus.voucher.list', {});
   const inv = { invalidate: ['cus.voucher.list', 'cus.home'] };
   // بعد اعتماد المحاسب تُفتح نافذة رابط المدير مباشرة
@@ -85,14 +86,15 @@ export function VouchersPage() {
                 <td><Money fils={v.amount} strong /></td>
                 <td>
                   <Badge tone={V_TONE[v.status]}>{v.statusLabel}</Badge>
+                  {v.status === 'requested' && !v.canApprove && lk.data?.companyAccountantName && <div className="mt-1 text-[12px] text-muted">{tr("يعتمده {0}", lk.data.companyAccountantName)}</div>}
                   {v.status === 'signing' && v.signLink && <div className="mt-1 text-[12px] text-muted">{v.signLink.status === 'open' ? tr("أُرسل الرابط للمدير") : v.signLink.status === 'rejected' ? tr("رفض المدير: {0}", v.signLink.rejectReason) : v.signLink.status === 'expired' ? tr("انتهت صلاحية الرابط") : ''}</div>}
                   {v.status === 'active' && <div className="mt-1 text-[12px] text-muted">{v.signed ? tr("اعتمده المدير") : tr("بلا توقيع المدير (قبل التحديث)")}</div>}
                 </td>
                 <td className="text-left whitespace-nowrap">
                   {v.number && <Link to={'/custody/print/voucher/' + v.id} className="inline-flex min-h-11 items-center gap-1 px-2 text-accent-fg no-underline sm:min-h-8"><Icon name="printer" size={16} />{tr("طباعة")}</Link>}
-                  {staff && v.status === 'requested' && <Button size="sm" variant="ghost" icon="check" loading={approve.isPending} onClick={() => approve.mutate({ id: v.id })}>{tr("اعتماد المحاسب")}</Button>}
+                  {v.canApprove && <Button size="sm" variant="ghost" icon="check" loading={approve.isPending} onClick={() => approve.mutate({ id: v.id })}>{tr("اعتماد المحاسب")}</Button>}
                   {staff && v.status === 'signing' && <Button size="sm" variant="secondary" icon="key" onClick={() => setSigningId(v.id)}>{tr("رابط المدير")}</Button>}
-                  {staff && v.status === 'requested' && <Button size="sm" variant="ghost" icon="x" onClick={() => setActing({ v, kind: 'reject' })}>{tr("رفض")}</Button>}
+                  {v.canApprove && <Button size="sm" variant="ghost" icon="x" onClick={() => setActing({ v, kind: 'reject' })}>{tr("رفض")}</Button>}
                   {(admin && (v.status === 'active' || v.status === 'signing' || v.status === 'requested')) && <Button size="sm" variant="ghost" icon="trash" onClick={() => setActing({ v, kind: 'cancel' })}>{tr("إلغاء السند")}</Button>}
                 </td>
               </tr>

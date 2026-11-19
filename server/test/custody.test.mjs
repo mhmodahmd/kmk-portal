@@ -218,3 +218,48 @@ test('vouchers: request → accountant approval → manager link (3 days, draw o
   const home = c.ok('cus.home', {}, c.T.ahmad);
   eq([home.myRequest.status, home.myCustody.stage], ['approved', 'disbursing']);
 });
+
+test('vouchers: the company accountant set in settings approves before the manager', () => {
+  const c = setup();
+  const users = c.ok('users.list', {}, c.A).users;
+  const uid = (u) => users.find((x) => x.username === u).id;
+  const st = c.ok('cus.settings.get', {}, c.A);
+  truthy(['هدى', 'سارة'].every((n) => st.accountants.some((a) => a.name === n)), 'accountants list');
+  truthy(c.fail('cus.settings.save', { ...st.settings, defaultAmount: '100', companyAccountantId: uid('ahmad') }, c.A).message.includes('محاسب'));
+  c.ok('cus.settings.save', { ...st.settings, defaultAmount: '100', companyAccountantId: uid('sara') }, c.A);
+  eq(c.ok('cus.settings.get', {}, c.A).settings.companyAccountantId, uid('sara'));
+
+  // طلب سند: هدى (محاسبة أخرى) لا تعتمده ولا يظهر في موافقاتها، وسارة تعتمده
+  const vr = c.ok('cus.voucher.request', { type: 'payment', partyName: 'مورد', amount: '10', reason: 'لوازم' }, c.T.ahmad);
+  const no = c.fail('cus.voucher.approve', { id: vr.id }, c.T.huda);
+  eq(no.code, 'FORBIDDEN'); truthy(no.message.includes('محاسب الشركة (سارة)'), no.message);
+  truthy(!c.ok('inbox.list', {}, c.T.huda).some((x) => x.refId === vr.id));
+  truthy(c.ok('inbox.list', {}, c.T.sara).some((x) => x.refId === vr.id));
+  eq(c.ok('cus.voucher.list', {}, c.T.huda).find((v) => v.id === vr.id).canApprove, false);
+  eq(c.ok('cus.voucher.list', {}, c.T.sara).find((v) => v.id === vr.id).canApprove, true);
+  eq(c.ok('cus.voucher.approve', { id: vr.id }, c.T.sara).status, 'signing');
+
+  // سند تصدره محاسبة أخرى ينتظر محاسب الشركة، وما يصدره محاسب الشركة يعتمد بإصداره
+  const byHuda = c.ok('cus.voucher.create', { type: 'receipt', partyName: 'عميل', amount: '30', reason: 'دفعة' }, c.T.huda);
+  eq([byHuda.status, byHuda.number, byHuda.requestedByName, byHuda.approved], ['requested', '', 'هدى', false]);
+  eq(c.ok('cus.voucher.approve', { id: byHuda.id }, c.T.sara).approvedByName, 'سارة');
+  eq(c.ok('cus.voucher.create', { type: 'payment', partyName: 'مورد', amount: '5', reason: 'بريد' }, c.T.sara).status, 'signing');
+  // طلب محاسب الشركة نفسه يعتمده محاسب آخر
+  const bySara = c.ok('cus.voucher.request', { type: 'payment', partyName: 'مورد', amount: '7', reason: 'شحن' }, c.T.sara);
+  eq(c.ok('cus.voucher.approve', { id: bySara.id }, c.T.huda).status, 'signing');
+
+  // عهدة تفتحها محاسبة أخرى: سند صرفها ينتظر محاسب الشركة، ثم المدير
+  const r = c.ok('cus.request.create', { amount: '40', reason: 'معرض' }, c.T.ahmad);
+  const cu = c.ok('cus.open', { employeeId: c.emp.ahmad.id, amount: '40', requestId: r.id }, c.T.huda);
+  eq(c.ok('cus.home', {}, c.T.ahmad).myRequest.statusLabel, 'بانتظار اعتماد محاسب الشركة');
+  const gh = c.ok('cus.get', { id: cu.id }, c.T.huda), gs = c.ok('cus.get', { id: cu.id }, c.T.sara);
+  eq([gh.can.approveOpen, gh.can.signOpen, gs.can.approveOpen, gs.openVoucherStatus, gs.companyAccountantName], [false, false, true, 'requested', 'سارة']);
+  c.ok('cus.voucher.approve', { id: cu.openVoucherId }, c.T.sara);
+  const after = c.ok('cus.get', { id: cu.id }, c.T.huda);
+  eq([after.can.signOpen, after.openVoucherStatus, c.ok('cus.home', {}, c.T.ahmad).myRequest.status], [true, 'signing', 'signing']);
+
+  // بلا محاسب شركة: أي محاسب غير مقدّم الطلب
+  c.ok('cus.settings.save', { ...st.settings, defaultAmount: '100', companyAccountantId: '' }, c.A);
+  const free = c.ok('cus.voucher.request', { type: 'payment', partyName: 'مورد', amount: '3', reason: 'ماء' }, c.T.ahmad);
+  eq(c.ok('cus.voucher.approve', { id: free.id }, c.T.huda).status, 'signing');
+});

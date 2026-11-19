@@ -45,6 +45,7 @@ export default function CustodyDetailPage() {
     catch (e) { toast(e instanceof Error ? e.message : tr("تعذّر رفع الملف."), 'bad'); }
     finally { setUploading(''); }
   };
+  const approveOpen = useAction('cus.voucher.approve', { invalidate: [...inv, 'cus.voucher.list'], success: tr("اعتمدتَ السند، وهو الآن بانتظار اعتماد المدير") });
   const unattach = useAction('cus.attachment.delete', { invalidate: ['cus.get'], success: tr("حُذف المرفق") });
   const reject = useAction('cus.reject', { invalidate: inv, success: tr("رُفض الإقفال وأُعيدت العهدة للموظف"), silentError: true });
   const remove = useAction('cus.delete', { invalidate: ['cus.list', 'cus.home'], success: tr("حُذفت العهدة"), silentError: true, onSuccess: () => nav('/custody/all') });
@@ -82,6 +83,12 @@ export default function CustodyDetailPage() {
           {can.review && <Button variant="primary" icon="check" onClick={() => setApproving(true)}>{tr("اعتماد الإقفال")}</Button>}
           {can.review && <Button variant="danger-outline" icon="x" onClick={() => setRejecting(true)}>{tr("رفض")}</Button>}
         </div>
+        {q.data.openVoucherStatus === 'requested' && openVoucher && c.status === 'open' && c.stage === 'awaiting_signature' && (
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-line p-3 no-print">
+            <span className="min-w-0 flex-1 font-semibold">{q.data.companyAccountantName ? tr("سند صرف العهدة بانتظار اعتماد محاسب الشركة ({0})", q.data.companyAccountantName) : tr("سند صرف العهدة بانتظار اعتماد المحاسب")}</span>
+            {can.approveOpen && <Button variant="primary" icon="check" loading={approveOpen.isPending} onClick={() => approveOpen.mutate({ id: openVoucher.id })}>{tr("اعتماد المحاسب")}</Button>}
+          </div>
+        )}
         {can.signOpen && openVoucher && (
           <div className="flex flex-col gap-2 rounded-lg border border-line p-3 no-print">
             <span className="font-semibold">{tr("سند الصرف {0} بانتظار موافقة الإدارة", openVoucher.number)}</span>

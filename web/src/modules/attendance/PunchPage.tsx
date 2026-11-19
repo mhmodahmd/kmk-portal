@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiError } from '../../lib/api';
 import type { AttToday } from '../../lib/types';
-import { duration, formatTime, hm } from '../../lib/format';
+import { dmy, duration, formatTime, hm } from '../../lib/format';
 import { useAction, useApi } from '../../lib/useApi';
 import { Badge, Card, ErrorBox, Skeleton } from '../../ui/Display';
 import { Icon } from '../../ui/Icon';
@@ -122,7 +122,7 @@ export default function PunchPage() {
         {!t ? <><Skeleton className="h-5 w-40" /><Skeleton className="h-12 w-56" /><Skeleton className="h-44 w-44 rounded-full" /></> : (
           <>
             <div className="flex flex-col items-center gap-1">
-              <span className="text-muted">{t.dayName} · <span className="num">{t.date.split('-').reverse().join('/')}</span></span>
+              <span className="text-muted">{t.dayName} · <span className="num">{dmy(t.date)}</span></span>
               <span className="text-[44px] font-bold leading-none num ltr" aria-live="off">{clock}<span className="ms-2 text-[20px] font-semibold text-muted">{ampm}</span></span>
             </div>
 

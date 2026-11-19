@@ -106,6 +106,50 @@ export function dmy(ds: string) {
   return `${d}/${m}/${y}`;
 }
 
+/**
+ * دالة العرض الموحّدة لأي تاريخ يصل من الخادم: يوم/شهر/سنة دائماً.
+ * "2026-11-15" ← "15/11/2026"، و"2026-11-15 14:05" (وقت الكويت المحلي) ← "15/11/2026 · 02:05 م"،
+ * والطابع الزمني الكامل ISO يُحوَّل إلى توقيت الكويت. غير ذلك يُعاد كما هو.
+ */
+export function dateText(s: string | null | undefined, withTime = true) {
+  if (!s) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return dmy(s);
+  const local = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})(:\d{2})?$/.exec(s);
+  if (local) {
+    if (!withTime) return dmy(local[1]);
+    const h = Number(local[2]), h12 = h % 12 || 12;
+    return `${dmy(local[1])} · ${String(h12).padStart(2, '0')}:${local[3]} ${h < 12 ? AM : PM}`;
+  }
+  const t = Date.parse(s);
+  if (Number.isNaN(t)) return s;
+  return withTime ? formatDateTime(s) : formatDate(s);
+}
+
+/** الأرقام العربية الهندية والفارسية ← لاتينية */
+const latinDigits = (s: string) => s.replace(/[٠-٩]/g, (c) => String(c.charCodeAt(0) - 0x0660)).replace(/[۰-۹]/g, (c) => String(c.charCodeAt(0) - 0x06f0));
+
+/**
+ * ما يكتبه المستخدم ← yyyy-mm-dd، أو '' إن لم يكن تاريخاً صحيحاً.
+ * يقبل 15/11/2026 و15-11-2026 و15.11.2026 و1/2/2026 و15112026، وبالأرقام العربية.
+ */
+export function parseDmy(input: string) {
+  const s = latinDigits(input).trim();
+  const m = /^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})$/.exec(s) || /^(\d{2})(\d{2})(\d{4})$/.exec(s);
+  if (!m) return '';
+  const d = Number(m[1]), mo = Number(m[2]), y = Number(m[3]);
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  if (y < 1900 || dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return '';
+  return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+/** تنسيق أثناء الكتابة: الأرقام وحدها تُفصل بشرطة مائلة تلقائياً (15 ← 15/، 1511 ← 15/11) */
+export function typingDmy(input: string) {
+  const s = latinDigits(input).replace(/[^\d/.\-]/g, '');
+  if (!/^(\d{2}\/){0,2}\d*$/.test(s)) return s.slice(0, 10);
+  const d = s.replace(/\D/g, '').slice(0, 8);
+  return d.length <= 2 ? d : d.length <= 4 ? `${d.slice(0, 2)}/${d.slice(2)}` : `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+}
+
 export function daysWord(n: number) {
   if (IS_EN) return n === 1 ? '1 day' : `${n} days`;
   if (n === 1) return 'يوم واحد';

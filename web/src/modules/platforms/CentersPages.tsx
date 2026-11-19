@@ -83,7 +83,12 @@ export function CentersPage() {
   const filtered = !!search.trim() || !!status;
   const total = rows.reduce((n, c) => n + c.collected, 0);
   const preset = SORT_PRESETS.some((x) => x.key === sort.key) ? sort.key : '';
-  const edit = (c: CenterView) => (L?.isAccountant ? <Button size="sm" variant="ghost" icon="edit" onClick={() => setEditing({ item: c })}>{tr("تعديل")}</Button> : null);
+  const canEdit = !!L?.isAccountant;
+  const edit = (c: CenterView) => (canEdit ? <Button size="sm" variant="secondary" icon="edit" aria-label={tr("تعديل بيانات {0}", c.name)} onClick={() => setEditing({ item: c })}>{tr("تعديل")}</Button> : null);
+  /** اسم المركز: يفتح نموذج التعديل لمن يملكه */
+  const nameOf = (c: CenterView, cls: string) => (canEdit
+    ? <button type="button" onClick={() => setEditing({ item: c })} title={tr("تعديل بيانات المركز")} className={cx('cursor-pointer border-0 bg-transparent p-0 text-start text-fg hover:underline', cls)}>{c.name}</button>
+    : <span className={cls}>{c.name}</span>);
   const projectsOf = (c: CenterView, max?: number): ReactNode => (
     <>
       {(max ? c.projects.slice(0, max) : c.projects).map((p) => <div key={p.id}><Link to={'/crm/projects/' + p.id} className="text-fg no-underline hover:underline">{p.name}</Link> <span className="text-muted">· {p.clientName}</span></div>)}
@@ -126,7 +131,7 @@ export function CentersPage() {
                 { key: 'collected', label: tr("المحصّل") }, { key: 'scheduled', label: tr("المجدول") }, { key: 'sponsors', label: tr("المشاريع والرعاة") }, { key: 'campaigns', label: tr("المسابقات") }, '']}>
               {rows.map((c) => (
                 <tr key={c.id} id={'center-' + c.id} className={cx(focus === c.id && 'bg-accent-soft')}>
-                  <td className="min-w-[200px]"><span className="font-semibold">{c.name}</span><div className="text-[12px] text-muted">{pName(c.platformId)}</div></td>
+                  <td className="min-w-[200px]">{nameOf(c, 'font-semibold')}<div className="text-[12px] text-muted">{pName(c.platformId)}</div></td>
                   <td className="text-[13px]">{c.managerName || '—'}</td>
                   <td className="num whitespace-nowrap text-[13px]">{c.startDate ? dmy(c.startDate) : '—'}</td>
                   <td><Badge tone={C_TONE[c.status]}>{c.statusLabel}</Badge></td>
@@ -145,11 +150,12 @@ export function CentersPage() {
             <Card key={c.id} className={cx('flex flex-col gap-3', focus === c.id && 'ring-2 ring-accent')}>
               <div id={'center-' + c.id} className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <h3 className="m-0 text-[16px] font-semibold">{c.name}</h3>
-                  <span className="text-[12px] text-muted">{[pName(c.platformId), c.managerName, c.startDate ? tr("منذ {0}", dmy(c.startDate)) : ''].filter(Boolean).join(' · ')}</span>
+                  <h3 className="m-0 text-[16px] font-semibold">{nameOf(c, 'text-[16px] font-semibold')}</h3>
+                  <span className="text-[12px] text-muted">{[pName(c.platformId), c.managerName, c.startDate ? tr("منذ {0}", dmy(c.startDate)) : '', c.endDate ? tr("حتى {0}", dmy(c.endDate)) : ''].filter(Boolean).join(' · ')}</span>
                 </div>
                 <Badge tone={C_TONE[c.status]}>{c.statusLabel}</Badge>
               </div>
+              {c.notes && <p className="m-0 line-clamp-2 text-[12px] text-muted" title={c.notes}>{c.notes}</p>}
               <div className="grid grid-cols-2 gap-2 text-[13px]">
                 <div className="rounded-lg bg-chip px-3 py-2"><div className="text-[12px] text-muted">{tr("المحصّل")}</div><b className="num">{kwd(c.collected)}</b></div>
                 <div className="rounded-lg bg-chip px-3 py-2"><div className="text-[12px] text-muted">{tr("المجدول")}</div><b className="num">{kwd(c.scheduled)}</b></div>
@@ -186,7 +192,8 @@ function CenterDialog({ item, platformId, onClose }: { item: CenterView | null; 
         <Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button>
       </>}>
       <div className="flex flex-col gap-3">
-        <Select label={tr("المنصة")} value={f.platformId} onChange={set('platformId')} options={(L?.platforms || []).map((p) => ({ value: p.id, label: p.name }))} />
+        <Select label={tr("المنصة")} value={f.platformId} onChange={set('platformId')} options={(L?.platforms || []).map((p) => ({ value: p.id, label: p.name }))}
+          disabled={!!item && item.projectsCount > 0} hint={item && item.projectsCount > 0 ? tr("للمركز مشاريع مربوطة، فلا يُنقل إلى منصة أخرى.") : undefined} />
         <TextInput label={tr("اسم المركز")} required value={f.name} onChange={set('name')} maxLength={120} autoFocus />
         <div className="grid gap-3 sm:grid-cols-2">
           <Select label={tr("الحالة")} value={f.status} onChange={set('status')} options={opts(L?.centerStatuses || [])} />
@@ -194,7 +201,8 @@ function CenterDialog({ item, platformId, onClose }: { item: CenterView | null; 
           <TextInput label={tr("البداية")} type="date" ltr value={f.startDate} onChange={set('startDate')} />
           <TextInput label={tr("النهاية")} type="date" ltr value={f.endDate} onChange={set('endDate')} />
         </div>
-        <Textarea label={tr("ملاحظات")} value={f.notes} onChange={set('notes')} />
+        <Textarea label={tr("ملاحظات")} value={f.notes} onChange={set('notes')} maxLength={1000} />
+        {item && <p className="m-0 text-[12px] text-muted">{tr("يُسجَّل كل تعديل في سجل العمليات مع ما تغيّر.")}</p>}
         {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
       </div>
     </Dialog>

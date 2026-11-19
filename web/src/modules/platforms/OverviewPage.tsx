@@ -5,32 +5,58 @@ import { useApi } from '../../lib/useApi';
 import { dmy, monthLabel } from '../../lib/format';
 import { Badge, Card, CardHeader, EmptyState, ErrorBox } from '../../ui/Display';
 import { Bars, Change, Kpi, Legend, MiniStats, PanelTitle, TrendBars } from '../../ui/Dashboard';
+import { MultiPick, type PickOption } from '../../ui/Controls';
+import { Button } from '../../ui/Button';
 import { kwd } from '../custody/shared';
 import { DashboardSkeleton } from '../correspondence/CorDashboardPage';
 import { PeriodPicker, periodLabel } from './PeriodPicker';
-import { pltLink, usePlatform } from './shared';
+import { pltLink, usePlatform, usePltLookups } from './shared';
 import type { PltDashboard } from './types';
 
 const SERIES = [{ key: 'sales', label: tr("مبيعات التطبيق (صافي)"), color: 'var(--c-accent)' }, { key: 'sponsorship', label: tr("الرعايات والعقود"), color: 'var(--c-ok)' }];
 const short = (f: number) => (f / 1000).toLocaleString('en-US', { maximumFractionDigits: 0 });
 
-/** لوحة المنصات: أقسام التقرير الشهري الستة + الرعايات والعقود. كل رقم رابط إلى ما وراءه */
+/**
+ * لوحة المنصات: أقسام التقرير الشهري الستة + الرعايات والعقود. كل رقم رابط إلى ما وراءه.
+ * التصفية بباقة أو أكثر (مبيعات التطبيق) وبمركز أو أكثر (الرعايات والمسابقات والجهات)، وكل الأرقام والرسوم تتبعها.
+ */
 export default function PltOverviewPage() {
   const [platform] = usePlatform();
+  const L = usePltLookups().data;
   const [period, setPeriod] = useState('');
-  const q = useApi<PltDashboard>('plt.dashboard', { platform, period: period || undefined }, { staleTime: 30_000 });
+  const [pkgs, setPkgs] = useState<string[]>([]);
+  const [ctrs, setCtrs] = useState<string[]>([]);
+  const pid = L?.platforms.find((p) => p.key === platform)?.id || '';
+  const multiPlatform = !pid && (L?.platforms.length || 0) > 1;
+  const pName = (id: string) => L?.platforms.find((p) => p.id === id)?.name || '';
+  const pkgOptions: PickOption[] = (L?.packages || []).filter((p) => p.kind !== 'test' && (!pid || p.platformId === pid))
+    .map((p) => ({ value: p.id, label: p.name, sub: [multiPlatform ? pName(p.platformId) : '', p.kindLabel, p.active ? '' : tr("غير مفعّلة")].filter(Boolean).join(' · ') }));
+  const ctrOptions: PickOption[] = (L?.centers || []).filter((c) => !pid || c.platformId === pid)
+    .map((c) => ({ value: c.id, label: c.name, sub: [multiPlatform ? pName(c.platformId) : '', c.status !== 'active' ? L?.centerStatuses.find((x) => x.id === c.status)?.label || '' : ''].filter(Boolean).join(' · ') }));
+  // عند تغيير المنصة يسقط ما لا ينتمي إليها
+  const selPkgs = L ? pkgs.filter((x) => pkgOptions.some((o) => o.value === x)) : pkgs;
+  const selCtrs = L ? ctrs.filter((x) => ctrOptions.some((o) => o.value === x)) : ctrs;
+  const filtered = selPkgs.length > 0 || selCtrs.length > 0;
+  const q = useApi<PltDashboard>('plt.dashboard', { platform, period: period || undefined, packages: selPkgs.length ? selPkgs : undefined, centers: selCtrs.length ? selCtrs : undefined },
+    { staleTime: 30_000, placeholderData: (prev) => prev });
   if (q.isError) return <ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} />;
   const d = q.data;
   if (!d) return <DashboardSkeleton />;
   const s = d.summary;
   const multi = d.period.length > 1, label = periodLabel(d.periodKey);
   const vs = /^\d{4}$/.test(d.periodKey) ? tr("عن السنة السابقة") : multi ? tr("عن الفترة السابقة") : tr("عن الشهر الماضي");
-  const sales = (extra: Record<string, string | undefined> = {}) => pltLink('/platforms/sales/' + d.periodKey, platform, extra);
+  // صفحة المبيعات تأخذ باقة واحدة: تُمرَّر إن كانت المختارة واحدة
+  const sales = (extra: Record<string, string | undefined> = {}) => pltLink('/platforms/sales/' + d.periodKey, platform, { ...(selPkgs.length === 1 ? { pkg: selPkgs[0] } : {}), ...extra });
   const hasSales = s.count > 0 || s.prevCount > 0;
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <PeriodPicker value={d.periodKey} onChange={setPeriod} withData={d.months} />
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <PeriodPicker value={d.periodKey} onChange={setPeriod} withData={d.months} />
+          <MultiPick label={tr("الباقات")} allLabel={tr("كل الباقات")} countLabel={tr("{0} باقات")} icon="filter" value={selPkgs} onChange={setPkgs} options={pkgOptions} />
+          <MultiPick label={tr("المراكز")} allLabel={tr("كل المراكز")} countLabel={tr("{0} مراكز")} icon="building" value={selCtrs} onChange={setCtrs} options={ctrOptions} />
+          {q.isFetching && q.isPlaceholderData && <span className="text-[12px] text-muted" role="status">{tr("جارٍ التحديث…")}</span>}
+        </div>
         <span className="flex items-center gap-2 text-[13px] text-muted">
           {d.monthStatus === 'approved' ? <Badge tone="ok">{multi ? tr("أشهر الفترة معتمدة") : tr("شهر معتمد")}</Badge>
             : d.monthStatus === 'draft' ? <Badge tone="warn">{multi ? tr("فيها أشهر لم تُعتمد") : tr("مسودة لم تُعتمد")}</Badge> : null}
@@ -38,6 +64,16 @@ export default function PltOverviewPage() {
         </span>
       </div>
       {multi && <p className="-mt-2 m-0 text-[12px] text-muted">{tr("المقارنة بـ {0}", periodLabel(d.prevKey))}</p>}
+      {filtered && (
+        <div className="-mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-accent-soft px-3 py-2 text-[13px]">
+          <span className="min-w-0 flex-1">
+            {[selPkgs.length ? tr("مبيعات التطبيق لـ {0} فقط", pkgOptions.filter((o) => selPkgs.includes(o.value)).map((o) => o.label).join('، ')) : '',
+              selCtrs.length ? tr("الرعايات والمسابقات والجهات لـ {0} فقط", ctrOptions.filter((o) => selCtrs.includes(o.value)).map((o) => o.label).join('، ')) : ''].filter(Boolean).join(' · ')}
+            <span className="block text-[12px] text-muted">{tr("الباقات تُصفّي مبيعات التطبيق، والمراكز تُصفّي الرعايات، لأن مبيعات التطبيق لا تُنسب إلى مركز.")}</span>
+          </span>
+          <Button size="sm" variant="ghost" icon="x" onClick={() => { setPkgs([]); setCtrs([]); }}>{tr("مسح التصفية")}</Button>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Kpi label={multi ? tr("إيراد الفترة") : tr("إيراد الشهر")} value={kwd(s.revenue, false)} icon="finance" strong foot={<Change now={s.revenue} prev={s.prevRevenue} label={vs} format={(n) => kwd(n)} />} />
@@ -54,7 +90,9 @@ export default function PltOverviewPage() {
       </Card>
 
       {!hasSales ? (
-        <Card><EmptyState title={multi ? tr("لا مبيعات تطبيق في هذه الفترة") : tr("لا مبيعات تطبيق لهذا الشهر")} body={tr("استورد ملف بوابة الدفع من «المبيعات الشهرية» لتظهر الباقات والمشترون ووسائل الدفع.")} /></Card>
+        <Card>{selPkgs.length
+          ? <EmptyState title={tr("لا مبيعات للباقات المختارة في هذه الفترة")} action={<Button variant="secondary" onClick={() => setPkgs([])}>{tr("كل الباقات")}</Button>} />
+          : <EmptyState title={multi ? tr("لا مبيعات تطبيق في هذه الفترة") : tr("لا مبيعات تطبيق لهذا الشهر")} body={tr("استورد ملف بوابة الدفع من «المبيعات الشهرية» لتظهر الباقات والمشترون ووسائل الدفع.")} />}</Card>
       ) : (
         <>
           <Card className="flex flex-col gap-3">
@@ -130,11 +168,11 @@ export default function PltOverviewPage() {
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <Card className="flex flex-col gap-3">
           <PanelTitle title={tr("المراكز · المحصّل من الرعاة")} action={<Link to={pltLink('/platforms/centers', platform)} className="text-[13px] font-semibold text-accent-fg no-underline">{tr("كل المراكز")}</Link>} />
-          <Bars empty={tr("لا مراكز بعد")} rows={d.centers.map((c) => ({ key: c.id, label: c.name, value: c.collected, display: kwd(c.collected), sub: c.scheduled ? tr("مجدول {0}", kwd(c.scheduled)) : tr("{0} مشروع", c.projectsCount), to: pltLink('/platforms/centers', platform, { center: c.id }) }))} />
+          <Bars empty={selCtrs.length ? tr("لا بيانات للمراكز المختارة") : tr("لا مراكز بعد")} rows={d.centers.map((c) => ({ key: c.id, label: c.name, value: c.collected, display: kwd(c.collected), sub: c.scheduled ? tr("مجدول {0}", kwd(c.scheduled)) : tr("{0} مشروع", c.projectsCount), to: pltLink('/platforms/centers', platform, { center: c.id }) }))} />
         </Card>
         <Card padded={false}>
           <CardHeader title={tr("المسابقات والتحديات الجارية")} action={<Link to={pltLink('/platforms/campaigns', platform)} className="text-[13px] font-semibold text-accent-fg no-underline">{tr("الكل")}</Link>} />
-          {d.campaigns.length === 0 ? <p className="m-0 px-5 pb-4 text-[13px] text-muted">{tr("لا مسابقات جارية أو مخططة.")}</p> : d.campaigns.map((c) => (
+          {d.campaigns.length === 0 ? <p className="m-0 px-5 pb-4 text-[13px] text-muted">{selCtrs.length ? tr("لا مسابقات جارية أو مخططة في المراكز المختارة.") : tr("لا مسابقات جارية أو مخططة.")}</p> : d.campaigns.map((c) => (
             <Link key={c.id} to={pltLink('/platforms/campaigns', platform)} className="flex flex-wrap items-center gap-3 border-t border-line px-5 py-3 text-fg no-underline first:border-t-0 hover:bg-chip/40">
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="font-semibold">{c.name}</span>

@@ -3,7 +3,7 @@ import { Link, Outlet, useNavigate, useParams, useSearchParams } from 'react-rou
 import { tr } from '../../lib/i18n';
 import { api } from '../../lib/api';
 import { errorText, useAction, useApi } from '../../lib/useApi';
-import { dmy, monthLabel } from '../../lib/format';
+import { dateText, dmy, monthLabel } from '../../lib/format';
 import { Badge, Card, CardHeader, EmptyState, ErrorBox, Loader, PageHeader } from '../../ui/Display';
 import { Bars, Kpi, PanelTitle, TrendBars } from '../../ui/Dashboard';
 import { Button } from '../../ui/Button';
@@ -214,9 +214,9 @@ export function SubDetailPage() {
           { k: tr("الباقة الحالية"), v: s.packageName },
           { k: tr("ينتهي"), v: <span className="num">{dmy(s.expiresAt)}</span> },
           { k: tr("مرات الشراء"), v: tr("{0} · {1}", s.purchases, kwd(s.totalPaid)) },
-          { k: tr("أول شراء"), v: <span className="num">{s.firstPaidAt.slice(0, 10)}</span> },
+          { k: tr("أول شراء"), v: <span className="num">{dateText(s.firstPaidAt, false)}</span> },
           { k: tr("المسؤول"), v: s.assignedName || '—' },
-          { k: tr("إيقاف الرسائل"), v: s.optOut ? tr("{0} · {1}", s.optOutAt.slice(0, 10), s.optOutReason || '') : '—' }
+          { k: tr("إيقاف الرسائل"), v: s.optOut ? tr("{0} · {1}", dateText(s.optOutAt, false), s.optOutReason || '') : '—' }
         ]} />
         {shown && <p className="m-0 text-[12px] text-muted">{tr("سُجّل إظهار التواصل في سجل العمليات.")}</p>}
         {!s.id && <p className="m-0 rounded-lg bg-warn-bg px-3 py-2 text-[13px] text-warn">{tr("لا بيانات تواصل لهذا المشترك. أعد رفع ملف البوابة الذي فيه عملياته من «المنصات».")}</p>}
@@ -227,7 +227,7 @@ export function SubDetailPage() {
         <DataTable minWidth={560} head={[tr("الشراء"), tr("الباقة"), tr("المبلغ"), tr("ينتهي"), tr("النتيجة")]}>
           {s.cycles.map((c) => (
             <tr key={c.gatewayId}>
-              <td className="num text-[13px]">{c.paidAt}</td>
+              <td className="num text-[13px]">{dateText(c.paidAt, false)}</td>
               <td className="text-[13px]">{c.packageName}</td>
               <td className="num">{kwd(c.amount)}</td>
               <td className="num text-[13px]">{dmy(c.expiresAt)}</td>

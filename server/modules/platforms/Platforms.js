@@ -576,8 +576,13 @@ var Platforms = {
   dashboard: function (ctx, p) {
     p = p || {};
     var pf = Platforms.platformFilter_(p.platform);
-    var all = Platforms.rows_('Sales').filter(function (s) { return !pf || s.platformId === pf; });
-    var latest = all.reduce(function (m, s) { return s.month > m ? s.month : m; }, '');
+    // التصفية: الباقات تخص مبيعات التطبيق، والمراكز تخص الرعايات والمسابقات والجهات (المبيعات لا مركز لها).
+    // الأشهر وحالة الاعتماد وتمييز المشتري الجديد والعائد تُحسب من كل المبيعات لا من المصفّاة.
+    var pkgSet = Platforms.idSet_(p.packages), ctrSet = Platforms.idSet_(p.centers);
+    var allSales = Platforms.rows_('Sales').filter(function (s) { return !pf || s.platformId === pf; });
+    var all = pkgSet ? allSales.filter(function (s) { return pkgSet[s.packageId]; }) : allSales;
+    var inCenters = function (pr) { return !ctrSet || !!ctrSet[pr.centerId || '']; };
+    var latest = allSales.reduce(function (m, s) { return s.month > m ? s.month : m; }, '');
     // الفترة: شهر أو عدة أشهر أو سنة كاملة. المقارنة بالفترة السابقة بالطول نفسه (الشهر بالشهر السابق، والسنة بالسنة السابقة)
     var period = p.period || p.month ? Platforms.period_(p.period || p.month) : [latest || localMonth_()];
     var first = period[0], last = period[period.length - 1];
@@ -592,11 +597,11 @@ var Platforms = {
     period.forEach(function (m) { inCur[m] = true; });
     prevPeriod.forEach(function (m) { inPrev[m] = true; });
     var cur = all.filter(function (s) { return inCur[s.month]; }), before = all.filter(function (s) { return inPrev[s.month]; });
-    var pkById = indexBy_(Platforms.rows_('Packages')), flags = Platforms.buyerFlags_(all);
+    var pkById = indexBy_(Platforms.rows_('Packages')), flags = Platforms.buyerFlags_(allSales);
 
     // الرعايات والعقود (العملاء)
     var crm = Platforms.crm_();
-    var crmPaid = crm.paid.filter(function (x) { return !pf || x.project.platformId === pf; });
+    var crmPaid = crm.paid.filter(function (x) { return (!pf || x.project.platformId === pf) && inCenters(x.project); });
     var sponsorIn = function (m) { return crmPaid.filter(function (x) { return x.date.slice(0, 7) === m; }).reduce(function (s, x) { return s + x.amount; }, 0); };
     var sponsorOf = function (set) { return crmPaid.filter(function (x) { return set[x.date.slice(0, 7)]; }).reduce(function (s, x) { return s + x.amount; }, 0); };
     var year = month.slice(0, 4);
@@ -644,8 +649,8 @@ var Platforms = {
       return { month: mm, sales: all.filter(function (s) { return s.month === mm; }).reduce(function (s, x) { return s + x.net; }, 0), sponsorship: sponsorIn(mm) };
     });
     // المراكز والمسابقات
-    var centersAll = Platforms.rows_('Centers').filter(function (c) { return !pf || c.platformId === pf; });
-    var campaignsAll = Platforms.rows_('Campaigns').filter(function (c) { return !pf || c.platformId === pf; });
+    var centersAll = Platforms.rows_('Centers').filter(function (c) { return (!pf || c.platformId === pf) && (!ctrSet || ctrSet[c.id]); });
+    var campaignsAll = Platforms.rows_('Campaigns').filter(function (c) { return (!pf || c.platformId === pf) && (!ctrSet || ctrSet[c.centerId || '']); });
     var centersIdx = indexBy_(Platforms.rows_('Centers'));
     var byCenter = centersAll.map(function (c) {
       var v = Platforms.centerView_(c, crm, campaignsAll);
@@ -656,26 +661,27 @@ var Platforms = {
       .sort(function (a, b) { return (a.endDate || '9999').localeCompare(b.endDate || '9999'); });
     // الجهات (العقود): المستحق والمحصّل لكل عميل
     var byClient = {};
-    crm.projects.filter(function (pr) { return !pf || pr.platformId === pf; }).forEach(function (pr) {
+    crm.projects.filter(function (pr) { return (!pf || pr.platformId === pf) && inCenters(pr); }).forEach(function (pr) {
       var cl = crm.clients[pr.clientId], k = pr.clientId;
       if (!cl) return;
       var x = byClient[k] = byClient[k] || { clientId: k, name: cl.name, collected: 0, scheduled: 0, overdue: 0, projects: 0 };
       x.projects++;
     });
-    crm.paid.forEach(function (x) { if (byClient[x.project.clientId] && (!pf || x.project.platformId === pf)) byClient[x.project.clientId].collected += x.amount; });
+    crm.paid.forEach(function (x) { if (byClient[x.project.clientId] && (!pf || x.project.platformId === pf) && inCenters(x.project)) byClient[x.project.clientId].collected += x.amount; });
     crm.scheduled.forEach(function (x) {
       var b = byClient[x.project.clientId];
-      if (!b || (pf && x.project.platformId !== pf)) return;
+      if (!b || (pf && x.project.platformId !== pf) || !inCenters(x.project)) return;
       b.scheduled += x.amount;
       if (x.date && x.date < localDate_()) b.overdue += x.amount;
     });
     // حالة الفترة: معتمدة إن اعتُمدت كل أشهرها التي فيها مبيعات، ومسودة إن بقي منها شهر غير معتمد
-    var withSales = Object.keys(cur.reduce(function (o, s) { o[s.month] = true; return o; }, {}));
+    var withSales = Object.keys(allSales.filter(function (s) { return inCur[s.month]; }).reduce(function (o, s) { o[s.month] = true; return o; }, {}));
     var statuses = pf ? withSales.map(function (m) { var r = Platforms.monthRow_(pf, m); return r ? r.status : 'draft'; }) : [];
     return {
       platform: pf ? Platforms.platform_(pf).key : 'all', month: month, prevMonth: prev,
       period: period, periodKey: Platforms.periodKey_(period), prevPeriod: prevPeriod, prevKey: Platforms.periodKey_(prevPeriod),
-      months: Object.keys(all.reduce(function (o, s) { o[s.month] = true; return o; }, {})).sort().reverse(),
+      filters: { packages: pkgSet ? Object.keys(pkgSet) : [], centers: ctrSet ? Object.keys(ctrSet) : [] },
+      months: Object.keys(allSales.reduce(function (o, s) { o[s.month] = true; return o; }, {})).sort().reverse(),
       monthStatus: !statuses.length ? '' : statuses.every(function (s) { return s === 'approved'; }) ? 'approved' : 'draft',
       summary: {
         count: t.count, prevCount: tp.count, amount: t.amount, prevAmount: tp.amount, fee: t.fee, prevFee: tp.fee, net: t.net, prevNet: tp.net,
@@ -697,7 +703,7 @@ var Platforms = {
         upgrades: cur.filter(function (s) { return flags.upgrade[s.id]; }).length,
         active: subsAll.filter(function (s) { return s.paidAt.slice(0, 10) < nextStart && s.expiresAt >= nextStart; }).length,
         expiring: subsAll.filter(function (s) { return s.expiresAt >= nextStart && s.expiresAt < afterStart; }).length,
-        historyFrom: all.reduce(function (mn, s) { return !mn || s.month < mn ? s.month : mn; }, '')
+        historyFrom: allSales.reduce(function (mn, s) { return !mn || s.month < mn ? s.month : mn; }, '')
       },
       methods: group(cur, function (s) { return s.method; }, function (s) { return PLT.METHOD[s.method] || s.method; }),
       channels: group(cur, function (s) { return s.channel; }, function (s) { return PLT.CHANNEL[s.channel] || s.channel; }),
@@ -711,6 +717,14 @@ var Platforms = {
         return x;
       }).sort(function (a, b) { return (b.collected + b.scheduled) - (a.collected + a.scheduled); })
     };
+  },
+
+  /** قائمة معرّفات من مصفوفة أو نص بفواصل ← { id: true }، أو null إن كانت فارغة (بلا تصفية) */
+  idSet_: function (v) {
+    var list = Array.isArray(v) ? v : String(v || '').split(',');
+    var out = {}, n = 0;
+    list.forEach(function (x) { x = String(x == null ? '' : x).trim(); if (x && !out[x]) { out[x] = true; n++; } });
+    return n ? out : null;
   },
 
   centers: function (ctx, p) {
@@ -924,13 +938,29 @@ var Platforms = {
       var saved;
       if (cur) {
         if (cur.platformId !== platform.id && Platforms.linkedProjects_('centerId', cur.id).length) throw appError('للمركز مشاريع مربوطة، فلا يُنقل إلى منصة أخرى.');
+        var changes = Platforms.centerChanges_(cur, rec);
+        if (!changes.length) return Platforms.centerView_(cur, Platforms.crm_(), Platforms.rows_('Campaigns'));
         saved = Db.update('platforms', 'Centers', cur.id, rec);
-        Audit.log(ctx.user, 'platforms', 'center.update', 'Center', cur.id, { name: rec.name, platform: platform.name, status: PLT.CENTER_STATUS[rec.status] });
+        Audit.log(ctx.user, 'platforms', 'center.update', 'Center', cur.id, { name: rec.name, platform: platform.name, status: PLT.CENTER_STATUS[rec.status], changes: changes });
       } else {
         saved = Db.insert('platforms', 'Centers', Object.assign(rec, { createdBy: ctx.user.id, createdAt: nowIso() }));
         Audit.log(ctx.user, 'platforms', 'center.create', 'Center', saved.id, { name: rec.name, platform: platform.name });
       }
       return Platforms.centerView_(saved, Platforms.crm_(), Platforms.rows_('Campaigns'));
+    });
+  },
+
+  /** ما تغيّر في بيانات المركز، لسجل العمليات: «الحالة: نشط ← مغلق» */
+  centerChanges_: function (cur, rec) {
+    var platName = function (id) { var x = Platforms.platforms_().filter(function (p) { return p.id === id; })[0]; return x ? x.name : id; };
+    var show = {
+      name: function (v) { return v; }, platformId: platName, status: function (v) { return PLT.CENTER_STATUS[v] || v; },
+      startDate: dmy_, endDate: dmy_, managerName: function (v) { return v; }, notes: function (v) { return v.length > 60 ? v.slice(0, 60) + '…' : v; }
+    };
+    var labels = { name: 'الاسم', platformId: 'المنصة', status: 'الحالة', startDate: 'البداية', endDate: 'النهاية', managerName: 'المسؤول', notes: 'الملاحظات' };
+    return Object.keys(labels).filter(function (k) { return String(cur[k] || '') !== String(rec[k] || ''); }).map(function (k) {
+      var a = String(cur[k] || ''), b = String(rec[k] || '');
+      return labels[k] + ': ' + (a ? show[k](a) : '—') + ' ← ' + (b ? show[k](b) : '—');
     });
   },
 

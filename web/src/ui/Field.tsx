@@ -1,6 +1,6 @@
 import { IS_EN, tr } from '../lib/i18n';
-import { forwardRef, useId, useState, type FormEvent, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
-import { dmy } from '../lib/format';
+import { forwardRef, useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { dmy, kwDate, parseDmy, typingDmy } from '../lib/format';
 import { Icon } from './Icon';
 import { cx } from './cx';
 
@@ -15,6 +15,7 @@ function validityText(el: Control): string {
   const v = el.validity;
   const fmt = (s: string) => (/^\d{4}-\d{2}-\d{2}$/.test(s) ? dmy(s) : s);
   if (v.valueMissing) return el instanceof HTMLSelectElement ? tr("اختر قيمة.") : tr("هذا الحقل مطلوب.");
+  if (v.customError) return el.validationMessage;
   if (v.rangeUnderflow && 'min' in el) return tr("الحد الأدنى {0}.", fmt(el.min));
   if (v.rangeOverflow && 'max' in el) return tr("الحد الأقصى {0}.", fmt(el.max));
   if (v.typeMismatch) return el instanceof HTMLInputElement && el.type === 'email' ? tr("بريد إلكتروني غير صحيح.") : tr("الصيغة غير صحيحة.");
@@ -49,11 +50,89 @@ export function Field({ label, hint, error, required, children, className }: Fie
 type InputProps = InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: string; error?: string; ltr?: boolean };
 
 export const TextInput = forwardRef<HTMLInputElement, InputProps>(function TextInput({ label, hint, error, ltr, required, className, ...rest }, ref) {
+  if (rest.type === 'date' || rest.type === 'datetime-local') return <DateInput ref={ref} label={label} hint={hint} error={error} required={required} className={className} {...rest} />;
   return (
     <Field label={label} hint={hint} error={error} required={required} className={className}>
       {(id, d, bind) => (
         <input ref={ref} id={id} aria-describedby={d} aria-invalid={!!error || undefined} required={required} {...bind}
           className={cx(control, error ? 'border-bad' : 'border-line', ltr && 'ltr text-right')} {...rest} />
+      )}
+    </Field>
+  );
+});
+
+const DATE_PLACEHOLDER = IS_EN ? 'dd/mm/yyyy' : 'يوم/شهر/سنة';
+
+/**
+ * حقل التاريخ: يُكتب ويُعرض يوم/شهر/سنة في كل الأجهزة (أداة المتصفح الأصلية تفرض ترتيب لغة الجهاز)،
+ * وزر التقويم يفتح أداة المتصفح للاختيار. القيمة المرسلة إلى onChange تبقى ISO (yyyy-mm-dd أو yyyy-mm-ddThh:mm)
+ * كما كانت مع input type=date، فلا تتغير النماذج. min/max/required تعمل وتظهر رسائلها تحت الحقل.
+ */
+const DateInput = forwardRef<HTMLInputElement, InputProps>(function DateInput({ label, hint, error, required, className, type, value, onChange, min, max, disabled, readOnly, ltr: _ltr, placeholder: _ph, ...rest }, ref) {
+  const withTime = type === 'datetime-local';
+  const iso = String(value ?? '');
+  const own = useRef<HTMLInputElement | null>(null);
+  const [text, setText] = useState(dmy(iso.slice(0, 10)));
+  const [time, setTime] = useState(withTime ? iso.slice(11, 16) : '');
+  const [seen, setSeen] = useState(iso);
+  const emitted = useRef<string | null>(null);
+  // قيمة جديدة من خارج الحقل (تعبئة النموذج أو إعادة ضبطه): تُعرض. ما أرسله الحقل نفسه لا يُعاد تنسيقه أثناء الكتابة
+  if (iso !== seen) {
+    setSeen(iso);
+    if (iso !== emitted.current) { setText(dmy(iso.slice(0, 10))); setTime(withTime ? iso.slice(11, 16) : ''); }
+  }
+  const day = parseDmy(text);
+  const minD = min ? String(min).slice(0, 10) : '', maxD = max ? String(max).slice(0, 10) : '';
+  const problem = text.trim() && !day ? tr("اكتب التاريخ يوماً/شهراً/سنة، مثل {0}.", dmy(kwDate()))
+    : day && minD && day < minD ? tr("الحد الأدنى {0}.", dmy(minD))
+    : day && maxD && day > maxD ? tr("الحد الأقصى {0}.", dmy(maxD)) : '';
+  useEffect(() => { own.current?.setCustomValidity(problem); }, [problem]);
+
+  const emit = (d: string, t: string) => {
+    const v = withTime ? (d && t ? `${d}T${t}` : '') : d;
+    if (v === emitted.current && v === iso) return;
+    emitted.current = v;
+    onChange?.({ target: { value: v }, currentTarget: { value: v } } as unknown as ChangeEvent<HTMLInputElement>);
+  };
+  const setRefs = (el: HTMLInputElement | null) => {
+    own.current = el;
+    if (typeof ref === 'function') ref(el); else if (ref) ref.current = el;
+  };
+  const openPicker = (el: HTMLInputElement) => { try { el.showPicker(); } catch { /* المتصفح يفتحها بالنقر نفسه */ } };
+  const locked = disabled || readOnly;
+  return (
+    <Field label={label} hint={hint} error={error} required={required} className={className}>
+      {(id, d, bind) => (
+        <div className={cx('grid gap-2', withTime && 'grid-cols-[minmax(0,1fr)_auto]')}>
+          <div className="relative">
+            <input ref={setRefs} id={id} type="text" inputMode="numeric" autoComplete="off" dir="ltr" maxLength={10} placeholder={DATE_PLACEHOLDER}
+              aria-describedby={d} aria-invalid={!!error || undefined} required={required} disabled={disabled} readOnly={readOnly} {...bind} {...rest}
+              value={text}
+              onChange={(e) => {
+                const v = typingDmy(e.target.value);
+                setText(v);
+                if (!v.trim()) emit('', time);
+                else { const p = parseDmy(v); if (p) emit(p, time); }
+              }}
+              onBlur={(e) => { if (day) setText(dmy(day)); rest.onBlur?.(e); }}
+              className={cx(control, 'num text-right', IS_EN ? 'pr-12' : 'pl-12', error ? 'border-bad' : 'border-line')} />
+            <span className="absolute end-1 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md text-muted">
+              <Icon name="calendar" size={18} />
+              {!locked && (
+                <input type="date" tabIndex={-1} aria-label={tr("اختيار من التقويم")} title={tr("اختيار من التقويم")}
+                  value={day || ''} min={minD || undefined} max={maxD || undefined}
+                  onClick={(e) => openPicker(e.currentTarget)}
+                  onChange={(e) => { const p = e.target.value; setText(dmy(p)); emit(p, time); bind.onInput(); }}
+                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0 text-[16px]" />
+              )}
+            </span>
+          </div>
+          {withTime && (
+            <input type="time" dir="ltr" required={required} disabled={disabled} readOnly={readOnly} aria-label={tr("الساعة")} value={time}
+              onChange={(e) => { setTime(e.target.value); emit(day, e.target.value); }}
+              className={cx(control, 'num w-[130px]', error ? 'border-bad' : 'border-line')} />
+          )}
+        </div>
       )}
     </Field>
   );

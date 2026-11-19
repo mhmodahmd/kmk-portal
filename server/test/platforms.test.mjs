@@ -240,3 +240,50 @@ test('platforms: a campaign links its sponsor projects from its own form, and co
   eq(c.ok('crm.projects', { centerId: center.id }, c.A).map((x) => [x.name, x.campaignName]), [['رعاية تحدي الطور', '']]);
   eq(c.ok('plt.campaign.remove', { id: camp.id }, c.A).removed, true);
 });
+
+test('platforms: the overview filters by several packages and by centers; editing a center records what changed', () => {
+  const c = setup();
+  const lk = c.ok('plt.lookups', {}, c.T.sara);
+  const saad = lk.platforms[0].id, pk = (code) => lk.packages.find((p) => p.code === code).id;
+  c.ok('plt.import.commit', { platform: 'saad', rows: FILE, map: { 'ماسي': pk('ذهبي') } }, c.T.sara);
+  const a = c.ok('plt.center.save', { platformId: saad, name: 'مركز أ' }, c.T.sara);
+  const b = c.ok('plt.center.save', { platformId: saad, name: 'مركز ب' }, c.T.sara);
+  const campA = c.ok('plt.campaign.save', { platformId: saad, centerId: a.id, kind: 'challenge', name: 'تحدي أ', status: 'running' }, c.T.sara);
+  c.ok('plt.campaign.save', { platformId: saad, centerId: b.id, kind: 'competition', name: 'مسابقة ب', status: 'running' }, c.T.sara);
+  const ca = c.ok('crm.client.save', { name: 'راعي أ', category: 'current' }, c.A), cb = c.ok('crm.client.save', { name: 'راعي ب', category: 'current' }, c.A);
+  const pa = c.ok('crm.project.save', { clientId: ca.id, name: 'رعاية أ', billing: 'fixed', contractValue: '100', platformId: saad, centerId: a.id, campaignId: campA.id }, c.A);
+  const pb = c.ok('crm.project.save', { clientId: cb.id, name: 'رعاية ب', billing: 'fixed', contractValue: '400', platformId: saad, centerId: b.id }, c.A);
+  c.ok('crm.payment.save', { projectId: pa.id, amount: '100', date: '2026-10-05' }, c.T.huda);
+  c.ok('crm.payment.save', { projectId: pb.id, amount: '250', date: '2026-10-06' }, c.T.huda);
+
+  const all = c.ok('plt.dashboard', { platform: 'saad', month: '2026-10' }, c.T.ahmad);
+  eq([all.summary.count, all.summary.sponsorship, all.centers.length, all.campaigns.length, all.filters], [8, 350000, 2, 2, { packages: [], centers: [] }]);
+  // باقة واحدة: مبيعاتها وحدها، والرعايات كما هي
+  const one = c.ok('plt.dashboard', { platform: 'saad', month: '2026-10', packages: [pk('برونزي')] }, c.T.ahmad);
+  eq([one.summary.count, one.summary.amount, one.summary.net, one.summary.sponsorship, one.summary.revenue], [2, 12000, 12000, 350000, 362000]);
+  eq(one.byPackage.map((p) => [p.name, p.count, p.share]), [['الباقة البرونزية', 2, 100]]);
+  eq(one.trend[11], { month: '2026-10', sales: 12000, sponsorship: 350000 });
+  eq(one.months, all.months, 'the period picker still lists every month with sales');
+  eq([one.buyers.buyers, one.buyers.newBuyers], [2, 2]);
+  // أكثر من باقة، ونص بفواصل كذلك
+  const two = c.ok('plt.dashboard', { platform: 'saad', month: '2026-10', packages: pk('برونزي') + ',' + pk('فضي') }, c.T.ahmad);
+  eq([two.summary.count, two.summary.amount, two.byPackage.length, two.buyers.upgrades], [3, 27000, 2, 1]);
+  eq(two.filters.packages.length, 2);
+  // مركز: رعاياته ومسابقاته وجهاته وحدها، ومبيعات التطبيق كما هي
+  const ctr = c.ok('plt.dashboard', { platform: 'saad', month: '2026-10', centers: [a.id] }, c.T.ahmad);
+  eq([ctr.summary.count, ctr.summary.sponsorship, ctr.summary.revenue, ctr.summary.ytdSponsorship], [8, 100000, 232000, 100000]);
+  eq([ctr.centers.map((x) => x.name), ctr.campaigns.map((x) => x.name), ctr.clients.map((x) => x.name)], [['مركز أ'], ['تحدي أ'], ['راعي أ']]);
+  eq(ctr.trend[11].sponsorship, 100000);
+  eq(c.ok('plt.dashboard', { platform: 'saad', month: '2026-10', centers: [a.id, b.id], packages: [pk('ذهبي')] }, c.T.ahmad).summary.revenue, 60000 + 350000);
+
+  // تعديل المركز: يُسجَّل ما تغيّر، والحفظ دون تغيير لا يُسجَّل
+  const before = c.ok('audit.list', { module: 'platforms' }, c.A).rows.filter((x) => x.action === 'center.update').length;
+  const ed = c.ok('plt.center.save', { id: a.id, name: 'مركز أ', status: 'paused', managerName: 'أ. خالد', startDate: '2026-09-01' }, c.T.sara);
+  eq([ed.statusLabel, ed.managerName, ed.startDate, ed.projectsCount], ['متوقف مؤقتاً', 'أ. خالد', '2026-09-01', 1]);
+  const rows = c.ok('audit.list', { module: 'platforms' }, c.A).rows.filter((x) => x.action === 'center.update');
+  eq(rows.length, before + 1);
+  eq(rows[0].details.changes, ['الحالة: نشط ← متوقف مؤقتاً', 'البداية: — ← 01/09/2026', 'المسؤول: — ← أ. خالد']);
+  c.ok('plt.center.save', { id: a.id, name: 'مركز أ', status: 'paused', managerName: 'أ. خالد', startDate: '2026-09-01' }, c.T.sara);
+  eq(c.ok('audit.list', { module: 'platforms' }, c.A).rows.filter((x) => x.action === 'center.update').length, before + 1, 'no change, no audit row');
+  eq(c.fail('plt.center.save', { id: a.id, name: 'مركز أ' }, c.T.ahmad).code, 'FORBIDDEN', 'a viewer cannot edit a center');
+});

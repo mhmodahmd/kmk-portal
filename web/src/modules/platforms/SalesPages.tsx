@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { tr } from '../../lib/i18n';
 import { api } from '../../lib/api';
 import { errorText, useAction, useApi } from '../../lib/useApi';
-import { formatDateTime, monthLabel } from '../../lib/format';
+import { dateText, formatDateTime, monthLabel } from '../../lib/format';
 import { readTable } from '../../lib/xlsx';
 import { Badge, Card, CardHeader, EmptyState, ErrorBox, Loader } from '../../ui/Display';
 import { Button } from '../../ui/Button';
@@ -230,7 +230,7 @@ export function SalesMonthPage() {
               { key: 'channelLabel', label: tr("القناة") }, { key: 'country', label: tr("الدولة") }, { key: 'amount', label: tr("المبلغ") }, { key: 'net', label: tr("الصافي") }, tr("المشتري")]}>
             {t.rows.map((r) => (
               <tr key={r.id}>
-                <td className="num whitespace-nowrap text-[13px]">{r.paidAt}</td>
+                <td className="num whitespace-nowrap text-[13px]">{dateText(r.paidAt)}</td>
                 <td className="num text-[13px]">{r.gatewayId}</td>
                 <td>{r.packageName}{r.kind === 'gift' && <span className="text-[12px] text-muted"> · {tr("{0} فرداً", r.people)}</span>}</td>
                 <td className="text-[13px]">{r.methodLabel}</td>

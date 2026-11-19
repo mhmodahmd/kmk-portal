@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Icon, type IconName } from './Icon';
 import { cx } from './cx';
 import { monthLabel, shiftMonth } from '../lib/format';
+import { Button } from './Button';
+import { Dialog } from './Overlay';
 
 /** تبويبات تنقّل داخل وحدة (روابط). تنزلق أفقياً على الجوال. */
 export function TabNav({ items, label }: { items: { to: string; label: string; badge?: number; end?: boolean }[]; label: string }) {
@@ -210,5 +212,65 @@ export function Facts({ items, cols = 2 }: { items: { k: string; v: ReactNode }[
         </div>
       ))}
     </dl>
+  );
+}
+
+export interface PickOption { value: string; label: string; sub?: string }
+
+/**
+ * اختيار من متعدد: زر يعرض المختار («كل الباقات»، أو الاسم، أو «3 باقات») ويفتح نافذة بمربعات اختيار.
+ * القائمة الفارغة تعني «الكل» (بلا تصفية). التطبيق بزر «عرض» حتى لا يُعاد الحساب مع كل نقرة.
+ */
+export function MultiPick({ label, value, onChange, options, allLabel, countLabel, icon = 'filter' }: {
+  label: string; value: string[]; onChange: (v: string[]) => void; options: PickOption[];
+  /** «كل الباقات» */ allLabel: string; /** «{0} باقات» */ countLabel: string; icon?: IconName;
+}) {
+  const [open, setOpen] = useState(false);
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const picked = options.filter((o) => value.includes(o.value));
+  const summary = !picked.length ? allLabel : picked.length === 1 ? picked[0].label : tr(countLabel, picked.length);
+  const start = () => { setSel(new Set(picked.map((o) => o.value))); setOpen(true); };
+  const toggle = (v: string) => { const n = new Set(sel); if (n.has(v)) n.delete(v); else n.add(v); setSel(n); };
+  const every = options.length > 0 && options.every((o) => sel.has(o.value));
+  return (
+    <>
+      <button type="button" onClick={start} aria-haspopup="dialog" disabled={!options.length}
+        title={picked.length > 1 ? picked.map((o) => o.label).join('، ') : undefined}
+        className={cx('inline-flex h-11 min-w-0 max-w-full cursor-pointer items-center gap-2 rounded-lg border bg-surface px-3 text-[14px] text-fg hover:border-line-strong disabled:cursor-default disabled:opacity-50 sm:h-10',
+          picked.length ? 'border-accent' : 'border-line')}>
+        <Icon name={icon} size={16} className="shrink-0 text-muted" />
+        <span className="shrink-0 text-muted">{label}</span>
+        <b className="truncate font-semibold">{summary}</b>
+        <Icon name="chevronDown" size={14} className="shrink-0 text-muted" />
+      </button>
+      {open && (
+        <Dialog open onClose={() => setOpen(false)} title={label}
+          footer={<>
+            <Button variant="primary" className="flex-1" onClick={() => { onChange(options.filter((o) => sel.has(o.value)).map((o) => o.value)); setOpen(false); }}>
+              {sel.size && !every ? tr("عرض المختار ({0})", sel.size) : tr("عرض {0}", allLabel)}
+            </Button>
+            <Button variant="ghost" onClick={() => setOpen(false)}>{tr("تراجع")}</Button>
+          </>}>
+          <div className="flex flex-col gap-1">
+            <div className="mb-1 flex items-center justify-between gap-2 text-[13px]">
+              <span className="text-muted">{sel.size ? tr("المختار: {0}", sel.size) : allLabel}</span>
+              <span className="flex gap-3">
+                <button type="button" className="min-h-9 cursor-pointer border-0 bg-transparent p-0 font-semibold text-accent-fg" onClick={() => setSel(new Set(options.map((o) => o.value)))}>{tr("تحديد الكل")}</button>
+                <button type="button" className="min-h-9 cursor-pointer border-0 bg-transparent p-0 font-semibold text-accent-fg disabled:opacity-40" disabled={!sel.size} onClick={() => setSel(new Set())}>{tr("مسح")}</button>
+              </span>
+            </div>
+            {options.map((o) => (
+              <label key={o.value} className={cx('flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-3 py-1.5', sel.has(o.value) ? 'bg-accent-soft' : 'hover:bg-chip')}>
+                <input type="checkbox" className="h-[18px] w-[18px] shrink-0 accent-[var(--c-accent)]" checked={sel.has(o.value)} onChange={() => toggle(o.value)} />
+                <span className="flex min-w-0 flex-col">
+                  <span className="font-medium">{o.label}</span>
+                  {o.sub && <span className="text-[12px] text-muted">{o.sub}</span>}
+                </span>
+              </label>
+            ))}
+          </div>
+        </Dialog>
+      )}
+    </>
   );
 }

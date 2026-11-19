@@ -99,7 +99,7 @@ test('custody requests through the approvals inbox, and voucher requests', () =>
   eq(item.refId, r.id);
   c.ok('inbox.decide', { kind: 'cus.request', id: r.id, approve: true }, c.T.huda);
   const mine = c.ok('cus.home', {}, c.T.ahmad);
-  eq([mine.myCustody.amount, mine.myRequest.status], [150000, 'approved']);
+  eq([mine.myCustody.amount, mine.myRequest.status, mine.myRequest.statusLabel], [150000, 'signing', 'بانتظار اعتماد المدير'], 'the request waits for the manager after the accountant opens it');
   const pv = c.ok('cus.voucher.get', { id: mine.myCustody.openVoucherId }, c.T.ahmad).voucher;
   truthy(pv.reason.includes('مشتريات المعرض'));
   eq(pv.requestedByName, 'أحمد');
@@ -135,7 +135,7 @@ test('manager signs through a one-time link, and amounts in words', () => {
   const printed = c.ok('cus.voucher.get', { id: cu.openVoucherId }, c.T.ahmad);
   eq(printed.signs.find((s) => s.label === 'المدير').image, png);
   eq(c.fail('cus.sign.view', { token: 'ab'.repeat(32) }).code, 'BAD_LINK');
-  eq(c.fail('cus.sign.create', { kind: 'voucher', id: cu.openVoucherId }, c.T.huda).message.includes('موقّع'), true);
+  eq(c.fail('cus.sign.create', { kind: 'voucher', id: cu.openVoucherId }, c.T.huda).message.includes('مسبقاً'), true);
 });
 
 test('custody lists and settings are for the system admin', () => {
@@ -166,4 +166,55 @@ test('HR cannot end the service of an employee holding an unclosed custody', () 
   c.ok('cus.markSigned', { kind: 'statement', id: cu.id }, c.T.huda);
   eq(c.ok('cus.get', { id: cu.id }, c.T.huda).custody.status, 'closed');
   eq(c.ok('hr.employee.save', emp, c.A).status, 'terminated');
+});
+
+test('vouchers: request → accountant approval → manager link (3 days, draw or upload) → in effect', () => {
+  const c = setup();
+  const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+  c.ok('cus.signature.save', { data: png }, c.T.huda);
+  // الطلب: لا رقم ولا توقيع للمحاسب، ولا رابط للمدير قبل اعتماده
+  const vr = c.ok('cus.voucher.request', { type: 'payment', partyName: 'مورد', amount: '20', reason: 'لوازم' }, c.T.ahmad);
+  eq([vr.status, vr.statusLabel, vr.approved, vr.approvedByName], ['requested', 'بانتظار اعتماد المحاسب', false, '']);
+  truthy(c.fail('cus.sign.create', { kind: 'voucher', id: vr.id }, c.T.huda).message.includes('المحاسب'));
+  // اعتماد المحاسب: رقم وتوقيعه، والسند بانتظار المدير وليس سارياً
+  const ap = c.ok('cus.voucher.approve', { id: vr.id }, c.T.huda);
+  eq([ap.number, ap.status, ap.statusLabel, ap.approvedByName, ap.signed], ['PV-2026-0001', 'signing', 'بانتظار اعتماد المدير', 'هدى', false]);
+  const doc = c.ok('cus.voucher.get', { id: vr.id }, c.T.huda);
+  eq([doc.signs.find((s) => s.label === 'المحاسب').image, doc.signs.find((s) => s.label === 'المدير').image], [png, '']);
+  eq(c.ok('cus.home', {}, c.T.sara).staff.voucherSigning.map((v) => v.id), [vr.id]);
+  eq(c.ok('cus.voucher.list', { status: 'active' }, c.T.huda).length, 0, 'not in effect before the manager signs');
+  // رابط المدير: صالح 3 أيام
+  const link = c.ok('cus.sign.create', { kind: 'voucher', id: vr.id }, c.T.huda);
+  const lrow = c.srv.Db.view('custody', 'SignLinks').find((l) => l.status === 'open' && l.targetId === vr.id);
+  eq((new Date(link.expiresAt) - new Date(lrow.createdAt)) / 86400000 > 2.99 && (new Date(link.expiresAt) - new Date(lrow.createdAt)) / 86400000 < 3.01, true, 'link valid for 3 days');
+  // المدير يرفع صورة توقيعه (أي صورة صالحة)، فيصبح السند سارياً ويُغلق الرابط
+  const jpg = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==';
+  const done = c.ok('cus.sign.submit', { token: link.token, data: jpg });
+  truthy(done.message.includes('سارياً'), done.message);
+  const after = c.ok('cus.voucher.get', { id: vr.id }, c.T.ahmad);
+  eq([after.voucher.status, after.voucher.statusLabel, after.voucher.mgrSigned, after.signs.find((s) => s.label === 'المدير').image], ['active', 'ساري', true, jpg]);
+  eq(c.fail('cus.sign.view', { token: link.token }).code, 'USED', 'the link closes for good after signing');
+  truthy(c.fail('cus.sign.create', { kind: 'voucher', id: vr.id }, c.T.huda).message.includes('مسبقاً'));
+
+  // إصدار المحاسب سنداً بنفسه (صرف أو قبض) هو اعتماده: يبدأ بانتظار المدير
+  const rv = c.ok('cus.voucher.create', { type: 'receipt', partyName: 'عميل', amount: '40', reason: 'دفعة' }, c.T.sara);
+  eq([rv.status, rv.approvedByName], ['signing', 'سارة']);
+  // التوقيع الورقي يجعله سارياً كذلك
+  c.ok('cus.markSigned', { kind: 'voucher', id: rv.id, note: 'الأصل في الملف' }, c.T.huda);
+  eq(c.ok('cus.voucher.get', { id: rv.id }, c.T.huda).voucher.status, 'active');
+  // رابط منتهي الصلاحية
+  const pv = c.ok('cus.voucher.create', { type: 'payment', partyName: 'مورد', amount: '5', reason: 'بريد' }, c.T.sara);
+  const old = c.ok('cus.sign.create', { kind: 'voucher', id: pv.id }, c.T.sara);
+  const row = c.srv.Db.view('custody', 'SignLinks').find((l) => l.status === 'open' && l.targetId === pv.id);
+  c.srv.Db.update('custody', 'SignLinks', row.id, { expiresAt: new Date(new Date(row.createdAt).getTime() - 1000).toISOString() });
+  eq(c.fail('cus.sign.view', { token: old.token }).code, 'EXPIRED');
+
+  // طلب عهدة جديدة: يفتحها المحاسب فينتظر المدير، ثم «تمت الموافقة» بعد توقيعه
+  const r = c.ok('cus.request.create', { amount: '60', reason: 'معرض' }, c.T.ahmad);
+  const cu = c.ok('cus.open', { employeeId: c.emp.ahmad.id, amount: '60', requestId: r.id }, c.T.sara);
+  eq(c.ok('cus.home', {}, c.T.ahmad).myRequest.status, 'signing');
+  const l2 = c.ok('cus.sign.create', { kind: 'voucher', id: cu.openVoucherId }, c.T.sara);
+  c.ok('cus.sign.submit', { token: l2.token, data: png });
+  const home = c.ok('cus.home', {}, c.T.ahmad);
+  eq([home.myRequest.status, home.myCustody.stage], ['approved', 'disbursing']);
 });

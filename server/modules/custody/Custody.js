@@ -9,7 +9,10 @@
  * - صاحب العهدة = موظف في الدليل الموحد (employeeId). المنفّذون في السجلات = مستخدمو البوابة (userId).
  * - المبالغ بالفلس (أعداد صحيحة). الرصيد = المبلغ + المرحّل + المقبوضات الإضافية − المصروفات.
  * - لا أحد يفتح عهدة لنفسه أو يعتمد عهدته أو يعالج طلبه.
- * - توقيع الإدارة: رابط سرّي لمرة واحدة يفتحه المدير بلا حساب (#/sign/<token>)، أو تأكيد التوقيع الورقي.
+ * - السندات (صرف وقبض، ومنها سند صرف العهدة): الطلب ← اعتماد المحاسب (رقم السند وتوقيعه) ← اعتماد المدير ← ساري.
+ *   إصدار المحاسب سنداً بنفسه (أو فتحه عهدة) هو اعتماده، فيبدأ السند «بانتظار اعتماد المدير».
+ * - توقيع الإدارة: رابط سرّي لمرة واحدة يفتحه المدير بلا حساب (#/sign/<token>)، صالح 3 أيام ويُغلق بعد التوقيع،
+ *   يرسم فيه توقيعه أو يرفع صورته؛ أو تأكيد التوقيع الورقي.
  * - الملفات على Drive (المرفقات والنسخ الموقّعة) تُفعَّل بعد منح صلاحية Drive للخادم (CUS_DRIVE).
  */
 var CUS_SCHEMA = {
@@ -62,13 +65,13 @@ var CUS = {
   CARRY: { add: 'يُضاف إلى المبلغ', include: 'يُحتسب ضمن المبلغ' },
   ENTRY: { expense: 'مصروف', receipt: 'مقبوض إضافي' },
   V_TYPES: { payment: 'صرف', receipt: 'قبض' },
-  V_STATUS: { requested: 'بانتظار موافقة المحاسب', active: 'ساري', rejected: 'مرفوض', cancelled: 'ملغي' },
-  REQ_STATUS: { pending: 'بانتظار موافقة المحاسب', approved: 'تمت الموافقة', rejected: 'مرفوض', cancelled: 'ملغي' },
+  V_STATUS: { requested: 'بانتظار اعتماد المحاسب', signing: 'بانتظار اعتماد المدير', active: 'ساري', rejected: 'مرفوض', cancelled: 'ملغي' },
+  REQ_STATUS: { pending: 'بانتظار اعتماد المحاسب', signing: 'بانتظار اعتماد المدير', approved: 'تمت الموافقة', rejected: 'مرفوض', cancelled: 'ملغي' },
   SETTLEMENT: { carry: 'ترحيل', voucher: 'سند' },
   PAY: { cash: 'نقدي', cheque: 'شيك', transfer: 'تحويل' },
   PROJECT_TYPES: { project: 'مشروع', debt: 'مديونية شخصية' },
   SIGN_KINDS: { voucher: 'سند', statement: 'كشف تسوية' },
-  SIGN_DAYS: 7,
+  SIGN_DAYS: 3,
   MANAGER: 'manager',
   IMPORT: 'import',
   SIGNATURE_MAX: 45000,
@@ -334,6 +337,7 @@ var Custody = {
         awaitingCloseSign: all.filter(function (c) { return c.status === 'signing'; }).map(function (c) { return Custody.view_(c, m); }),
         pendingRequests: Custody.rows_('Requests').filter(function (r) { return r.status === 'pending'; }).map(function (r) { return Requests.view_(r, m); }),
         voucherRequests: Custody.rows_('Vouchers').filter(function (v) { return v.status === 'requested'; }).map(function (v) { return Vouchers.view_(v, m); }),
+        voucherSigning: Custody.rows_('Vouchers').filter(function (v) { return v.status === 'signing' && !Vouchers.isOpening_(v); }).map(function (v) { return Vouchers.view_(v, m); }),
         openCount: open.length,
         openBalance: open.reduce(function (s, c) { return s + c.remaining; }, 0),
         monthSpent: monthSpent
@@ -374,7 +378,7 @@ var Custody = {
         openCount: s.openCount, openBalance: s.openBalance, activeCount: openViews.length,
         pendingActions: s.pendingClose.length + s.pendingRequests.length + s.voucherRequests.length + s.awaitingOpenSign.length + s.awaitingCloseSign.length,
         pendingClose: s.pendingClose.length, pendingRequests: s.pendingRequests.length, voucherRequests: s.voucherRequests.length,
-        awaitingSign: s.awaitingOpenSign.length + s.awaitingCloseSign.length,
+        awaitingSign: s.awaitingOpenSign.length + s.awaitingCloseSign.length + s.voucherSigning.length,
         monthSpent: s.monthSpent, prevMonthSpent: sumIn(exps, prevMonth), yearSpent: yearExps.reduce(function (a, e) { return a + e.amount; }, 0),
         monthEntries: exps.filter(function (e) { return (e.date || '').slice(0, 7) === month; }).length,
         noAttachment: yearExps.filter(function (e) { return !(e.attachmentIds || []).length; }).length,
@@ -664,11 +668,11 @@ var Custody = {
     var now = nowIso();
     if (kind === 'voucher') {
       var v = Db.getOrThrow('custody', 'Vouchers', p.id, 'السند');
-      if (v.status !== 'active') throw appError('السند ليس سارياً، لا يُسجَّل له توقيع.');
+      if (v.status !== 'signing' && v.status !== 'active') throw appError(v.status === 'requested' ? 'السند لم يعتمده المحاسب بعد، لا يُسجَّل له توقيع المدير.' : 'السند ملغي أو مرفوض، لا يُسجَّل له توقيع.');
       var vc = v.custodyId ? Db.get('custody', 'Custodies', v.custodyId) : null;
       if (vc && Custody.isOwner_(ctx, vc)) throw appError('لا يمكنك تأكيد توقيع سند يخص عهدتك.', 'FORBIDDEN');
       if (v.signedAt) throw appError('السند موقّع من الإدارة مسبقاً.');
-      Db.update('custody', 'Vouchers', v.id, { signedAt: now, signedBy: ctx.user.id, signedNote: note });
+      Db.update('custody', 'Vouchers', v.id, { signedAt: now, signedBy: ctx.user.id, signedNote: note, status: 'active' });
       Custody.advanceOpen_(vc, v.id);
       Audit.log(ctx.user, 'custody', 'voucher.signed', 'Voucher', v.id, { number: v.number, note: note });
       return true;
@@ -740,13 +744,13 @@ var Custody = {
     var now = nowIso();
     if (kind === 'voucher') {
       var v = Db.getOrThrow('custody', 'Vouchers', p.id, 'السند');
-      if (v.status !== 'active') throw appError('السند ليس سارياً، لا يُرفع له توقيع.');
+      if (v.status !== 'signing' && v.status !== 'active') throw appError(v.status === 'requested' ? 'السند لم يعتمده المحاسب بعد، لا تُرفع له نسخة موقّعة.' : 'السند ملغي أو مرفوض، لا تُرفع له نسخة موقّعة.');
       var vc = v.custodyId ? Db.get('custody', 'Custodies', v.custodyId) : null;
       if (vc && Custody.isOwner_(ctx, vc)) throw appError('لا يمكنك رفع توقيع سند يخص عهدتك.', 'FORBIDDEN');
       var folder = vc ? Custody.folderOf_(vc) : Files.folder_('', ['السندات']);
       var f = Files.save_(folder, up, v.number + '_موقّع.' + up.ext); // i18n:line
       Files.trash_(v.signedFileId);
-      Db.update('custody', 'Vouchers', v.id, { signedFileId: f.id, signedAt: v.signedAt || now, signedBy: v.signedAt ? v.signedBy : ctx.user.id });
+      Db.update('custody', 'Vouchers', v.id, { signedFileId: f.id, signedAt: v.signedAt || now, signedBy: v.signedAt ? v.signedBy : ctx.user.id, status: 'active' });
       Custody.advanceOpen_(vc, v.id);
       Audit.log(ctx.user, 'custody', 'voucher.signedUpload', 'Voucher', v.id, { number: v.number });
       return true;
@@ -952,7 +956,7 @@ var Custody = {
     if (h.staff) {
       cards.push({
         kind: 'cus.staff', pendingClose: h.staff.pendingClose.length, pendingRequests: h.staff.pendingRequests.length,
-        voucherRequests: h.staff.voucherRequests.length, awaitingSign: h.staff.awaitingOpenSign.length + h.staff.awaitingCloseSign.length,
+        voucherRequests: h.staff.voucherRequests.length, awaitingSign: h.staff.awaitingOpenSign.length + h.staff.awaitingCloseSign.length + h.staff.voucherSigning.length,
         openCount: h.staff.openCount, openBalance: h.staff.openBalance, monthSpent: h.staff.monthSpent
       });
     }
@@ -1089,9 +1093,12 @@ var Custody = {
 var Requests = {
   view_: function (r, m) {
     var active = Custody.activeOf_(r.employeeId);
+    var c = r.status === 'approved' && r.custodyId ? Db.get('custody', 'Custodies', r.custodyId) : null;
+    var pv = c && c.openVoucherId ? Db.get('custody', 'Vouchers', c.openVoucherId) : null;
+    var status = pv && pv.status === 'signing' ? 'signing' : r.status;
     return {
       id: r.id, employeeId: r.employeeId, employeeName: Custody.empName_(m, r.employeeId), amount: r.amount, reason: r.reason,
-      status: r.status, statusLabel: CUS.REQ_STATUS[r.status] || r.status, custodyId: r.custodyId,
+      status: status, statusLabel: CUS.REQ_STATUS[status] || status, custodyId: r.custodyId,
       handledByName: Custody.userName_(m, r.handledBy), handledAt: r.handledAt, rejectReason: r.rejectReason, createdAt: r.createdAt,
       activeCustodyId: active ? active.id : ''
     };
@@ -1202,6 +1209,11 @@ var Vouchers = {
     return o;
   },
 
+  isOpening_: function (v) {
+    var c = v.custodyId ? Db.get('custody', 'Custodies', v.custodyId) : null;
+    return !!(c && c.openVoucherId === v.id);
+  },
+
   view_: function (v, m) {
     var c = v.custodyId ? Db.get('custody', 'Custodies', v.custodyId) : null;
     var approver = v.approvedBy || v.createdBy;
@@ -1212,7 +1224,8 @@ var Vouchers = {
       if (req && !requestedBy) { requestedBy = req.createdBy; requestedAt = req.createdAt; }
       if (req && req.reason && String(reason).indexOf('سبب الطلب:') < 0) reason += ' — سبب الطلب: ' + req.reason;
     }
-    var approved = v.status === 'active' || v.status === 'cancelled';
+    // اعتمده المحاسب: بانتظار المدير أو ساري، أو أُلغي بعد اعتماده (طلب أُلغي قبل الاعتماد بلا رقم)
+    var approved = v.status === 'signing' || v.status === 'active' || (v.status === 'cancelled' && !!v.number);
     var link = v.mgrSignId ? m.links[v.mgrSignId] : null;
     return {
       id: v.id, type: v.type, typeLabel: (v.status === 'requested' || v.status === 'rejected' ? 'طلب سند ' : 'سند ') + CUS.V_TYPES[v.type],
@@ -1227,7 +1240,7 @@ var Vouchers = {
       signedByName: v.signedBy === CUS.MANAGER ? (link ? link.managerName : 'المدير') + ' (توقيع إلكتروني)' : Custody.userName_(m, v.signedBy),
       isOpening: isOpening, requestedBy: requestedBy || '', requestedByName: Custody.userName_(m, requestedBy), requestedAt: requestedAt || '',
       rejectReason: v.rejectReason, rejectedByName: Custody.userName_(m, v.rejectedBy), rejectedAt: v.rejectedAt,
-      signLink: v.status === 'active' ? Sign.info_('voucher', v.id, m) : null
+      signLink: v.status === 'signing' || v.status === 'active' ? Sign.info_('voucher', v.id, m) : null
     };
   },
 
@@ -1245,7 +1258,7 @@ var Vouchers = {
     };
   },
 
-  /** ينشئ سنداً معتمداً برقم تسلسلي (داخلي) */
+  /** ينشئ سنداً اعتمده المحاسب (منشئه) برقم تسلسلي، بانتظار اعتماد المدير (داخلي) */
   create_: function (ctx, d) {
     var used = Vouchers.numbers_();
     var number = Custody.serial_(Vouchers.prefix_(d.type), Number(d.date.slice(0, 4)), 4, function (n) { return !!used[n]; });
@@ -1253,7 +1266,7 @@ var Vouchers = {
     var v = Db.insert('custody', 'Vouchers', {
       type: d.type, number: number, date: d.date, custodyId: d.custodyId || '', partyName: d.partyName, amount: d.amount,
       amountInWords: Vouchers.amountInWords_(d.amount), reason: d.reason, paymentMethod: d.paymentMethod || 'cash', chequeNo: d.chequeNo || '',
-      createdBy: ctx.user.id, createdAt: now, status: 'active', approvedBy: ctx.user.id, approvedAt: now,
+      createdBy: ctx.user.id, createdAt: now, status: 'signing', approvedBy: ctx.user.id, approvedAt: now,
       requestedBy: d.requestedBy || '', requestedAt: d.requestedAt || ''
     });
     Audit.log(ctx.user, 'custody', 'voucher.create', 'Voucher', v.id, { number: number, amount: kwd_(v.amount), party: v.partyName });
@@ -1291,7 +1304,7 @@ var Vouchers = {
       Vouchers.assertHandler_(ctx, cur);
       var date = localDate_(), used = Vouchers.numbers_();
       var number = Custody.serial_(Vouchers.prefix_(cur.type), Number(date.slice(0, 4)), 4, function (n) { return !!used[n]; });
-      return Db.update('custody', 'Vouchers', cur.id, { number: number, date: date, status: 'active', approvedBy: ctx.user.id, approvedAt: nowIso() });
+      return Db.update('custody', 'Vouchers', cur.id, { number: number, date: date, status: 'signing', approvedBy: ctx.user.id, approvedAt: nowIso() });
     });
     Audit.log(ctx.user, 'custody', 'voucher.approve', 'Voucher', v.id, { number: v.number, amount: kwd_(v.amount) });
     return Vouchers.view_(v, Custody.maps_());
@@ -1340,7 +1353,8 @@ var Vouchers = {
       return Vouchers.canSee_(ctx, v, mine) && (!p.type || v.type === p.type) && (!p.status || v.status === p.status) &&
         (!p.custodyId || v.custodyId === p.custodyId) && (!q || (v.number + ' ' + v.partyName + ' ' + v.reason).indexOf(q) >= 0);
     }).sort(function (a, b) {
-      return (a.status === 'requested' ? 0 : 1) - (b.status === 'requested' ? 0 : 1) || b.date.localeCompare(a.date) ||
+      var rank = function (x) { return x.status === 'requested' ? 0 : x.status === 'signing' ? 1 : 2; };
+      return rank(a) - rank(b) || b.date.localeCompare(a.date) ||
         (b.number || '').localeCompare(a.number || '') || (b.createdAt || '').localeCompare(a.createdAt || '');
     }).map(function (v) { return Vouchers.view_(v, m); });
   },
@@ -1380,8 +1394,9 @@ var Sign = {
   error_: function (t) {
     if (t.kind === 'voucher') {
       if (t.voucher.status === 'cancelled') return 'السند ملغي';
-      if (t.voucher.status !== 'active') return 'السند لم يوافق عليه المحاسب بعد';
-      if (t.voucher.signedAt) return 'السند موقّع من الإدارة مسبقاً';
+      if (t.voucher.status === 'rejected') return 'طلب السند مرفوض';
+      if (t.voucher.status === 'requested') return 'السند لم يعتمده المحاسب بعد';
+      if (t.voucher.signedAt || t.voucher.status !== 'signing') return 'السند معتمد من الإدارة مسبقاً';
       return '';
     }
     if (t.custody.status === 'closed') return 'العهدة مغلقة نهائياً مسبقاً';
@@ -1458,7 +1473,7 @@ var Sign = {
       var now = nowIso();
       Db.update('custody', 'SignLinks', l.id, { status: 'signed', actedAt: now, signatureData: data });
       if (t.kind === 'voucher') {
-        Db.update('custody', 'Vouchers', t.id, { mgrSignId: l.id, signedAt: now, signedBy: CUS.MANAGER });
+        Db.update('custody', 'Vouchers', t.id, { mgrSignId: l.id, signedAt: now, signedBy: CUS.MANAGER, status: 'active' });
         if (t.voucher.custodyId) Custody.advanceOpen_(Db.get('custody', 'Custodies', t.voucher.custodyId), t.id);
       } else {
         Db.update('custody', 'Custodies', t.id, { status: 'closed', closeSignedAt: now, closeSignedBy: CUS.MANAGER, closeMgrSignId: l.id });
@@ -1466,7 +1481,8 @@ var Sign = {
       return { link: l, target: t };
     });
     Audit.log({ id: CUS.MANAGER, fullName: res.link.managerName }, 'custody', 'sign.manager', res.target.kind === 'voucher' ? 'Voucher' : 'Custody', res.target.id, { label: res.target.label });
-    return { title: res.target.label, message: 'تم التوقيع على ' + res.target.label + '، شكراً لك.' };
+    var msg = res.target.kind === 'voucher' ? 'تم اعتماد ' + res.target.label + ' وأصبح سارياً، شكراً لك.' : 'تم التوقيع على ' + res.target.label + '، شكراً لك.';
+    return { title: res.target.label, message: msg };
   },
 
   reject: function (ctx, p) {

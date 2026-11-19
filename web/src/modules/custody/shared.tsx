@@ -41,7 +41,7 @@ export function useCustodyRole() {
 export const useLookups = () => useApi<Lookups>('cus.lookups', {}, { staleTime: 5 * 60_000 });
 
 export const STATUS_TONE: Record<CustodyStatus, Tone> = { open: 'ok', pending: 'warn', signing: 'info', closed: 'neutral' };
-export const V_TONE: Record<VoucherView['status'], Tone> = { requested: 'warn', active: 'ok', rejected: 'bad', cancelled: 'neutral' };
+export const V_TONE: Record<VoucherView['status'], Tone> = { requested: 'warn', signing: 'info', active: 'ok', rejected: 'bad', cancelled: 'neutral' };
 
 export function StatusBadge({ c }: { c: CustodyView }) {
   const tone = c.status === 'open' && c.stage !== 'received' ? 'warn' : STATUS_TONE[c.status];
@@ -238,7 +238,7 @@ export function VoucherFormDialog({ open, onClose, request }: { open: boolean; o
           <Select label={tr("طريقة الدفع")} value={f.paymentMethod} onChange={set('paymentMethod')} options={(lk.data?.paymentMethods || []).map((m) => ({ value: m.id, label: m.label }))} />
           {f.paymentMethod === 'cheque' && <TextInput label={tr("رقم الشيك")} value={f.chequeNo} onChange={set('chequeNo')} />}
         </div>
-        {request && <p className="m-0 text-[13px] text-muted">{tr("يحصل السند على رقمه بعد موافقة المحاسب، ثم يوقّعه المدير.")}</p>}
+        <p className="m-0 text-[13px] text-muted">{request ? tr("يحصل السند على رقمه بعد اعتماد المحاسب، ثم يعتمده المدير عبر رابط فيصبح سارياً.") : tr("يصدر السند باعتمادك وتوقيعك، ثم يعتمده المدير عبر رابط فيصبح سارياً.")}</p>
         {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
       </div>
     </Dialog>
@@ -256,7 +256,7 @@ export function SignActions({ kind, id, info, onDone }: { kind: 'voucher' | 'sta
     invalidate: ['cus.get', 'cus.voucher.list'], silentError: true,
     onSuccess: (r) => {
       const url = location.origin + location.pathname + '#/sign/' + r.token;
-      const text = tr("السلام عليكم {0}،\n{1} بمبلغ {2} بانتظار توقيعكم:\n{3}\nالرابط صالح حتى {4}", r.managerName, r.label, kwd(r.amount), url, formatDateTime(r.expiresAt));
+      const text = tr("السلام عليكم {0}،\n{1} بمبلغ {2} اعتمده المحاسب وبانتظار اعتمادكم:\n{3}\nالرابط صالح حتى {4}", r.managerName, r.label, kwd(r.amount), url, formatDateTime(r.expiresAt));
       setLink({ url, text, wa: 'https://wa.me/' + (r.phone || '') + '?text=' + encodeURIComponent(text) });
       onDone?.();
     }
@@ -286,7 +286,7 @@ export function SignActions({ kind, id, info, onDone }: { kind: 'voucher' | 'sta
       )}
       <div className="flex flex-wrap gap-2">
         <Button size="sm" icon="key" loading={create.isPending} onClick={() => { setError(''); create.mutate({ kind, id }, { onError: (e) => setError(e.message) }); }}>
-          {info?.status === 'open' ? tr("رابط جديد للمدير") : tr("إرسال للمدير للتوقيع")}
+          {info?.status === 'open' ? tr("رابط جديد للمدير") : tr("إنشاء رابط اعتماد المدير")}
         </Button>
         <Button size="sm" variant="ghost" icon="check" onClick={() => { setNote(''); setError(''); setPaper(true); }}>{tr("وقّع ورقياً")}</Button>
         {drive && (
@@ -303,7 +303,7 @@ export function SignActions({ kind, id, info, onDone }: { kind: 'voucher' | 'sta
           <Button onClick={async () => { try { await navigator.clipboard.writeText(link?.text || ''); toast(tr("تم النسخ")); } catch { /* لا حافظة */ } }}>{tr("نسخ")}</Button>
         </>}>
         <div className="flex flex-col gap-2">
-          <p className="m-0 text-muted">{tr("الرابط لمرة واحدة وصالح 7 أيام. يفتحه المدير بلا حساب، فيرى المستند ويوقّع أو يرفض مع السبب.")}</p>
+          <p className="m-0 text-muted">{tr("الرابط لمرة واحدة وصالح 3 أيام. يفتحه المدير بلا حساب، فيرى المستند ويرسم توقيعه أو يرفع صورته، أو يرفض مع السبب. يُغلق الرابط نهائياً بعد التوقيع.")}</p>
           <pre className="m-0 whitespace-pre-wrap break-all rounded-lg bg-bg p-3 text-[13px] ltr text-left">{link?.url}</pre>
         </div>
       </Dialog>
@@ -311,7 +311,7 @@ export function SignActions({ kind, id, info, onDone }: { kind: 'voucher' | 'sta
         onSubmit={() => { setError(''); mark.mutate({ kind, id, note }, { onError: (e) => setError(e.message) }); }} footer={<><Button type="submit" variant="primary" className="flex-1" loading={mark.isPending}>{tr("تأكيد")}</Button>
           <Button variant="ghost" onClick={() => setPaper(false)}>{tr("تراجع")}</Button></>}>
         <div className="flex flex-col gap-3">
-          <p className="m-0 text-muted">{kind === 'voucher' ? tr("استخدمه إذا وقّع المدير على السند المطبوع. سند صرف العهدة ينقلها إلى «جاري الصرف».") : tr("استخدمه إذا وقّع المدير على الكشف المطبوع. تُغلق العهدة نهائياً.")}</p>
+          <p className="m-0 text-muted">{kind === 'voucher' ? tr("استخدمه إذا وقّع المدير على السند المطبوع. يصبح السند سارياً، وسند صرف العهدة ينقلها إلى «جاري الصرف».") : tr("استخدمه إذا وقّع المدير على الكشف المطبوع. تُغلق العهدة نهائياً.")}</p>
           <TextInput label={tr("ملاحظة (اختياري)")} value={note} onChange={(e) => setNote(e.target.value)} placeholder={tr("مثال: الأصل محفوظ في ملف 2026")} />
           {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2 text-bad">{error}</div>}
         </div>

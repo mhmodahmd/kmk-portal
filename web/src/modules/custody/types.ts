@@ -29,7 +29,7 @@ export interface SignLinkInfo { status: 'open' | 'expired' | 'signed' | 'rejecte
 export interface VoucherView {
   id: string; type: 'payment' | 'receipt'; typeLabel: string; number: string; date: string; custodyId: string; custodyLabel: string;
   partyName: string; amount: number; amountInWords: string; reason: string; paymentMethod: string; paymentMethodLabel: string; chequeNo: string;
-  status: 'requested' | 'active' | 'rejected' | 'cancelled'; statusLabel: string; cancelReason: string; createdByName: string; createdAt: string;
+  status: 'requested' | 'signing' | 'active' | 'rejected' | 'cancelled'; statusLabel: string; cancelReason: string; createdByName: string; createdAt: string;
   approved: boolean; approvedByName: string; approvedAt: string; signed: boolean; signedAt: string; signedNote: string; mgrSigned: boolean; hasSignedFile: boolean;
   signedByName: string; isOpening: boolean; requestedBy: string; requestedByName: string; requestedAt: string;
   rejectReason: string; rejectedByName: string; rejectedAt: string; signLink: SignLinkInfo | null;
@@ -42,7 +42,7 @@ export interface CustodyDetail {
 }
 
 export interface CusRequest {
-  id: string; employeeId: string; employeeName: string; amount: number; reason: string; status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  id: string; employeeId: string; employeeName: string; amount: number; reason: string; status: 'pending' | 'signing' | 'approved' | 'rejected' | 'cancelled';
   statusLabel: string; custodyId: string; handledByName: string; handledAt: string; rejectReason: string; createdAt: string; activeCustodyId: string;
 }
 
@@ -55,7 +55,7 @@ export interface CusHome {
   defaultAmount: number; isHolder: boolean; myCustody: CustodyView | null; myRequest: CusRequest | null; myClosed?: number;
   staff: null | {
     pendingClose: CustodyView[]; awaitingOpenSign: CustodyView[]; awaitingCloseSign: CustodyView[]; pendingRequests: CusRequest[];
-    voucherRequests: VoucherView[]; openCount: number; openBalance: number; monthSpent: number;
+    voucherRequests: VoucherView[]; voucherSigning: VoucherView[]; openCount: number; openBalance: number; monthSpent: number;
   };
 }
 

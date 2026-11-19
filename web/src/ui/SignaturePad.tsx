@@ -67,3 +67,37 @@ function trimmed(cv: HTMLCanvasElement) {
   out.getContext('2d')!.drawImage(cv, x0 - pad, y0 - pad, sw, sh, 0, 0, out.width, out.height);
   return out.toDataURL('image/png');
 }
+
+/** أقصى طول لصورة التوقيع (data URL) كما يقبلها الخادم */
+export const SIGNATURE_MAX = 45000;
+
+/**
+ * صورة توقيع من ملف (صورة ورقة موقّعة أو PNG): تُصغَّر إلى 600×240 كحد أقصى وتُضغط حتى تقبلها الخادم.
+ * PNG إن كان صغيراً (يحفظ الشفافية)، وإلا JPEG بخلفية بيضاء بجودة تنخفض تدريجياً.
+ */
+export async function signatureFromFile(file: File): Promise<string> {
+  if (!/^image\//.test(file.type)) throw new Error(tr("اختر صورة (PNG أو JPG)."));
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => bad(new Error(tr("تعذّرت قراءة الصورة."))); i.src = url; });
+    for (const maxW of [600, 450, 320]) {
+      const scale = Math.min(1, maxW / img.naturalWidth, (maxW * 0.4) / img.naturalHeight);
+      const cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.round(img.naturalWidth * scale));
+      cv.height = Math.max(1, Math.round(img.naturalHeight * scale));
+      const ctx = cv.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, cv.width, cv.height);
+      const png = cv.toDataURL('image/png');
+      if (png.length <= SIGNATURE_MAX) return png;
+      const flat = document.createElement('canvas');
+      flat.width = cv.width; flat.height = cv.height;
+      const fx = flat.getContext('2d')!;
+      fx.fillStyle = '#fff'; fx.fillRect(0, 0, flat.width, flat.height); fx.drawImage(cv, 0, 0);
+      for (const q of [0.85, 0.7, 0.55]) {
+        const jpg = flat.toDataURL('image/jpeg', q);
+        if (jpg.length <= SIGNATURE_MAX) return jpg;
+      }
+    }
+    throw new Error(tr("الصورة كبيرة جداً، صوّر التوقيع وحده أو اقصص الصورة."));
+  } finally { URL.revokeObjectURL(url); }
+}

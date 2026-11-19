@@ -7,11 +7,12 @@ import { Avatar, Badge, Card, EmptyState, ErrorBox, ListRow, Loader } from '../.
 import { Button } from '../../ui/Button';
 import { DataTable, Pager, SearchBox, Segmented, useTable } from '../../ui/Controls';
 import { ReasonDialog } from '../../ui/Decide';
+import { Dialog } from '../../ui/Overlay';
 import { Icon } from '../../ui/Icon';
-import { Money, OpenCustodyDialog, V_TONE, VoucherFormDialog, dateLabel, useCustodyRole } from './shared';
+import { Money, OpenCustodyDialog, SignActions, V_TONE, VoucherFormDialog, dateLabel, kwd, useCustodyRole } from './shared';
 import type { CusRequest, VoucherView } from './types';
 
-const REQ_TONE = { pending: 'warn', approved: 'ok', rejected: 'bad', cancelled: 'neutral' } as const;
+const REQ_TONE = { pending: 'warn', signing: 'info', approved: 'ok', rejected: 'bad', cancelled: 'neutral' } as const;
 
 /** طلبات العهد الجديدة: الموظف يرى طلباته، والمحاسب يعتمد بفتح العهدة أو يرفض */
 export function CusRequestsPage() {
@@ -50,9 +51,12 @@ export function VouchersPage() {
   const [search, setSearch] = useState('');
   const [form, setForm] = useState<'' | 'request' | 'create'>('');
   const [acting, setActing] = useState<{ v: VoucherView; kind: 'reject' | 'cancel' } | null>(null);
+  const [signingId, setSigningId] = useState('');
   const q = useApi<VoucherView[]>('cus.voucher.list', {});
   const inv = { invalidate: ['cus.voucher.list', 'cus.home'] };
-  const approve = useAction('cus.voucher.approve', { ...inv, success: tr("اعتُمد السند") });
+  // بعد اعتماد المحاسب تُفتح نافذة رابط المدير مباشرة
+  const approve = useAction<{ id: string }, VoucherView>('cus.voucher.approve', { ...inv, success: tr("اعتمدتَ السند، وهو الآن بانتظار اعتماد المدير"), onSuccess: (v) => setSigningId(v.id) });
+  const signing = (q.data || []).find((v) => v.id === signingId) || null;
   const reject = useAction('cus.voucher.reject', { ...inv, success: tr("رُفض الطلب"), silentError: true });
   const cancel = useAction('cus.voucher.cancel', { ...inv, success: tr("أُلغي السند"), silentError: true });
   const rows = useMemo(() => (q.data || []).filter((v) => (!type || v.type === type) && (!search || (v.number + ' ' + v.partyName + ' ' + v.reason).includes(search.trim()))), [q.data, type, search]);
@@ -81,13 +85,15 @@ export function VouchersPage() {
                 <td><Money fils={v.amount} strong /></td>
                 <td>
                   <Badge tone={V_TONE[v.status]}>{v.statusLabel}</Badge>
-                  {v.status === 'active' && <div className="mt-1 text-[12px] text-muted">{v.signed ? tr("موقّع") : tr("بانتظار توقيع الإدارة")}</div>}
+                  {v.status === 'signing' && v.signLink && <div className="mt-1 text-[12px] text-muted">{v.signLink.status === 'open' ? tr("أُرسل الرابط للمدير") : v.signLink.status === 'rejected' ? tr("رفض المدير: {0}", v.signLink.rejectReason) : v.signLink.status === 'expired' ? tr("انتهت صلاحية الرابط") : ''}</div>}
+                  {v.status === 'active' && <div className="mt-1 text-[12px] text-muted">{v.signed ? tr("اعتمده المدير") : tr("بلا توقيع المدير (قبل التحديث)")}</div>}
                 </td>
                 <td className="text-left whitespace-nowrap">
                   {v.number && <Link to={'/custody/print/voucher/' + v.id} className="inline-flex min-h-11 items-center gap-1 px-2 text-accent-fg no-underline sm:min-h-8"><Icon name="printer" size={16} />{tr("طباعة")}</Link>}
-                  {staff && v.status === 'requested' && <Button size="sm" variant="ghost" icon="check" loading={approve.isPending} onClick={() => approve.mutate({ id: v.id })}>{tr("اعتماد")}</Button>}
+                  {staff && v.status === 'requested' && <Button size="sm" variant="ghost" icon="check" loading={approve.isPending} onClick={() => approve.mutate({ id: v.id })}>{tr("اعتماد المحاسب")}</Button>}
+                  {staff && v.status === 'signing' && <Button size="sm" variant="secondary" icon="key" onClick={() => setSigningId(v.id)}>{tr("رابط المدير")}</Button>}
                   {staff && v.status === 'requested' && <Button size="sm" variant="ghost" icon="x" onClick={() => setActing({ v, kind: 'reject' })}>{tr("رفض")}</Button>}
-                  {(admin && (v.status === 'active' || v.status === 'requested')) && <Button size="sm" variant="ghost" icon="trash" onClick={() => setActing({ v, kind: 'cancel' })}>{tr("إلغاء السند")}</Button>}
+                  {(admin && (v.status === 'active' || v.status === 'signing' || v.status === 'requested')) && <Button size="sm" variant="ghost" icon="trash" onClick={() => setActing({ v, kind: 'cancel' })}>{tr("إلغاء السند")}</Button>}
                 </td>
               </tr>
             ))}
@@ -95,6 +101,20 @@ export function VouchersPage() {
         )}
       </Card>
       <VoucherFormDialog open={!!form} request={form === 'request'} onClose={() => setForm('')} />
+      <Dialog open={!!signing} onClose={() => setSigningId('')} title={tr("اعتماد المدير")}>
+        {signing && (
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-0.5 rounded-lg bg-chip px-3 py-2.5">
+              <b>{signing.typeLabel} <span className="num">{signing.number}</span></b>
+              <span className="text-[13px] text-muted">{tr("{0} · {1} · اعتمده {2}", signing.partyName, kwd(signing.amount), signing.approvedByName)}</span>
+            </div>
+            {signing.status === 'signing' ? <>
+              <p className="m-0 text-[13px] text-muted">{tr("أنشئ رابطاً وأرسله للمدير. بعد توقيعه يصبح السند سارياً.")}</p>
+              <SignActions kind="voucher" id={signing.id} info={signing.signLink} />
+            </> : <p className="m-0 text-ok">{tr("اعتمده المدير، والسند ساري.")}</p>}
+          </div>
+        )}
+      </Dialog>
       <ReasonDialog open={!!acting} onClose={() => setActing(null)} title={acting?.kind === 'reject' ? tr("رفض طلب السند") : tr("إلغاء السند")}
         label={acting?.kind === 'reject' ? tr("سبب الرفض") : tr("سبب الإلغاء")} confirmLabel={acting?.kind === 'reject' ? tr("رفض") : tr("إلغاء السند")} danger
         onConfirm={(reason) => (acting!.kind === 'reject' ? reject : cancel).mutateAsync({ id: acting!.v.id, reason })} />

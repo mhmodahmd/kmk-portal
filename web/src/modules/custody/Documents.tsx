@@ -47,6 +47,7 @@ export function VoucherDocument({ doc }: { doc: VoucherDoc }) {
     <div className="kmk-doc flex flex-col gap-4 bg-white p-6 text-[14px] text-black">
       <Head company={doc.company} title={v.typeLabel} sub={v.number} />
       {v.status === 'cancelled' && <div className="rounded border-2 border-bad px-3 py-2 text-center font-bold text-bad">{tr("ملغي: {0}", v.cancelReason)}</div>}
+      {v.status === 'signing' && <div className="rounded border-2 border-dashed border-black/40 px-3 py-2 text-center font-bold">{tr("بانتظار اعتماد المدير — غير ساري بعد")}</div>}
       <div className="flex flex-wrap justify-between gap-2">
         <span>{tr("التاريخ:")} <b className="num">{dateLabel(v.date)}</b></span>
         <span className="rounded border-2 border-fg px-4 py-1 text-[18px] font-bold num ltr">{kwd(v.amount)}</span>

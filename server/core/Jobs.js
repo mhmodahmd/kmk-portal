@@ -53,6 +53,7 @@ var Jobs = {
 
 /** مشغّل زمني: كل دقيقة */
 function processMailQueue() {
+  try { Workflow.sweepIfDue_(); } catch (e) { console.error('wf sweep: ' + (e.stack || e)); } // مدد السلاسل: مرة في الساعة
   return Notify.drainMail_();
 }
 
@@ -62,6 +63,7 @@ function dailyMaintenance() {
   try { out.backup = Backup.run_(); } catch (e) { out.backupError = String(e); console.error('backup: ' + (e.stack || e)); }
   try { out.mail = Notify.drainMail_(); } catch (e) { console.error('mail: ' + e); }
   try { out.storage = Files.storageAlert_(); } catch (e) { console.error('storage: ' + e); }
+  try { out.digest = Workflow.digest_(); } catch (e) { console.error('wf digest: ' + e); }
   return out;
 }
 

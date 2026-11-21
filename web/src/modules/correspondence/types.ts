@@ -33,8 +33,8 @@ export interface LetterDetail {
   letter: LetterView; original: LetterView | null; replies: LetterView[]; files: LetterFile[]; log: LetterLog[];
   main: LetterFile | null; versions: DocVersion[]; readers: { id: string; name: string }[];
   can: { edit: boolean; remove: boolean; files: boolean; modify: boolean; attach: boolean; reopen: boolean };
-  workflow: ChainView | null; drive: boolean;
-  submit: { resubmit: boolean; defaultTemplateId: string; templates: { id: string; name: string; steps: string[] }[] } | null;
+  workflow: ChainView | null; drive: boolean; signatures: { name: string; at: string; method: string; code: string; version: number; step: string }[];
+  submit: { resubmit: boolean; defaultTemplateId: string; defaultSource?: 'rule' | 'type' | ''; ruleName?: string; templates: { id: string; name: string; steps: string[] }[] } | null;
 }
 
 export interface Opt { id: string; label: string }
@@ -43,7 +43,7 @@ export interface CorLookups {
   people: { id: string; name: string }[]; clients: { id: string; name: string }[]; projects: { id: string; name: string; clientId: string }[];
   directions: Opt[]; statuses: Opt[]; channels: Opt[]; categories: string[]; years: string[];
   links: Record<LinkType, { id: string; name: string }[]>;
-  confidentialities: Opt[]; fieldKinds: Opt[]; types: DocType[];
+  confidentialities: Opt[]; fieldKinds: Opt[]; types: DocType[]; canArchive: boolean; archiveClerks: boolean;
 }
 
 export interface DocField {
@@ -84,23 +84,38 @@ export interface CorReport {
 /** السلسلة الإجرائية */
 export type ChainStatus = 'running' | 'returned' | 'approved' | 'rejected' | 'cancelled';
 export type StepStatus = 'pending' | 'current' | 'done' | 'rejected' | 'returned' | 'skipped' | 'cancelled';
-export type StepKind = 'review' | 'approve' | 'execute' | 'inform';
+export type StepKind = 'review' | 'approve' | 'sign' | 'execute' | 'inform';
 export type AssigneeType = 'user' | 'role' | 'direct_manager' | 'dept_manager' | 'creator_dept_manager';
 
 export interface ChainSummary {
   instanceId: string; status: ChainStatus; statusLabel: string; templateName: string; stepName: string; assigneeNames: string[];
-  asking: boolean; dots: StepStatus[]; done: number; total: number;
+  asking: boolean; overdue: boolean; dots: StepStatus[]; done: number; total: number;
 }
 export interface ChainStep {
-  id: string; order: number; name: string; kind: StepKind; kindLabel: string; status: StepStatus; statusLabel: string;
-  assignees: { id: string; name: string }[]; fallback: boolean; asking: boolean; startedAt: string; endedAt: string; actedByName: string; note: string;
+  id: string; order: number; group: number; parallel: boolean; name: string; kind: StepKind; kindLabel: string; status: StepStatus; statusLabel: string;
+  mode: StepMode; modeLabel: string; approvals: number; need: number; dueAt: string; overdue: boolean; escalationLevel: number;
+  assignees: { id: string; name: string; done: boolean }[]; fallback: boolean; asking: boolean; startedAt: string; endedAt: string; actedByName: string; note: string;
 }
-export interface ChainAction { id: string; action: string; label: string; byName: string; toName: string; step: string; note: string; version: number; at: string }
+export type StepMode = 'any' | 'all' | 'count';
+export interface ChainAction { id: string; action: string; label: string; byName: string; onBehalfOfName: string; toName: string; step: string; note: string; version: number; at: string }
 export interface ChainView {
   id: string; status: ChainStatus; statusLabel: string; templateName: string; templateVersion: number; startedAt: string; endedAt: string; startedByName: string;
-  steps: ChainStep[]; actions: ChainAction[]; current: { id: string; name: string; kind: StepKind; asking: boolean } | null;
-  can: { act: boolean; ask: boolean; answer: boolean; cancel: boolean; reassign: boolean };
+  steps: ChainStep[]; actions: ChainAction[]; current: { id: string; name: string; kind: StepKind; asking: boolean; onBehalfOfName: string } | null;
+  can: { act: boolean; ask: boolean; sign: boolean; answer: boolean; cancel: boolean; reassign: boolean };
 }
-export interface WfTemplateStep { order: number; name: string; kind: StepKind; kindLabel: string; assignee: { type: AssigneeType; id?: string; role?: string; module?: string }; assigneeLabel: string; onReject: 'end' | 'creator' }
+export interface WfCondition { field: string; op: CondOp; value: string | number }
+export type CondOp = 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte';
+export interface WfTemplateStep { order: number; name: string; kind: StepKind; kindLabel: string; assignee: { type: AssigneeType; id?: string; role?: string; module?: string }; assigneeLabel: string; onReject: 'end' | 'creator'; condition: WfCondition | null; conditionLabel: string;
+  group: number; mode: StepMode; count: number; slaHours: number; workingDays: boolean; escalation: { notifyManager: boolean; reassignTo: string } | null }
+export interface CondField { key: string; label: string; kind: 'select' | 'money' | 'number' | 'text'; typeId?: string; options: { id: string; label: string }[] }
+export interface WfRule {
+  id: string; name: string; typeId: string; departmentId: string; confidentiality: string; field: string; op: CondOp; value: string | number;
+  templateId: string; templateName: string; templateLive: boolean; priority: number; active: boolean; summary: string;
+}
+export interface WfVersion { version: number; current: boolean; savedAt: string; savedByName: string; documents: number; steps: { name: string; kindLabel: string; condition: string }[] }
+export interface WfSimulation {
+  template: { id: string; name: string; version: number } | null; source: 'chosen' | 'rule' | 'default' | 'none'; ruleName?: string;
+  steps: { order: number; name: string; kind: StepKind; kindLabel: string; skipped: boolean; condition: string; assignees: string[]; fallback: boolean }[];
+}
 export interface WfTemplate { id: string; name: string; description: string; module: string; version: number; status: 'published' | 'retired'; statusLabel: string; updatedAt: string; running: number; steps: WfTemplateStep[] }
-export interface WfLookups { kinds: Opt[]; assignees: Opt[]; onReject: Opt[]; roles: Opt[]; departments: { id: string; name: string }[]; people: { id: string; name: string }[] }
+export interface WfLookups { kinds: Opt[]; assignees: Opt[]; onReject: Opt[]; ops: Opt[]; modes: Opt[]; conditionFields: CondField[]; roles: Opt[]; departments: { id: string; name: string }[]; people: { id: string; name: string }[] }

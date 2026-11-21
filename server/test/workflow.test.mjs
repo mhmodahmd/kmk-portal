@@ -37,7 +37,7 @@ test('workflow: templates are managed by the module manager, validated, and vers
   eq(c.fail('wf.template.save', { module: 'correspondence', name: 'س', steps }, c.T.ahmad).code, 'FORBIDDEN');
   truthy(c.fail('wf.template.save', { module: 'tasks', name: 'س', steps }, c.A).message.includes('لا تدعم'));
   truthy(c.fail('wf.template.save', { module: 'correspondence', name: 'س', steps: [] }, c.T.huda).message.includes('مرحلة واحدة'));
-  truthy(c.fail('wf.template.save', { module: 'correspondence', name: 'س', steps: [{ name: 'أ', kind: 'sign', assignee: { type: 'user', id: c.U.sara } }] }, c.T.huda).message.includes('نوع المرحلة'));
+  truthy(c.fail('wf.template.save', { module: 'correspondence', name: 'س', steps: [{ name: 'أ', kind: 'stamp', assignee: { type: 'user', id: c.U.sara } }] }, c.T.huda).message.includes('نوع المرحلة'));
   truthy(c.fail('wf.template.save', { module: 'correspondence', name: 'س', steps: [{ name: 'أ', kind: 'review', assignee: {} }] }, c.T.huda).message.includes('المسؤول'));
   truthy(c.fail('wf.template.save', { module: 'correspondence', name: 'س', steps: [{ name: 'أ', kind: 'review', assignee: { type: 'role', role: 'boss' } }] }, c.T.huda).message.includes('الدور'));
   truthy(c.fail('wf.template.save', { module: 'correspondence', name: 'س', steps: [{ name: 'أ', kind: 'inform', assignee: { type: 'user', id: c.U.sara } }] }, c.T.huda).message.includes('اطلاع'));
@@ -52,7 +52,7 @@ test('workflow: templates are managed by the module manager, validated, and vers
   eq(c.ok('cor.get', { id: d.id }, c.T.ahmad).workflow.steps.length, 3, 'the running chain keeps its snapshot');
   eq(c.ok('wf.templates', { module: 'correspondence' }, c.T.ahmad).length, 1, 'clerks see published templates');
   const lk = c.ok('wf.lookups', { module: 'correspondence' }, c.T.sara);
-  eq([lk.kinds.map((k) => k.id), lk.roles.map((r) => r.id), lk.people.length > 0], [['review', 'approve', 'execute', 'inform'], ['clerk', 'manager'], true]);
+  eq([lk.kinds.map((k) => k.id), lk.roles.map((r) => r.id), lk.people.length > 0], [['review', 'approve', 'sign', 'execute', 'inform'], ['clerk', 'manager'], true]);
 });
 
 test('workflow: a document goes through review and approval, participants see it, and the approved document is locked', () => {

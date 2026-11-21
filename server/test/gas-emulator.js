@@ -252,7 +252,10 @@ export function createGas({ storage, clock, log } = {}) {
   // ───── Drive (مجلدات وملفات في الذاكرة، تُحفظ مع الحالة) ─────
   state.drive = state.drive || { items: {} };
   const D = state.drive.items;
-  const blobOf = (bytes, mime, name) => ({ bytes, getBytes: () => bytes, getContentType: () => mime, getName: () => name, setName(n) { name = n; return this; } });
+  const blobOf = (bytes, mime, name) => ({ bytes, getBytes: () => bytes, getContentType: () => mime, getName: () => name, setName(n) { name = n; return this; },
+    getDataAsString: () => new TextDecoder().decode(Uint8Array.from(bytes || [], (b) => b & 255)) });
+  /** نص الملف للبحث: بايتاته كنص (الـ PDF التجريبي نصي)، والنسخة المحوّلة (OCR) نص أصلها */
+  const textOf = (it) => new TextDecoder().decode(Uint8Array.from(it.bytes || [], (b) => b & 255));
   const fileApi = (id) => {
     const it = D[id];
     return {
@@ -260,6 +263,7 @@ export function createGas({ storage, clock, log } = {}) {
       setTrashed(v) { it.trashed = !!v; touch(); }, getBlob: () => blobOf(it.bytes, it.mime, it.name),
       // تصدير صيغة جوجل (مستند، جدول، عرض) إلى PDF: ملف PDF صغير صالح
       getAs(mime) {
+        if (mime === 'text/plain' && /^application\/vnd\.google-apps\.document/.test(it.mime)) return blobOf(Array.from(new TextEncoder().encode(textOf(it))), 'text/plain', it.name + '.txt');
         if (mime !== 'application/pdf' || !/^application\/vnd\.google-apps\./.test(it.mime)) throw new Error('Conversion from ' + it.mime + ' to ' + mime + ' failed.');
         return blobOf(Array.from(new TextEncoder().encode(MINI_PDF)), 'application/pdf', it.name + '.pdf');
       },
@@ -319,6 +323,14 @@ export function createGas({ storage, clock, log } = {}) {
       return fileApi(need(id, 'file'));
     },
     // المساحة: مجموع أحجام الملفات غير المحذوفة، والحد 15 جيجا (أو state.driveLimit في الاختبارات)
+    // البحث في النص: يدعم «fullText contains "..."» فقط
+    searchFiles(q) {
+      const m = /fullText contains "((?:[^"\\]|\\.)*)"/.exec(String(q || ''));
+      const needle = m ? m[1].replace(/\\(.)/g, '$1') : '';
+      const ids = Object.keys(D).filter((k) => D[k].kind === 'file' && !D[k].trashed && needle && textOf(D[k]).includes(needle));
+      let i = 0;
+      return { hasNext: () => i < ids.length, next: () => fileApi(ids[i++]) };
+    },
     getStorageUsed: () => Object.keys(D).reduce((n, k) => n + (D[k].kind === 'file' && !D[k].trashed && D[k].bytes ? D[k].bytes.length : 0), 0) + (state.driveExtraUsed || 0),
     getStorageLimit: () => state.driveLimit || 15 * 1024 ** 3
   };

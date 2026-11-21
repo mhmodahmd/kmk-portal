@@ -23,6 +23,7 @@ export function CorLayout() {
     { to: '/correspondence/out', label: tr("الصادر") },
     { to: '/correspondence/docs', label: tr("كل المستندات") },
     { to: '/correspondence/archive', label: tr("الأرشيف") },
+    { to: '/correspondence/historical', label: tr("الأرشيف التاريخي") },
     { to: '/correspondence/report', label: tr("التقرير") },
     ...(L?.isManager ? [{ to: '/correspondence/settings', label: tr("الإعدادات") }] : [])
   ];

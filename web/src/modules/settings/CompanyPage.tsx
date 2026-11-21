@@ -7,6 +7,7 @@ import { formatDateTime } from '../../lib/format';
 import { useAction, useApi } from '../../lib/useApi';
 import { Card, ErrorBox, Loader, PageHeader } from '../../ui/Display';
 import { cx } from '../../ui/cx';
+import { SignaturesAdminCard } from '../correspondence/Sign';
 import { Facts } from '../../ui/Controls';
 import { Button } from '../../ui/Button';
 import { Form, TextInput } from '../../ui/Field';
@@ -40,6 +41,7 @@ export default function CompanyPage() {
           </Form>
         )}
       </Card>
+      <SignaturesAdminCard />
       <StorageCard />
       <SystemCard />
     </div>

@@ -71,8 +71,10 @@ var Notify = {
   enqueueMail_: function (rows, users) {
     if (!Notify.mailAvailable_()) return;
     var states = indexBy_(Db.view('core', 'NotifyState'));
-    var q = [];
+    var q = [], digest = Workflow.settings_().digest;
     rows.forEach(function (n) {
+      // السلاسل في الملخص اليومي عند تفعيله (حصة البريد)
+      if (digest && n.module === 'workflow') return;
       var u = users[n.userId], st = states[n.userId];
       if (!u || !u.email || (st && st.email === false)) return;
       q.push({ to: u.email, title: n.title, detail: n.detail || '', link: n.link || '', actorName: n.actorName || '', createdAt: nowIso(), attempts: 0 });

@@ -63,6 +63,8 @@ export interface InboxItem {
   kind: string;
   refId: string;
   needsNoteOnReject?: boolean;
+  /** يُقرَّر من صفحة السجل فقط (مثل مرحلة توقيع) */
+  linkOnly?: boolean;
   module: string;
   moduleLabel: string;
   title: string;

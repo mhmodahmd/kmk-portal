@@ -181,6 +181,33 @@ var Files = {
     }
   },
 
+  /**
+   * استخراج النص (OCR) من PDF أو صورة: نسخة Google Doc بلغة عربية تبقى في المجلد لفهرسة البحث،
+   * ويُعاد نصها. يعيد { docId, text } أو null إن تعذّر (تبقى الأرشفة بلا نص).
+   */
+  ocr_: function (fileId, folder, name) {
+    if (typeof Drive === 'undefined' || !Drive.Files) return null;
+    try {
+      var src = DriveApp.getFileById(fileId);
+      var doc = Drive.Files.create({ name: String(name).replace(/\.[^.]+$/, '') + ' (نص)', mimeType: 'application/vnd.google-apps.document', parents: [folder.getId()] }, src.getBlob(), { ocrLanguage: 'ar' }); // i18n:line
+      var text = DriveApp.getFileById(doc.id).getAs('text/plain').getDataAsString();
+      return { docId: doc.id, text: String(text || '').replace(/\r/g, '').trim() };
+    } catch (e) {
+      console.error('ocr: ' + e);
+      return null;
+    }
+  },
+
+  /** بحث Drive في نص الملفات (fullText). يعيد معرّفات الملفات (حتى max) */
+  searchText_: function (q, max) {
+    if (!Files.available_()) return [];
+    var safe = String(q || '').replace(/["\\]/g, ' ').trim();
+    if (safe.length < 2) return [];
+    var it = DriveApp.searchFiles('fullText contains "' + safe + '" and trashed = false'), out = [];
+    while (it.hasNext() && out.length < (max || 200)) out.push(it.next().getId());
+    return out;
+  },
+
   /** مساحة Drive لحساب الخادم بالبايت، أو null إن لم يكن Drive مفعّلاً (system.storage) */
   storage_: function () {
     if (!Files.available_()) return null;

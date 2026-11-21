@@ -7,7 +7,7 @@ import { Checkbox, Select, TextInput } from '../../ui/Field';
 import { Dialog } from '../../ui/Overlay';
 import { cx } from '../../ui/cx';
 import { useCorLookups } from './shared';
-import { TemplatesCard } from './Chain';
+import { ChainSettingsCard, RulesCard, TemplatesCard } from './Chain';
 import type { Category, DocType, FieldKind, WfTemplate } from './types';
 
 const KEYS = ['cor.categories', 'cor.lookups'];
@@ -18,6 +18,8 @@ export default function CorSettingsPage() {
   return (
     <div className="flex max-w-3xl flex-col gap-4">
       <TemplatesCard />
+      <RulesCard />
+      <ChainSettingsCard />
       <TypesCard />
       <CategoriesCard />
     </div>

@@ -19,6 +19,10 @@
  * السلسلة الإجرائية (المرحلة 2): المسودة أو الوارد المستلم يُرسل للسلسلة (سلسلة النوع الافتراضية أو المختارة) فيصبح «قيد الإجراء»،
  * ونتيجتها: معتمد (ويُقفل) · مرفوض · معاد للتعديل (يعدّله ويعيد إرساله فيعود للمرحلة نفسها). المشارك في السلسلة يرى المستند.
  * المقفل يفتحه مدير المستندات للتعديل بسبب، فيعود مسودة ويُرسل في سلسلة جديدة.
+ *
+ * الأرشيف التاريخي (المرحلة 6): المراسلات الورقية القديمة تُرفع PDF واحداً واحداً (مع بيانات من Excel اختيارياً)،
+ * ويُستخرج نصها (OCR) اقتراحاً، وتُدقَّق ثم تُعتمد. رقمها الأرشيفي ARC-<السنة>-<تسلسل> ويُحفظ رقمها الأصلي.
+ * لا سلسلة لها، ولا تظهر في القوائم العادية ولا الإحصاءات. البحث في نص الملفات عبر Drive.
  */
 var COR_SCHEMA = {
   Letters: [
@@ -28,11 +32,11 @@ var COR_SCHEMA = {
     ['linkedType', 'text'], ['linkedId', 'text'], ['projectId', 'text'], ['tags', 'json'], ['archivedAt', 'ts'],
     ['createdBy', 'text'], ['createdAt', 'ts'], ['updatedBy', 'text'], ['updatedAt', 'ts'],
     ['typeId', 'text'], ['fields', 'json'], ['confidentiality', 'text'], ['readers', 'json'], ['version', 'num'], ['mainFileId', 'text'],
-    ['wfInstanceId', 'text'], ['lockedAt', 'ts']
+    ['wfInstanceId', 'text'], ['lockedAt', 'ts'], ['historical', 'bool'], ['originalNo', 'text'], ['reviewStatus', 'text'], ['ocrText', 'text']
   ],
   LetterFiles: [
     ['id', 'text'], ['letterId', 'text'], ['fileName', 'text'], ['driveFileId', 'text'], ['mimeType', 'text'], ['fileSize', 'num'],
-    ['uploadedBy', 'text'], ['uploadedAt', 'ts'], ['role', 'text'], ['version', 'num'], ['previewFileId', 'text'], ['sha256', 'text']
+    ['uploadedBy', 'text'], ['uploadedAt', 'ts'], ['role', 'text'], ['version', 'num'], ['previewFileId', 'text'], ['sha256', 'text'], ['ocrDocId', 'text']
   ],
   LetterLog: [['id', 'text'], ['letterId', 'text'], ['kind', 'text'], ['body', 'text'], ['byId', 'text'], ['at', 'ts']],
   Categories: [['id', 'text'], ['name', 'text'], ['active', 'bool'], ['sortOrder', 'num']],
@@ -61,7 +65,7 @@ var COR = {
   CHAIN: ['in_review', 'returned', 'approved', 'rejected'],
   CHANNEL: { mail: 'بريد عادي', hand: 'باليد', whatsapp: 'واتساب', email: 'بريد إلكتروني', fax: 'فاكس' },
   LINKS: { client: 'عميل', project: 'مشروع', custody: 'عهدة', employee: 'موظف', task: 'مهمة' },
-  LOG: { create: 'تسجيل', update: 'تعديل', send: 'إرسال', receive: 'استلام', reply: 'رد', archive: 'أرشفة', restore: 'إعادة من الأرشيف', forward: 'إحالة', file: 'مرفق', version: 'إصدار جديد', submit: 'إرسال للسلسلة', chain: 'السلسلة', reopen: 'فتح للتعديل' },
+  LOG: { create: 'تسجيل', update: 'تعديل', send: 'إرسال', receive: 'استلام', reply: 'رد', archive: 'أرشفة', restore: 'إعادة من الأرشيف', forward: 'إحالة', file: 'مرفق', version: 'إصدار جديد', submit: 'إرسال للسلسلة', chain: 'السلسلة', reopen: 'فتح للتعديل', sign: 'توقيع' },
   CONF: { public: 'عام', internal: 'داخلي', secret: 'سري', top_secret: 'سري جداً' },
   FIELD_KINDS: { text: 'نص', number: 'رقم', money: 'مبلغ', date: 'تاريخ', select: 'قائمة', user: 'شخص', client: 'عميل', project: 'مشروع' },
   PATTERN: '{code}-{year}-{seq:4}',
@@ -116,8 +120,8 @@ var Correspondence = {
 
   /** صاحب المرحلة الحالية في سلسلة المستند */
   isHolder_: function (ctx, l) {
-    var inst = Workflow.latestOf_('correspondence', l.id), st = inst && inst.status === 'running' ? Workflow.currentStep_(inst) : null;
-    return !!(st && (st.assignees || []).indexOf(ctx.user.id) >= 0);
+    var inst = Workflow.latestOf_('correspondence', l.id);
+    return !!(inst && inst.status === 'running' && Workflow.myStep_(ctx, inst, Correspondence.wfEntity_(l.id)));
   },
 
   visible_: function (ctx, id) {
@@ -378,7 +382,7 @@ var Correspondence = {
       directions: dict(COR.DIRECTION), statuses: COR.ORDER.map(function (k) { return { id: k, label: COR.STATUS[k] }; }), channels: dict(COR.CHANNEL),
       categories: Correspondence.activeCategories_(), years: Object.keys(years).sort().reverse(),
       links: Correspondence.linkOptions_(ctx),
-      confidentialities: dict(COR.CONF), fieldKinds: dict(COR.FIELD_KINDS),
+      confidentialities: dict(COR.CONF), fieldKinds: dict(COR.FIELD_KINDS), canArchive: Correspondence.canArchive_(ctx), archiveClerks: Correspondence.archiveSettings_().archiveClerks,
       types: Correspondence.types().filter(function (t) { return t.active; }).map(function (t) {
         return Object.assign({}, t, { fields: t.fields.filter(function (f) { return f.active; }) });
       })
@@ -396,6 +400,7 @@ var Correspondence = {
     var clientProjects = {};
     if (p.clientId) Object.keys(m.projects).forEach(function (id) { if (m.projects[id].clientId === p.clientId) clientProjects[id] = true; });
     var rows = Correspondence.rows_('Letters').filter(function (l) {
+      if (l.historical && !p.historical) return false;
       if (!Correspondence.canSee_(ctx, l)) return false;
       if (p.archived && l.status !== 'archived') return false;
       if (!p.archived && !p.withArchived && !p.status && l.status === 'archived') return false;
@@ -459,7 +464,7 @@ var Correspondence = {
         .map(function (x) { return { id: x.id, kind: x.kind, kindLabel: COR.LOG[x.kind] || x.kind, body: x.body || '', byName: Correspondence.userName_(m, x.byId), at: x.at }; }),
       can: { edit: Correspondence.canEdit_(ctx, l), remove: Correspondence.isMgr_(ctx), files: full, modify: Correspondence.canEdit_(ctx, l) && !Correspondence.locked_(l),
         attach: full && !l.lockedAt && (Correspondence.canEdit_(ctx, l) || Correspondence.isHolder_(ctx, l)), reopen: Correspondence.isMgr_(ctx) && (!!l.lockedAt || l.status === 'rejected') },
-      workflow: Correspondence.chainView_(ctx, l), drive: Files.available_(),
+      workflow: Correspondence.chainView_(ctx, l), drive: Files.available_(), signatures: Signature.listFor_('correspondence', l.id),
       submit: Correspondence.submitOptions_(ctx, l, m)
     };
   },
@@ -472,9 +477,9 @@ var Correspondence = {
   /** يُرسل للسلسلة: المسودة، والوارد المستلم، والمعاد للتعديل (إعادة إرسال) — لمن يعدّل المستند */
   submitOptions_: function (ctx, l, m) {
     if (!Correspondence.canEdit_(ctx, l) || ['draft', 'received', 'returned'].indexOf(l.status) < 0) return null;
-    var type = Correspondence.typeOf_(l, m);
+    var type = Correspondence.typeOf_(l, m), pick = Correspondence.pickTemplate_(l, type);
     return {
-      resubmit: l.status === 'returned', defaultTemplateId: (type && type.templateId) || '',
+      resubmit: l.status === 'returned', defaultTemplateId: pick.templateId, defaultSource: pick.source, ruleName: pick.ruleName,
       templates: l.status === 'returned' ? [] : Workflow.templatesOf_('correspondence').map(function (t) { return { id: t.id, name: t.name, steps: t.steps.map(function (s) { return s.name; }) }; })
     };
   },
@@ -496,7 +501,7 @@ var Correspondence = {
         Audit.log(ctx.user, 'correspondence', 'letter.submit', 'Letter', l.id, { number: l.number, resubmit: true });
       } else {
         if (['draft', 'received'].indexOf(l.status) < 0) throw appError('يُرسل للسلسلة المستند المسودة أو الوارد المستلم.');
-        var type = Correspondence.typeOf_(l), templateId = String(p.templateId || (type && type.templateId) || '');
+        var type = Correspondence.typeOf_(l), templateId = String(p.templateId || Correspondence.pickTemplate_(l, type).templateId || '');
         if (!templateId) throw appError('اختر السلسلة الإجرائية.');
         Db.update('correspondence', 'Letters', l.id, { status: 'in_review', updatedBy: ctx.user.id, updatedAt: nowIso() });
         var inst = Workflow.start_(ctx, 'correspondence', l.id, templateId);
@@ -529,10 +534,220 @@ var Correspondence = {
     var l = Db.get('correspondence', 'Letters', id);
     if (!l) return null;
     var type = Correspondence.typeOf_(l);
-    return { id: l.id, number: l.number, title: l.subject, createdBy: l.createdBy, version: l.version || 0, moduleLabel: type ? type.name : 'مستند', facts: [{ k: 'الجهة', v: l.party || '—' }] };
+    return {
+      id: l.id, number: l.number, title: l.subject, createdBy: l.createdBy, version: l.version || 0, moduleLabel: type ? type.name : 'مستند',
+      facts: [{ k: 'الجهة', v: l.party || '—' }], values: Correspondence.wfValues_(type, l.confidentiality, l.fields, l.createdBy)
+    };
+  },
+
+  /** قيم الشروط وقواعد التوجيه: $type النوع، $conf السرية، $dept قسم المنشئ، و«typeId:key» للحقول الخاصة */
+  wfValues_: function (type, confidentiality, fields, createdBy) {
+    var emp = Staff.byUser_(createdBy), out = { $type: type ? type.id : '', $conf: confidentiality || 'internal', $dept: emp ? emp.departmentId || '' : '' };
+    if (type) Object.keys(fields || {}).forEach(function (k) { out[type.id + ':' + k] = fields[k]; });
+    return out;
+  },
+
+  /** الحقول المتاحة في الشروط والقواعد */
+  conditionFields_: function () {
+    var types = Correspondence.typesSorted_(), out = [
+      { key: '$type', label: 'نوع المستند', kind: 'select', options: types.map(function (t) { return { id: t.id, label: t.name }; }) },
+      { key: '$conf', label: 'درجة السرية', kind: 'select', options: Object.keys(COR.CONF).map(function (k) { return { id: k, label: COR.CONF[k] }; }) },
+      { key: '$dept', label: 'قسم المنشئ', kind: 'select', options: Staff.depts_().filter(function (d) { return d.active !== false; }).map(function (d) { return { id: d.id, label: d.name }; }) }
+    ];
+    types.filter(function (t) { return t.active; }).forEach(function (t) {
+      Correspondence.fieldsOf_(t.id).forEach(function (f) {
+        if (['money', 'number', 'select', 'text'].indexOf(f.kind) < 0) return;
+        out.push({ key: t.id + ':' + f.key, label: t.name + ': ' + f.label, kind: f.kind, typeId: t.id, options: (f.options || []).map(function (o) { return { id: o, label: o }; }) });
+      });
+    });
+    return out;
+  },
+
+  /** مستند افتراضي للمحاكاة: { typeId, confidentiality, createdBy, fields } (القيم كما تُدخل في النموذج) */
+  simEntity_: function (ctx, p) {
+    var type = p.typeId ? Db.getOrThrow('correspondence', 'DocTypes', String(p.typeId), 'نوع المستند') : null, fields = {};
+    if (type) Correspondence.fieldsOf_(type.id).forEach(function (f) {
+      var v = (p.fields || {})[f.key];
+      if (v == null || String(v).trim() === '') return;
+      fields[f.key] = Correspondence.fieldValue_(Object.assign({}, f, { required: false }), v);
+    });
+    var createdBy = p.createdBy && Db.get('core', 'Users', String(p.createdBy)) ? String(p.createdBy) : ctx.user.id;
+    var conf = p.confidentiality && COR.CONF[p.confidentiality] ? p.confidentiality : (type && type.confidentiality) || 'internal';
+    return { createdBy: createdBy, values: Correspondence.wfValues_(type, conf, fields, createdBy), defaultTemplateId: type ? type.templateId || '' : '' };
+  },
+
+  /** السلسلة المقترحة: قاعدة التوجيه، ثم سلسلة النوع الافتراضية */
+  pickTemplate_: function (l, type) {
+    var r = Workflow.route_('correspondence', Correspondence.wfValues_(type, l.confidentiality, l.fields, l.createdBy));
+    if (r) return { templateId: r.templateId, source: 'rule', ruleName: r.ruleName };
+    return { templateId: (type && type.templateId) || '', source: type && type.templateId ? 'type' : '', ruleName: '' };
   },
 
   wfLink_: function (id) { return '/correspondence/' + id; },
+
+  // ───────── الأرشيف التاريخي (المرحلة 6) ─────────
+  archiveSettings_: function () { return Object.assign({ archiveClerks: false }, Settings.get_('correspondence', {}) || {}); },
+  /** يرفع ويدقق الأرشيف: مدير المستندات، وموظف المستندات إن سمح المدير */
+  canArchive_: function (ctx) { return Correspondence.isMgr_(ctx) || (Permissions.has(ctx, 'correspondence') && !!Correspondence.archiveSettings_().archiveClerks); },
+  requireArchive_: function (ctx) { if (!Correspondence.canArchive_(ctx)) throw appError('الأرشيف التاريخي لمدير المستندات ومن يأذن له.', 'FORBIDDEN'); },
+
+  /** cor.archive.settings.save (المدير): { archiveClerks } */
+  archiveSettingsSave: function (ctx, p) {
+    Settings.set_('correspondence', Object.assign(Correspondence.archiveSettings_(), { archiveClerks: bool_(p && p.archiveClerks) }), ctx.user);
+    Audit.log(ctx.user, 'correspondence', 'archive.settings', 'Settings', 'correspondence', { archiveClerks: bool_(p && p.archiveClerks) });
+    return Correspondence.archiveSettings_();
+  },
+
+  /**
+   * cor.archive.import: { fileName, mimeType, data, meta: { typeId, originalNo, date, party, subject, category, summary } }
+   * ملف واحد في كل طلب. يُنشأ مستند تاريخي مؤرشف بملفه الرئيسي، ويُستخرج نصه، وينتظر التدقيق.
+   */
+  archiveImport: function (ctx, p) {
+    p = p || {};
+    Correspondence.requireArchive_(ctx);
+    Files.require_();
+    var meta = p.meta || {};
+    var up = Files.decode_({ fileName: p.fileName, mimeType: p.mimeType, data: p.data }, Files.DOCS);
+    if (up.mime !== 'application/pdf' && !/^image\//.test(up.mime)) throw appError('الأرشيف التاريخي ملفات PDF أو صور.');
+    var l = withLock(function () {
+      var type = meta.typeId ? Db.getOrThrow('correspondence', 'DocTypes', String(meta.typeId), 'نوع المستند') : Correspondence.builtinOf_('in');
+      var date = meta.date ? requireDate_(meta.date, 'تاريخ المستند') : localDate_();
+      var base = Files.safeName_(String(p.fileName || 'مستند').replace(/\.[^.]+$/, '')); // i18n:line
+      var rec = {
+        typeId: type.id, direction: type.direction, subject: optionalText(meta.subject, 200) || base, summary: optionalText(meta.summary, 4000),
+        party: optionalText(meta.party, 160), date: date, refNo: '', channel: '', category: '', clientId: '', projectId: '', linkedType: '', linkedId: '', dueDate: '',
+        confidentiality: type.confidentiality || 'internal', readers: [], fields: {}, tags: [], assigneeId: ctx.user.id,
+        status: 'archived', archivedAt: nowIso(), historical: true, originalNo: optionalText(meta.originalNo, 60), reviewStatus: 'pending', ocrText: '',
+        number: Db.nextSerial('ARC-' + date.slice(0, 4), 4), version: 0, mainFileId: '', replyToId: '', receivedAt: '', sentAt: '',
+        createdBy: ctx.user.id, createdAt: nowIso(), updatedBy: ctx.user.id, updatedAt: nowIso()
+      };
+      if (meta.category && Correspondence.activeCategories_().indexOf(String(meta.category)) >= 0) rec.category = String(meta.category);
+      var saved = Db.insert('correspondence', 'Letters', rec);
+      Correspondence.log_(ctx, saved.id, 'create', 'أرشفه من ملف «' + Files.safeName_(p.fileName || '') + '»' + (rec.originalNo ? ' · الرقم الأصلي ' + rec.originalNo : ''));
+      return saved;
+    });
+    var f = Correspondence.fileUpload(ctx, { letterId: l.id, role: 'main', fileName: p.fileName, mimeType: p.mimeType, data: p.data });
+    var row = Db.get('correspondence', 'LetterFiles', f.id);
+    var ocr = Files.ocr_(row.driveFileId, Files.folder_('', ['المراسلات', l.date.slice(0, 4)]), row.fileName); // i18n:line
+    var ch = { updatedAt: nowIso() };
+    if (ocr) {
+      Db.update('correspondence', 'LetterFiles', row.id, { ocrDocId: ocr.docId });
+      ch.ocrText = ocr.text.slice(0, 2000);
+      var first = ocr.text.split('\n').map(function (x) { return x.trim(); }).filter(function (x) { return x.length >= 4 && x.charAt(0) !== '%'; })[0];
+      if (!meta.subject && first) ch.subject = first.slice(0, 200);
+    }
+    Db.update('correspondence', 'Letters', l.id, ch);
+    Audit.log(ctx.user, 'correspondence', 'archive.import', 'Letter', l.id, { number: l.number, file: row.fileName, ocr: !!ocr });
+    return Correspondence.view_(Db.get('correspondence', 'Letters', l.id), Correspondence.maps_(), ctx);
+  },
+
+  /** cor.archive.list: { review: 'pending' | 'done' | '', q, page, pageSize } — ترقيم من الخادم */
+  archiveList: function (ctx, p) {
+    p = p || {};
+    if (!Correspondence.canArchive_(ctx) && !Permissions.has(ctx, 'correspondence')) throw appError('ليست لديك صلاحية لهذا الإجراء.', 'FORBIDDEN');
+    var q = String(p.q || '').trim().toLowerCase(), m = Correspondence.maps_();
+    var rows = Correspondence.rows_('Letters').filter(function (l) {
+      if (!l.historical || !Correspondence.canSee_(ctx, l)) return false;
+      if (p.review && (l.reviewStatus || 'done') !== p.review) return false;
+      if (q && [l.number, l.originalNo, l.subject, l.party, l.ocrText].join(' ').toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    }).sort(function (a, b) { return (b.date || '').localeCompare(a.date || '') || (b.number || '').localeCompare(a.number || ''); });
+    var size = Math.min(Math.max(Number(p.pageSize) || 25, 5), 100), page = Math.max(Number(p.page) || 1, 1);
+    return {
+      total: rows.length, page: page, pageSize: size, canArchive: Correspondence.canArchive_(ctx),
+      pending: Correspondence.rows_('Letters').filter(function (l) { return l.historical && l.reviewStatus === 'pending'; }).length,
+      rows: rows.slice((page - 1) * size, page * size).map(function (l) { return Object.assign(Correspondence.view_(l, m, ctx), { originalNo: l.originalNo || '', reviewStatus: l.reviewStatus || 'done', ocrText: l.ocrText || '' }); })
+    };
+  },
+
+  /** cor.archive.review: { id, typeId, subject, date, party, originalNo, category, summary } — حفظ التدقيق واعتماد الأرشفة */
+  archiveReview: function (ctx, p) {
+    p = p || {};
+    Correspondence.requireArchive_(ctx);
+    return withLock(function () {
+      var l = Correspondence.visible_(ctx, p.id);
+      if (!l.historical) throw appError('المستند ليس من الأرشيف التاريخي.');
+      var type = p.typeId ? Db.getOrThrow('correspondence', 'DocTypes', String(p.typeId), 'نوع المستند') : Correspondence.typeOf_(l);
+      var ch = {
+        typeId: type.id, direction: type.direction, subject: requireText(p.subject, 'الموضوع', 200), date: requireDate_(p.date, 'تاريخ المستند'),
+        party: optionalText(p.party, 160), originalNo: optionalText(p.originalNo, 60), summary: optionalText(p.summary, 4000),
+        category: p.category && Correspondence.activeCategories_().indexOf(String(p.category)) >= 0 ? String(p.category) : '',
+        reviewStatus: 'done', updatedBy: ctx.user.id, updatedAt: nowIso()
+      };
+      Db.update('correspondence', 'Letters', l.id, ch);
+      Correspondence.log_(ctx, l.id, 'update', l.reviewStatus === 'pending' ? 'دقّق بيانات الأرشفة واعتمدها' : 'عدّل بيانات الأرشفة');
+      Audit.log(ctx.user, 'correspondence', 'archive.review', 'Letter', l.id, { number: l.number });
+      return Correspondence.view_(Db.get('correspondence', 'Letters', l.id), Correspondence.maps_(), ctx);
+    });
+  },
+
+  /** cor.search.text: { q } — المستندات التي يحتوي نص ملفاتها (أو نسختها المستخرجة) على العبارة، ضمن ما يطّلع عليه */
+  searchText: function (ctx, p) {
+    var q = String((p && p.q) || '').trim();
+    if (q.length < 2) throw appError('اكتب كلمتين أو حرفين على الأقل للبحث.');
+    var ids = {};
+    Files.searchText_(q, 300).forEach(function (id) { ids[id] = true; });
+    var hits = {};
+    Correspondence.rows_('LetterFiles').forEach(function (f) { if (ids[f.driveFileId] || (f.ocrDocId && ids[f.ocrDocId]) || (f.previewFileId && ids[f.previewFileId])) hits[f.letterId] = true; });
+    var m = Correspondence.maps_(), lower = q.toLowerCase();
+    Correspondence.rows_('Letters').forEach(function (l) { if (l.ocrText && l.ocrText.toLowerCase().indexOf(lower) >= 0) hits[l.id] = true; });
+    return Object.keys(hits).map(function (id) { return Db.get('correspondence', 'Letters', id); })
+      .filter(function (l) { return l && Correspondence.canFiles_(ctx, l); })
+      .sort(function (a, b) { return (b.date || '').localeCompare(a.date || ''); }).slice(0, 100)
+      .map(function (l) { return Object.assign(Correspondence.view_(l, m, ctx), { historical: !!l.historical, originalNo: l.originalNo || '' }); });
+  },
+
+  // ───────── التوقيع ─────────
+  /** ملف PDF الذي يُوقَّع: الملف الرئيسي إن كان PDF، وإلا معاينته PDF (تُنشأ الآن إن لم توجد) */
+  signSource_: function (l) {
+    var f = l.mainFileId ? Db.get('correspondence', 'LetterFiles', l.mainFileId) : null;
+    if (!f) throw appError('ارفع الملف الرئيسي للمستند (PDF أو Word) قبل التوقيع.');
+    var id = f.mimeType === 'application/pdf' ? f.driveFileId : f.previewFileId;
+    if (!id) {
+      var ext = Files.extOf_(f.fileName), spec = FILES_OFFICE[ext];
+      if (spec && spec.convert) {
+        var folder = Files.folder_('', ['المراسلات', (l.date || l.createdAt).slice(0, 4)]); // i18n:line
+        id = Files.preview_(f.driveFileId, spec.convert, folder, f.fileName);
+        if (id) Db.update('correspondence', 'LetterFiles', f.id, { previewFileId: id });
+      }
+    }
+    if (!id) throw appError('تعذّر تحويل الملف الرئيسي إلى PDF للتوقيع. ارفعه بصيغة PDF.');
+    var bytes = DriveApp.getFileById(id).getBlob().getBytes();
+    return { bytes: bytes, sha: bytesToHex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, bytes)), fileName: f.fileName.replace(/\.[^.]+$/, '') + '.pdf' };
+  },
+
+  /** cor.sign.source: صاحب مرحلة «توقيع» يجلب الملف وتوقيعه ورمز التحقق ليختمه في المتصفح */
+  signSourceRoute: function (ctx, p) {
+    var l = Correspondence.visible_(ctx, p && p.id), inst = Workflow.latestOf_('correspondence', l.id);
+    var st = inst && inst.status === 'running' ? Workflow.currentSteps_(inst).filter(function (s) { return s.kind === 'sign' && !s.asking && Workflow.actingFor_(ctx, s, Correspondence.wfEntity_(l.id)) !== null; })[0] : null;
+    if (!st) throw appError('ليست لديك مرحلة توقيع على هذا المستند.', 'FORBIDDEN');
+    var sig = Signature.approvedOf_(ctx.user.id);
+    if (!sig) throw appError('ليس لديك توقيع معتمد. أضفه من «ملفي» ويعتمده مدير النظام.');
+    var src = Correspondence.signSource_(l), emp = Staff.byUser_(ctx.user.id);
+    return {
+      data: Utilities.base64Encode(src.bytes), fileName: src.fileName, sha256: src.sha, signature: sig, signer: ctx.user.fullName,
+      jobTitle: (emp && emp.jobTitle) || ctx.user.jobTitle || '', step: st.name, number: l.number, date: localDate_(), code: Signature.issueCode_(ctx.user.id, inst.id)
+    };
+  },
+
+  /** الملف الموقّع إصدار جديد من الملف الرئيسي (مضيف السلسلة sign_) */
+  wfSign_: function (ctx, inst, step, p) {
+    var l = Db.getOrThrow('correspondence', 'Letters', inst.entityId, 'المستند');
+    var up = Files.decode_({ fileName: 'signed.pdf', mimeType: 'application/pdf', data: p.data }, Files.DOCS);
+    if (up.mime !== 'application/pdf') throw appError('الملف الموقّع يجب أن يكون PDF.');
+    var src = Correspondence.signSource_(l), ver = (l.version || 0) + 1;
+    var name = l.number + '_v' + ver + '_' + Files.safeName_('موقّع ' + ctx.user.fullName + '.pdf'); // i18n:line
+    var f = Files.save_(Files.folder_('', ['المراسلات', (l.date || l.createdAt).slice(0, 4)]), up, name); // i18n:line
+    var sha = bytesToHex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, up.bytes));
+    var row = Db.insert('correspondence', 'LetterFiles', { letterId: l.id, fileName: name, driveFileId: f.id, mimeType: up.mime, fileSize: f.size, uploadedBy: ctx.user.id, uploadedAt: nowIso(), role: 'main', version: ver, previewFileId: '', sha256: sha });
+    Db.insert('correspondence', 'DocVersions', {
+      letterId: l.id, version: ver, fileId: row.id, note: 'توقيع ' + ctx.user.fullName + ' · ' + step.name + ' · ' + p.code, byId: ctx.user.id, at: nowIso(),
+      snapshot: { subject: l.subject, summary: l.summary || '', date: l.date, party: l.party || '', fields: l.fields || {}, confidentiality: l.confidentiality || 'internal' }
+    });
+    Db.update('correspondence', 'Letters', l.id, { version: ver, mainFileId: row.id, updatedBy: ctx.user.id, updatedAt: nowIso() });
+    Correspondence.log_(ctx, l.id, 'sign', 'وقّعه في مرحلة «' + step.name + '» · رمز التحقق ' + p.code);
+    return { fileId: row.id, version: ver, sourceSha256: src.sha, signedSha256: sha };
+  },
 
   /** نتيجة السلسلة: تُحدَّث حالة المستند في ملف المراسلات */
   onWorkflow_: function (ctx, event, inst) {
@@ -942,7 +1157,7 @@ var Correspondence = {
     p = p || {};
     var year = String(p.year || localDate_().slice(0, 4)), today = localDate_(), m = Correspondence.maps_();
     if (!/^\d{4}$/.test(year)) throw appError('السنة غير صحيحة.');
-    var mine = Correspondence.rows_('Letters').filter(function (l) { return Correspondence.canSee_(ctx, l); });
+    var mine = Correspondence.rows_('Letters').filter(function (l) { return !l.historical && Correspondence.canSee_(ctx, l); });
     var inYear = mine.filter(function (l) { return (l.date || '').slice(0, 4) === year; });
     var byMonth = [];
     for (var i = 1; i <= 12; i++) {
@@ -975,7 +1190,7 @@ var Correspondence = {
   /** لوحة المراسلات: المؤشرات، آخر 12 شهراً، التوزيعات، المتأخر والقريب، أحمال المسؤولين، أكثر الجهات (ضمن ما يراه المستخدم) */
   dashboard: function (ctx) {
     var today = localDate_(), month = today.slice(0, 7), m = Correspondence.maps_();
-    var mine = Correspondence.rows_('Letters').filter(function (l) { return Correspondence.canSee_(ctx, l); });
+    var mine = Correspondence.rows_('Letters').filter(function (l) { return !l.historical && Correspondence.canSee_(ctx, l); });
     var open = mine.filter(function (l) { return COR.OPEN.indexOf(l.status) >= 0; });
     var isOpen = function (l) { return COR.OPEN.indexOf(l.status) >= 0; };
     var prevMonth = (function () { var y = Number(month.slice(0, 4)), mo = Number(month.slice(5, 7)) - 1; if (mo < 1) { mo = 12; y--; } return y + '-' + String(mo).padStart(2, '0'); })();
@@ -1094,6 +1309,12 @@ var Correspondence = {
       'cor.get': { fn: Correspondence.get },
       'cor.submit': { perm: any, fn: Correspondence.submit },
       'cor.reopen': { perm: mgr, fn: Correspondence.reopen },
+      'cor.sign.source': { fn: Correspondence.signSourceRoute },
+      'cor.archive.import': { perm: any, fn: Correspondence.archiveImport },
+      'cor.archive.list': { perm: any, fn: Correspondence.archiveList },
+      'cor.archive.review': { perm: any, fn: Correspondence.archiveReview },
+      'cor.archive.settings.save': { perm: mgr, fn: Correspondence.archiveSettingsSave },
+      'cor.search.text': { perm: any, fn: Correspondence.searchText },
       'cor.save': { perm: any, fn: Correspondence.save },
       'cor.status': { perm: any, fn: Correspondence.setStatus },
       'cor.forward': { perm: any, fn: Correspondence.forward },

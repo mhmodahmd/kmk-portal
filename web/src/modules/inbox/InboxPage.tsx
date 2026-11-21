@@ -101,12 +101,13 @@ function Detail({ item, onDone }: { item: InboxItem; onDone: () => void }) {
       )}
       {item.note && <div className="rounded-lg bg-bg p-3 text-[13px] leading-relaxed text-muted">{item.note}</div>}
       {item.link && <Link to={item.link} className="self-start text-[13px] font-semibold text-accent-fg no-underline">{tr("فتح التفاصيل")}</Link>}
+      {item.linkOnly && item.link ? <Link to={item.link} className="inline-flex h-11 items-center justify-center rounded-lg bg-accent px-4 font-semibold text-on-accent no-underline sm:h-10">{item.approveLabel || tr("فتح التفاصيل")}</Link> : <>
       <Textarea label={tr("ملاحظة (مطلوبة عند الرفض)")} value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} className="[&_textarea]:min-h-[64px]" />
       {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
       <div className="flex gap-2">
         <Button variant="primary" icon="check" className="flex-1" loading={busy === 'a'} disabled={!!busy} onClick={() => go(true)}>{item.approveLabel || tr("اعتماد")}</Button>
         <Button variant="danger-outline" icon="x" className="flex-1" loading={busy === 'r'} disabled={!!busy} onClick={() => go(false)}>{item.rejectLabel || tr("رفض")}</Button>
-      </div>
+      </div></>}
     </Card>
   );
 }

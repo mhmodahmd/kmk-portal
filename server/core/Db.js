@@ -56,7 +56,13 @@ var SCHEMAS = {
     // حالة كل مستخدم: id = userId. readUntil: ما قبله مقروء («تعليم الكل»)
     NotifyState: [['id', 'text'], ['readUntil', 'ts'], ['email', 'bool'], ['updatedAt', 'ts']],
     // رسائل بريد بانتظار الإرسال (يصرفها المشغّل الزمني processMailQueue)
-    MailQueue: [['id', 'text'], ['to', 'text'], ['title', 'text'], ['detail', 'text'], ['link', 'text'], ['actorName', 'text'], ['createdAt', 'ts'], ['attempts', 'num']]
+    MailQueue: [['id', 'text'], ['to', 'text'], ['title', 'text'], ['detail', 'text'], ['link', 'text'], ['actorName', 'text'], ['createdAt', 'ts'], ['attempts', 'num']],
+    // التواقيع المعتمدة للمستندات (Sign.js) وسجل كل توقيع
+    Signatures: [['id', 'text'], ['userId', 'text'], ['data', 'text'], ['status', 'text'], ['approvedBy', 'text'], ['approvedAt', 'ts'], ['updatedAt', 'ts']],
+    SignatureLog: [
+      ['id', 'text'], ['module', 'text'], ['entityId', 'text'], ['entityVersion', 'num'], ['userId', 'text'], ['onBehalfOf', 'text'], ['method', 'text'],
+      ['sourceSha256', 'text'], ['signedSha256', 'text'], ['fileId', 'text'], ['code', 'text'], ['step', 'text'], ['at', 'ts']
+    ]
   }
 };
 

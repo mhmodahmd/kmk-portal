@@ -119,7 +119,7 @@
 
 | الجدول | الأعمدة الرئيسية |
 |---|---|
-| **Letters** (أعمدة جديدة) | typeId (ref:DocTypes), fields (json: قيم الحقول الخاصة بمفاتيحها؛ المبالغ بالفلس), confidentiality (`public`/`internal`/`secret`/`top_secret`), readers (json: userIds قائمة الاطلاع للسري), version (رقم الإصدار الحالي), mainFileId (ref:LetterFiles الملف الرئيسي), wfInstanceId (ref:`KMK-Workflow`.WfInstances), lockedAt, historical (bool للأرشيف التاريخي), originalNo (الرقم الأصلي للمستند القديم), reviewStatus (`pending`/`done` لتدقيق الأرشيف) · حالات جديدة في status: `in_review`, `returned`, `approved`, `rejected`, `cancelled` |
+| **Letters** (أعمدة جديدة) | ocrText (أول 2000 حرف من النص المستخرج للأرشيف التاريخي), typeId (ref:DocTypes), fields (json: قيم الحقول الخاصة بمفاتيحها؛ المبالغ بالفلس), confidentiality (`public`/`internal`/`secret`/`top_secret`), readers (json: userIds قائمة الاطلاع للسري), version (رقم الإصدار الحالي), mainFileId (ref:LetterFiles الملف الرئيسي), wfInstanceId (ref:`KMK-Workflow`.WfInstances), lockedAt, historical (bool للأرشيف التاريخي), originalNo (الرقم الأصلي للمستند القديم), reviewStatus (`pending`/`done` لتدقيق الأرشيف) · حالات جديدة في status: `in_review`, `returned`, `approved`, `rejected`, `cancelled` |
 | **LetterFiles** (أعمدة جديدة) | role (`main`/`attachment`/`signed`/`preview`), version, previewFileId (PDF معاينة لملفات Office), ocrDocId (نسخة Google Doc للبحث بعد OCR), sha256 |
 | **DocTypes** | name, code (`MEMO`…), direction (`in`/`out`/`internal`), numberPattern (`{code}-{year}-{seq:4}`), confidentiality (الافتراضية), templateId (السلسلة الافتراضية، ref:WfTemplates), needsSignature (bool), printTemplate (json: الترويسة ومواضع التواقيع), restartOnEdit (bool: تعديل المعتمد يعيد السلسلة), active, sortOrder · البذرة: وارد، صادر، مذكرة داخلية، تعميم، قرار إداري |
 | **DocFields** | typeId, key, label, kind (`text`/`number`/`money`/`date`/`select`/`user`/`client`/`project`), options (json للقائمة), required (bool), inList (bool), sortOrder, active |
@@ -137,14 +137,16 @@
 | **WfRules** | module, typeId, departmentId, field, op, value, confidentiality, templateId, priority, active |
 | **WfInstances** | module, entityId, templateId, templateVersion, templateName (اسم القالب وقت البدء), status (`running`/`approved`/`rejected`/`returned`/`cancelled`), currentGroup, startedBy, startedAt, endedAt |
 | **WfInstanceSteps** | instanceId, order, group, name, kind, mode, count, assignees (json: userIds محسوبة عند تفعيل المرحلة), status (`pending`/`current`/`done`/`rejected`/`returned`/`skipped`/`cancelled`), dueAt, escalationLevel, startedAt, endedAt, actedBy (من قرر), asking (bool: بانتظار إيضاح المنشئ), fallback (bool: أُسندت للبديل), config (json: نسخة إعدادات المرحلة كاملة) |
+| **WfSteps** (المرحلة 3 و5) | savedAt, savedBy لسجل الإصدارات · group (المراحل المتوازية تشترك فيه) · mode (`any`/`all`/`count`), count · slaHours, workingDays, escalation (json: `{notifyManager, reassignTo}`) · condition (json: `{field, op, value}`؛ المبلغ بالفلس) |
+| **WfInstanceSteps** (المرحلة 5) | approvals (json: من اعتمد في وضع «الكل» و«عدد») |
 | **WfActions** | instanceId, stepId, action (`start`/`approve`/`reject`/`return`/`forward`/`ask`/`answer`/`delegate`/`sign`/`skip`/`reassign`/`cancel`/`escalate`/`resubmit`/`inform`), byId, onBehalfOf, entityVersion, note, toId (المحال إليه أو المسند إليه), at · **إضافة فقط**، ويُغلق سنوياً في ملف أرشيف كبقية الحركات |
-| **Delegations** | fromUserId, toUserId, from (date), to (date), module (أو الكل), active, createdAt |
+| **Delegations** | fromUserId, toUserId, from (date), to (date), module (أو الكل), reason, active, createdAt, endedAt · تفويض واحد نشط لكل مستخدم، 90 يوماً كحد أقصى |
 
 ### 6د. التواقيع في النواة (معتمد · 2026-11-21)
 | الجدول | الأعمدة الرئيسية |
 |---|---|
-| **Signatures** (ينتقل من `KMK-Custody` إلى `KMK-Core`) | userId, data (صورة PNG)، status (`pending`/`approved`), approvedBy, approvedAt, updatedAt · الختم الرسمي سجل بـ `role` بدل `userId` |
-| **SignatureLog** | module, entityId, entityVersion, userId, onBehalfOf, method (`passkey`/`password`), sourceSha256 (بصمة الملف قبل التوقيع), signedSha256, fileId, ip, at |
+| **Signatures** (في `KMK-Core` لتواقيع المستندات؛ توقيع العهد يبقى في `KMK-Custody` ويمكن نسخه) | userId, data (صورة PNG)، status (`pending`/`approved`), approvedBy, approvedAt, updatedAt · الختم الرسمي سجل بـ `role` بدل `userId` |
+| **SignatureLog** | module, entityId, entityVersion, userId, onBehalfOf, method (`passkey`/`password`), sourceSha256 (بصمة الملف قبل التوقيع), signedSha256, fileId, code (رمز التحقق المختوم), step, at |
 
 ## 7. العملاء — `KMK-CRM` 🆕
 

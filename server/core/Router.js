@@ -44,6 +44,11 @@ var Router = {
       'system.migrate.legacyAttendance': { perm: 'super', fn: Migration.legacyAttendance },
       'system.migrate.legacyCustody': { perm: 'super', fn: Migration.legacyCustody },
       'system.migrate.legacyCrm': { perm: 'super', fn: MigrationCrm.run },
+      'sign.mine': { fn: Signature.mine },
+      'sign.save': { fn: Signature.save },
+      'sign.verify': { fn: Signature.verify },
+      'sign.list': { perm: 'super', fn: Signature.list },
+      'sign.decide': { perm: 'super', fn: Signature.decide },
       'users.list': { perm: 'super', fn: Users.list },
       'users.create': { perm: 'super', fn: Users.create },
       'users.update': { perm: 'super', fn: Users.update },
@@ -127,7 +132,7 @@ function ModuleProviders_() {
     { key: 'custody', prefix: 'cus.', summary: Custody.summary_, inbox: Custody.inbox_, decide: Custody.decide_, offboard: Custody.offboardBlock_, notify: Custody.notify_, approvalActions: Custody.approvalActions_, approvers: Custody.approvers_ },
     { key: 'tasks', prefix: 'tsk.', summary: Tasks.summary_, inbox: Tasks.inbox_, decide: Tasks.decide_, notify: Tasks.notify_, approvalActions: Tasks.approvalActions_, approvers: Tasks.approvers_ },
     { key: 'crm', prefix: 'crm.', summary: Crm.summary_, notify: Crm.notify_ },
-    { key: 'correspondence', prefix: 'cor.', summary: Correspondence.summary_, notify: Correspondence.notify_, workflowHost: { entity_: Correspondence.wfEntity_, onEvent_: Correspondence.onWorkflow_, link_: Correspondence.wfLink_ } },
+    { key: 'correspondence', prefix: 'cor.', summary: Correspondence.summary_, notify: Correspondence.notify_, workflowHost: { entity_: Correspondence.wfEntity_, onEvent_: Correspondence.onWorkflow_, link_: Correspondence.wfLink_, conditionFields_: Correspondence.conditionFields_, simEntity_: Correspondence.simEntity_, sign_: Correspondence.wfSign_ } },
     // السلسلة الإجرائية: مراحلها في صندوق كل مسؤول ولو لم يكن له دور في الوحدة المضيفة
     { key: 'workflow', prefix: 'wf.', always: true, inbox: Workflow.inbox_, decide: Workflow.decide_, notify: Workflow.notify_, approvers: Workflow.approvers_ },
     // يستقبل بيانات التواصل من استيراد المنصات في الذاكرة (المنصات لا تحفظها)

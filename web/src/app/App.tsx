@@ -15,6 +15,7 @@ const CompanyPage = lazy(() => import('../modules/settings/CompanyPage'));
 const AuditPage = lazy(() => import('../modules/settings/AuditPage'));
 const CrmImportPage = lazy(() => import('../modules/settings/CrmImportPage'));
 const ProfilePage = lazy(() => import('../modules/profile/ProfilePage'));
+const VerifyPage = lazy(() => import('../modules/correspondence/Sign'));
 
 const AttendanceLayout = lazy(() => import('../modules/attendance/AttendanceLayout'));
 const PunchPage = lazy(() => import('../modules/attendance/PunchPage'));
@@ -75,6 +76,7 @@ const CorReportPage = lazy(() => import('../modules/correspondence/CorPages').th
 const CorSettingsPage = lazy(() => import('../modules/correspondence/CorSettingsPage'));
 const CorDashboardPage = lazy(() => import('../modules/correspondence/CorDashboardPage'));
 const LetterDetailPage = lazy(() => import('../modules/correspondence/LetterDetailPage'));
+const ArchivePage = lazy(() => import('../modules/correspondence/ArchivePage'));
 const PltLayout = lazy(() => import('../modules/platforms/shared').then((m) => ({ default: m.PltLayout })));
 const PltOverviewPage = lazy(() => import('../modules/platforms/OverviewPage'));
 const SalesMonthsPage = lazy(() => import('../modules/platforms/SalesPages').then((m) => ({ default: m.SalesMonthsPage })));
@@ -144,6 +146,7 @@ export default function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/inbox" element={<InboxPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/verify" element={<VerifyPage />} />
             {att && (
               <Route path="/attendance" element={<AttendanceLayout />}>
                 <Route index element={<PunchPage />} />
@@ -217,6 +220,7 @@ export default function App() {
                 <Route path="out" element={<LettersPage view="out" />} />
                 <Route path="docs" element={<LettersPage view="docs" />} />
                 <Route path="archive" element={<LettersPage view="archive" />} />
+                <Route path="historical" element={<ArchivePage />} />
                 <Route path="report" element={<CorReportPage />} />
                 {corMgr && <Route path="settings" element={<CorSettingsPage />} />}
                 <Route path=":id" element={<LetterDetailPage />} />

@@ -7,7 +7,8 @@ import { Checkbox, Select, TextInput } from '../../ui/Field';
 import { Dialog } from '../../ui/Overlay';
 import { cx } from '../../ui/cx';
 import { useCorLookups } from './shared';
-import type { Category, DocType, FieldKind } from './types';
+import { TemplatesCard } from './Chain';
+import type { Category, DocType, FieldKind, WfTemplate } from './types';
 
 const KEYS = ['cor.categories', 'cor.lookups'];
 const TYPE_KEYS = ['cor.types', 'cor.lookups', 'cor.list', 'cor.get'];
@@ -16,6 +17,7 @@ const TYPE_KEYS = ['cor.types', 'cor.lookups', 'cor.list', 'cor.get'];
 export default function CorSettingsPage() {
   return (
     <div className="flex max-w-3xl flex-col gap-4">
+      <TemplatesCard />
       <TypesCard />
       <CategoriesCard />
     </div>
@@ -86,8 +88,10 @@ function TypeDialog({ item, onClose }: { item: DocType | null; onClose: () => vo
   const lk = useCorLookups();
   const [f, setF] = useState(() => ({
     name: item?.name || '', code: item?.code || '', direction: item?.direction || 'internal', numberPattern: item?.numberPattern || '{code}-{year}-{seq:4}',
-    confidentiality: item?.confidentiality || 'internal', active: item ? item.active : true
+    confidentiality: item?.confidentiality || 'internal', active: item ? item.active : true, templateId: item?.templateId || ''
   }));
+  const tq = useApi<WfTemplate[]>('wf.templates', { module: 'correspondence' });
+  const templates = (tq.data || []).filter((t) => t.status === 'published' || t.id === f.templateId);
   const [fields, setFields] = useState<FieldDraft[]>(() => (item?.fields || []).filter((x) => x.active).map((x) => ({ id: x.id, label: x.label, kind: x.kind, options: x.options.join('، '), required: x.required, inList: x.inList })));
   const [error, setError] = useState('');
   const save = useAction('cor.type.save', { invalidate: TYPE_KEYS, success: tr("حُفظ النوع"), silentError: true, onSuccess: onClose });
@@ -115,6 +119,8 @@ function TypeDialog({ item, onClose }: { item: DocType | null; onClose: () => vo
             options={(lk.data?.confidentialities || []).map((c) => ({ value: c.id, label: c.label }))} hint={tr("يمكن تغييرها لكل مستند عند تسجيله")} />
           <TextInput label={tr("نمط الترقيم")} required ltr value={f.numberPattern} onChange={(e) => setF({ ...f, numberPattern: e.target.value })} maxLength={40}
             hint={tr("مثال الرقم: {0} · المتاح: {code} و{year} و{seq:4} في آخره", preview)} />
+          <Select label={tr("السلسلة الافتراضية")} value={f.templateId} onChange={(e) => setF({ ...f, templateId: e.target.value })}
+            options={[{ value: '', label: tr("بلا سلسلة") }, ...templates.map((t) => ({ value: t.id, label: t.name }))]} hint={tr("تُقترح عند إرسال مستند من هذا النوع للسلسلة")} />
           {!builtin && <Select label={tr("الحالة")} value={String(f.active)} onChange={(e) => setF({ ...f, active: e.target.value === 'true' })} options={[{ value: 'true', label: tr("نشط") }, { value: 'false', label: tr("موقوف (لا يظهر عند التسجيل)") }]} />}
         </div>
 

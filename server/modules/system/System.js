@@ -21,9 +21,10 @@ var System = {
  * كل وحدة تقدّم: summary_(ctx) لبطاقاتها، و inbox_(ctx) لما ينتظر قرار المستخدم، و decide_ للقرار (ModuleProviders_).
  */
 var Home = {
-  /** الوحدات المفعّلة التي يملك المستخدم دوراً فيها */
+  /** الوحدات المفعّلة التي يملك المستخدم دوراً فيها، ومعها مزوّدات always (السلسلة الإجرائية لكل مشارك) */
   providers_: function (ctx) {
     return ModuleProviders_().filter(function (p) {
+      if (p.always) return true;
       var m = moduleDef_(p.key);
       return m && m.enabled && Permissions.has(ctx, p.key);
     });

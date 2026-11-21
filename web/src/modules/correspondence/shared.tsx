@@ -18,7 +18,9 @@ export const COR_KEYS = ['cor.list', 'cor.get', 'cor.report', 'cor.lookups', 'ho
 
 export const useCorLookups = () => useApi<CorLookups>('cor.lookups', {}, { staleTime: 5 * 60_000 });
 
-const S_TONE: Record<LetterStatus, 'neutral' | 'info' | 'warn' | 'ok' | 'bad'> = { draft: 'neutral', sent: 'info', received: 'warn', replied: 'ok', archived: 'neutral' };
+const S_TONE: Record<LetterStatus, 'neutral' | 'info' | 'warn' | 'ok' | 'bad'> = {
+  draft: 'neutral', in_review: 'info', returned: 'warn', approved: 'ok', rejected: 'bad', sent: 'info', received: 'warn', replied: 'ok', archived: 'neutral'
+};
 export const StatusBadge = ({ l }: { l: Pick<LetterView, 'status' | 'statusLabel'> }) => <Badge tone={S_TONE[l.status]}>{l.statusLabel}</Badge>;
 
 /** سهم الاتجاه: الوارد أخضر والصادر أزرق، والداخلي رمادي باسم نوعه */

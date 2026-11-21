@@ -2,7 +2,7 @@
 export type Direction = 'in' | 'out' | 'internal';
 export type Confidentiality = 'public' | 'internal' | 'secret' | 'top_secret';
 export type FieldKind = 'text' | 'number' | 'money' | 'date' | 'select' | 'user' | 'client' | 'project';
-export type LetterStatus = 'draft' | 'sent' | 'received' | 'replied' | 'archived';
+export type LetterStatus = 'draft' | 'in_review' | 'returned' | 'approved' | 'rejected' | 'sent' | 'received' | 'replied' | 'archived';
 export type Channel = 'mail' | 'hand' | 'whatsapp' | 'email' | 'fax';
 /** ما يمكن ربط الخطاب به (المشروع له حقله المستقل projectId أيضاً) */
 export type LinkType = 'client' | 'project' | 'custody' | 'employee' | 'task';
@@ -11,7 +11,7 @@ export interface FieldView { key: string; label: string; kind: FieldKind; value:
 
 export interface LetterView {
   typeId: string; typeName: string; typeCode: string; confidentiality: Confidentiality; confidentialityLabel: string; readers: string[];
-  version: number; hasMainFile: boolean; restricted: boolean; fields: FieldView[]; listFields: { label: string; display: string }[]; canFiles: boolean;
+  version: number; hasMainFile: boolean; restricted: boolean; locked: boolean; lockedAt: string; wf: ChainSummary | null; fields: FieldView[]; listFields: { label: string; display: string }[]; canFiles: boolean;
   id: string; number: string; direction: Direction; directionLabel: string; subject: string; summary: string;
   party: string; clientId: string; clientName: string; date: string; receivedAt: string; sentAt: string; refNo: string;
   channel: Channel | ''; channelLabel: string; category: string; status: LetterStatus; statusLabel: string; open: boolean;
@@ -32,7 +32,9 @@ export interface LetterLog { id: string; kind: string; kindLabel: string; body: 
 export interface LetterDetail {
   letter: LetterView; original: LetterView | null; replies: LetterView[]; files: LetterFile[]; log: LetterLog[];
   main: LetterFile | null; versions: DocVersion[]; readers: { id: string; name: string }[];
-  can: { edit: boolean; remove: boolean; files: boolean };
+  can: { edit: boolean; remove: boolean; files: boolean; modify: boolean; attach: boolean; reopen: boolean };
+  workflow: ChainView | null; drive: boolean;
+  submit: { resubmit: boolean; defaultTemplateId: string; templates: { id: string; name: string; steps: string[] }[] } | null;
 }
 
 export interface Opt { id: string; label: string }
@@ -49,7 +51,7 @@ export interface DocField {
 }
 export interface DocType {
   id: string; name: string; code: string; direction: Direction; directionLabel: string; numberPattern: string; confidentiality: Confidentiality;
-  builtin: boolean; active: boolean; documents: number; fields: DocField[];
+  builtin: boolean; active: boolean; documents: number; fields: DocField[]; templateId: string;
 }
 
 export interface Category { id: string; name: string; active: boolean }
@@ -78,3 +80,27 @@ export interface CorReport {
   byChannel: { channel: string; label: string; count: number }[];
   overdue: LetterView[];
 }
+
+/** السلسلة الإجرائية */
+export type ChainStatus = 'running' | 'returned' | 'approved' | 'rejected' | 'cancelled';
+export type StepStatus = 'pending' | 'current' | 'done' | 'rejected' | 'returned' | 'skipped' | 'cancelled';
+export type StepKind = 'review' | 'approve' | 'execute' | 'inform';
+export type AssigneeType = 'user' | 'role' | 'direct_manager' | 'dept_manager' | 'creator_dept_manager';
+
+export interface ChainSummary {
+  instanceId: string; status: ChainStatus; statusLabel: string; templateName: string; stepName: string; assigneeNames: string[];
+  asking: boolean; dots: StepStatus[]; done: number; total: number;
+}
+export interface ChainStep {
+  id: string; order: number; name: string; kind: StepKind; kindLabel: string; status: StepStatus; statusLabel: string;
+  assignees: { id: string; name: string }[]; fallback: boolean; asking: boolean; startedAt: string; endedAt: string; actedByName: string; note: string;
+}
+export interface ChainAction { id: string; action: string; label: string; byName: string; toName: string; step: string; note: string; version: number; at: string }
+export interface ChainView {
+  id: string; status: ChainStatus; statusLabel: string; templateName: string; templateVersion: number; startedAt: string; endedAt: string; startedByName: string;
+  steps: ChainStep[]; actions: ChainAction[]; current: { id: string; name: string; kind: StepKind; asking: boolean } | null;
+  can: { act: boolean; ask: boolean; answer: boolean; cancel: boolean; reassign: boolean };
+}
+export interface WfTemplateStep { order: number; name: string; kind: StepKind; kindLabel: string; assignee: { type: AssigneeType; id?: string; role?: string; module?: string }; assigneeLabel: string; onReject: 'end' | 'creator' }
+export interface WfTemplate { id: string; name: string; description: string; module: string; version: number; status: 'published' | 'retired'; statusLabel: string; updatedAt: string; running: number; steps: WfTemplateStep[] }
+export interface WfLookups { kinds: Opt[]; assignees: Opt[]; onReject: Opt[]; roles: Opt[]; departments: { id: string; name: string }[]; people: { id: string; name: string }[] }

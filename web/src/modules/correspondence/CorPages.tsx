@@ -9,6 +9,7 @@ import { DataTable, Pager, SearchBox, Segmented, TabNav, useTable } from '../../
 import { Select } from '../../ui/Field';
 import { cx } from '../../ui/cx';
 import { downloadCsv } from '../attendance/shared';
+import { ChainDots } from './Chain';
 import { ConfBadge, DirectionMark, DueText, LetterDialog, LetterLine, StatusBadge, useCorLookups, type LetterDraft } from './shared';
 import type { CorReport, LetterView } from './types';
 
@@ -40,7 +41,7 @@ export function CorLayout() {
   );
 }
 
-const sortValue = (l: LetterView, k: string) => (k === 'status' ? l.statusLabel : k === 'party' ? l.party : k === 'dueDate' ? l.dueDate : (l as unknown as Record<string, unknown>)[k]);
+const sortValue = (l: LetterView, k: string) => (k === 'wf' ? (l.wf ? l.wf.statusLabel + l.wf.stepName : '') : k === 'status' ? l.statusLabel : k === 'party' ? l.party : k === 'dueDate' ? l.dueDate : (l as unknown as Record<string, unknown>)[k]);
 
 /** جدول الوارد أو الصادر أو كل المستندات أو الأرشيف مع التصفية */
 export function LettersPage({ view }: { view: 'in' | 'out' | 'docs' | 'archive' }) {
@@ -99,9 +100,9 @@ export function LettersPage({ view }: { view: 'in' | 'out' | 'docs' | 'archive' 
           <EmptyState title={view === 'archive' ? tr("لا مستندات مؤرشفة") : view === 'in' ? tr("لا خطابات واردة") : view === 'out' ? tr("لا خطابات صادرة") : tr("لا مستندات")}
             body={view === 'archive' ? tr("الخطابات المنتهية تُنقل إلى الأرشيف من صفحتها، وتبقى قابلة للبحث هنا.") : tr("سجّل الخطاب من الزر أعلى الصفحة، واربطه بالعميل أو المشروع ليظهر في صفحتهما.")} />
         ) : (
-          <DataTable sticky sort={t.sort} onSort={t.onSort} pager={<Pager {...t.pager} />} minWidth={820}
+          <DataTable sticky sort={t.sort} onSort={t.onSort} pager={<Pager {...t.pager} />} minWidth={940}
             head={[{ key: 'number', label: tr("الرقم") }, { key: 'subject', label: tr("الموضوع") }, { key: 'party', label: tr("الجهة") }, { key: 'date', label: tr("التاريخ") },
-              { key: 'category', label: tr("التصنيف") }, { key: 'assigneeName', label: tr("المسؤول") }, { key: 'status', label: tr("الحالة") }, { key: 'dueDate', label: tr("موعد الرد") }]}>
+              { key: 'category', label: tr("التصنيف") }, { key: 'assigneeName', label: tr("المسؤول") }, { key: 'status', label: tr("الحالة") }, { key: 'wf', label: tr("السلسلة") }, { key: 'dueDate', label: tr("موعد الرد") }]}>
             {t.rows.map((l) => (
               <tr key={l.id} className="cursor-pointer hover:bg-chip/40" onClick={() => nav('/correspondence/' + l.id)}>
                 <td className="whitespace-nowrap"><span className="flex items-center gap-1.5">{showType && <DirectionMark l={l} short />}<span className="num">{l.number}</span></span>{showType && <span className="block text-[12px] text-muted">{l.typeName}</span>}</td>
@@ -112,6 +113,7 @@ export function LettersPage({ view }: { view: 'in' | 'out' | 'docs' | 'archive' 
                 <td className="text-[13px]">{l.category || '—'}</td>
                 <td className="text-[13px]">{l.assigneeName}</td>
                 <td><StatusBadge l={l} /></td>
+                <td className="min-w-[120px]"><ChainDots wf={l.wf} /></td>
                 <td className="whitespace-nowrap">{l.open ? <DueText l={l} /> : l.dueDate ? <span className="num text-[12px] text-muted">{dmy(l.dueDate)}</span> : '—'}</td>
               </tr>
             ))}

@@ -7,7 +7,9 @@ import { Bars, Change, Kpi, Legend, MiniStats, PanelTitle, StackBar, TrendBars }
 import { DirectionMark, DueText, LetterLine, StatusBadge } from './shared';
 import type { CorDashboard, LetterStatus, LetterView } from './types';
 
-const STATUS_BG: Record<LetterStatus, string> = { draft: 'bg-line-strong', sent: 'bg-accent', received: 'bg-warn', replied: 'bg-ok', archived: 'bg-chip' };
+const STATUS_BG: Record<LetterStatus, string> = {
+  draft: 'bg-line-strong', in_review: 'bg-accent-soft', returned: 'bg-warn-bg', approved: 'bg-ok-bg', rejected: 'bg-bad', sent: 'bg-accent', received: 'bg-warn', replied: 'bg-ok', archived: 'bg-chip'
+};
 const SERIES = [{ key: 'in', label: tr("وارد"), color: 'var(--c-ok)' }, { key: 'out', label: tr("صادر"), color: 'var(--c-accent)' }];
 
 /** لوحة المراسلات: المؤشرات، الاتجاه الشهري، التوزيعات، ما يحتاج متابعة */

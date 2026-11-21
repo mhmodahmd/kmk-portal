@@ -242,6 +242,7 @@ export default function App() {
                 {subMgr && <Route path="settings" element={<SubSettingsPage />} />}
               </Route>
             )}
+            {!cor && <Route path="/correspondence/:id" element={<LetterDetailPage />} />}
             {admin && <Route path="/settings/users" element={<UsersPage />} />}
             {admin && <Route path="/settings/company" element={<CompanyPage />} />}
             {admin && <Route path="/settings/audit" element={<AuditPage />} />}

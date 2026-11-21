@@ -151,7 +151,7 @@ var Notify = {
   },
 
   onAudit_: function (user, module, action, entity, entityId, details) {
-    var p = ModuleProviders_().filter(function (x) { var m = moduleDef_(x.key); return x.key === module && m && m.enabled; })[0];
+    var p = ModuleProviders_().filter(function (x) { var m = moduleDef_(x.key); return x.key === module && (x.always || (m && m.enabled)); })[0];
     if (!p) return;
     var items = [];
     if (p.notify) {
@@ -199,7 +199,7 @@ var Notify = {
       if (!u || !u.active || uid === actor.id || done[uid]) return;
       done[uid] = true;
       var ctx = { user: u, roles: Permissions.rolesOf(u.id), token: '' };
-      if (!Permissions.has(ctx, provider.key)) return;
+      if (!provider.always && !Permissions.has(ctx, provider.key)) return;
       var list;
       try { list = provider.inbox(ctx) || []; } catch (e) { return; }
       list.forEach(function (it) {

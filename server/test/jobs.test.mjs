@@ -20,7 +20,7 @@ test('backup: daily copy of every database into a Drive folder, kept 30 days', (
   const out = c.ok('system.backup', {}, c.A);
   // في المحاكي لا تُنشأ ملفات الوحدات إلا عند أول استخدام؛ ما لم يُنشأ يُتخطّى
   eq(out.copied.slice(0, 2), ['core', 'hr']);
-  eq(out.copied.length + out.skipped.length, 6);
+  eq(out.copied.length + out.skipped.length, 10);
   const n = out.copied.length;
   eq(out.day, '2026-11-15');
   const folder = c.gas.globals.DriveApp.getFolderById(c.gas.globals.PropertiesService.getScriptProperties().getProperty('BACKUP_FOLDER'));
@@ -28,7 +28,7 @@ test('backup: daily copy of every database into a Drive folder, kept 30 days', (
   eq(names().length, n);
   truthy(names().includes('KMK-hr-2026-11-15'));
   const again = c.ok('system.backup', {}, c.A);
-  eq([again.copied, again.skipped.length], [[], 6], 'same day: nothing copied twice');
+  eq([again.copied, again.skipped.length], [[], 10], 'same day: nothing copied twice');
   eq(c.ok('system.jobs', {}, c.A).backup.last.day, '2026-11-15');
   eq(c.fail('system.backup', {}, c.T.sara).code, 'FORBIDDEN');
 

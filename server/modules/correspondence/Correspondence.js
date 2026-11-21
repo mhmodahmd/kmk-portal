@@ -15,6 +15,10 @@
  * - الرقم من نمط النوع `{code}-{year}-{seq:4}`، فيبقى ترقيم الوارد والصادر كما هو.
  * - السرية: عام · داخلي (الافتراضي، وهو سلوك المراسلات السابق) · سري · سري جداً، مع قائمة اطلاع (readers).
  * - الملف الرئيسي بإصدارات (DocVersions)، والمرفقات حتى 25 ميجابايت بأنواع Office والنصوص، ومعاينة PDF لملفات Office.
+ *
+ * السلسلة الإجرائية (المرحلة 2): المسودة أو الوارد المستلم يُرسل للسلسلة (سلسلة النوع الافتراضية أو المختارة) فيصبح «قيد الإجراء»،
+ * ونتيجتها: معتمد (ويُقفل) · مرفوض · معاد للتعديل (يعدّله ويعيد إرساله فيعود للمرحلة نفسها). المشارك في السلسلة يرى المستند.
+ * المقفل يفتحه مدير المستندات للتعديل بسبب، فيعود مسودة ويُرسل في سلسلة جديدة.
  */
 var COR_SCHEMA = {
   Letters: [
@@ -23,7 +27,8 @@ var COR_SCHEMA = {
     ['channel', 'text'], ['category', 'text'], ['status', 'text'], ['replyToId', 'text'], ['dueDate', 'date'], ['assigneeId', 'text'],
     ['linkedType', 'text'], ['linkedId', 'text'], ['projectId', 'text'], ['tags', 'json'], ['archivedAt', 'ts'],
     ['createdBy', 'text'], ['createdAt', 'ts'], ['updatedBy', 'text'], ['updatedAt', 'ts'],
-    ['typeId', 'text'], ['fields', 'json'], ['confidentiality', 'text'], ['readers', 'json'], ['version', 'num'], ['mainFileId', 'text']
+    ['typeId', 'text'], ['fields', 'json'], ['confidentiality', 'text'], ['readers', 'json'], ['version', 'num'], ['mainFileId', 'text'],
+    ['wfInstanceId', 'text'], ['lockedAt', 'ts']
   ],
   LetterFiles: [
     ['id', 'text'], ['letterId', 'text'], ['fileName', 'text'], ['driveFileId', 'text'], ['mimeType', 'text'], ['fileSize', 'num'],
@@ -33,7 +38,7 @@ var COR_SCHEMA = {
   Categories: [['id', 'text'], ['name', 'text'], ['active', 'bool'], ['sortOrder', 'num']],
   DocTypes: [
     ['id', 'text'], ['name', 'text'], ['code', 'text'], ['direction', 'text'], ['numberPattern', 'text'], ['confidentiality', 'text'],
-    ['builtin', 'bool'], ['active', 'bool'], ['sortOrder', 'num'], ['createdAt', 'ts'], ['updatedAt', 'ts']
+    ['builtin', 'bool'], ['active', 'bool'], ['sortOrder', 'num'], ['createdAt', 'ts'], ['updatedAt', 'ts'], ['templateId', 'text']
   ],
   DocFields: [
     ['id', 'text'], ['typeId', 'text'], ['key', 'text'], ['label', 'text'], ['kind', 'text'], ['options', 'json'],
@@ -46,12 +51,17 @@ var COR_SCHEMA = {
 
 var COR = {
   DIRECTION: { in: 'وارد', out: 'صادر', internal: 'داخلي' },
-  STATUS: { draft: 'مسودة', sent: 'مُرسل', received: 'مستلَم', replied: 'تم الرد', archived: 'مؤرشف' },
-  ORDER: ['draft', 'sent', 'received', 'replied', 'archived'],
-  OPEN: ['draft', 'sent', 'received'],
+  STATUS: {
+    draft: 'مسودة', in_review: 'قيد الإجراء', returned: 'معاد للتعديل', approved: 'معتمد', rejected: 'مرفوض',
+    sent: 'مُرسل', received: 'مستلَم', replied: 'تم الرد', archived: 'مؤرشف'
+  },
+  ORDER: ['draft', 'in_review', 'returned', 'approved', 'rejected', 'sent', 'received', 'replied', 'archived'],
+  OPEN: ['draft', 'in_review', 'returned', 'approved', 'sent', 'received'],
+  /** حالات تأتي من السلسلة فقط */
+  CHAIN: ['in_review', 'returned', 'approved', 'rejected'],
   CHANNEL: { mail: 'بريد عادي', hand: 'باليد', whatsapp: 'واتساب', email: 'بريد إلكتروني', fax: 'فاكس' },
   LINKS: { client: 'عميل', project: 'مشروع', custody: 'عهدة', employee: 'موظف', task: 'مهمة' },
-  LOG: { create: 'تسجيل', update: 'تعديل', send: 'إرسال', receive: 'استلام', reply: 'رد', archive: 'أرشفة', restore: 'إعادة من الأرشيف', forward: 'إحالة', file: 'مرفق', version: 'إصدار جديد' },
+  LOG: { create: 'تسجيل', update: 'تعديل', send: 'إرسال', receive: 'استلام', reply: 'رد', archive: 'أرشفة', restore: 'إعادة من الأرشيف', forward: 'إحالة', file: 'مرفق', version: 'إصدار جديد', submit: 'إرسال للسلسلة', chain: 'السلسلة', reopen: 'فتح للتعديل' },
   CONF: { public: 'عام', internal: 'داخلي', secret: 'سري', top_secret: 'سري جداً' },
   FIELD_KINDS: { text: 'نص', number: 'رقم', money: 'مبلغ', date: 'تاريخ', select: 'قائمة', user: 'شخص', client: 'عميل', project: 'مشروع' },
   PATTERN: '{code}-{year}-{seq:4}',
@@ -83,6 +93,7 @@ var Correspondence = {
   access_: function (ctx, l) {
     var u = ctx.user.id;
     if (ctx.user.isSuperAdmin || l.createdBy === u || l.assigneeId === u || (l.readers || []).indexOf(u) >= 0) return 'full';
+    if (Workflow.isParticipant_('correspondence', l.id, u)) return 'full';
     var conf = l.confidentiality || 'internal', mgr = Correspondence.isMgr_(ctx);
     if (conf === 'public') return Permissions.has(ctx, 'correspondence') ? 'full' : null;
     if (conf === 'internal') return mgr ? 'full' : null;
@@ -95,6 +106,18 @@ var Correspondence = {
   canEdit_: function (ctx, l) {
     var u = ctx.user.id;
     return ctx.user.isSuperAdmin || l.createdBy === u || l.assigneeId === u || (Correspondence.isMgr_(ctx) && Correspondence.canFiles_(ctx, l));
+  },
+
+  /** لا يُعدَّل محتواه: قيد الإجراء في السلسلة، أو معتمد مقفل */
+  locked_: function (l) { return !!l.lockedAt || l.status === 'in_review'; },
+  lockError_: function (l) {
+    return l.lockedAt ? appError('المستند معتمد ومقفل. يفتحه مدير المستندات للتعديل عند الحاجة.') : appError('المستند قيد الإجراء في السلسلة. يُعدَّل إذا أُعيد للتعديل.');
+  },
+
+  /** صاحب المرحلة الحالية في سلسلة المستند */
+  isHolder_: function (ctx, l) {
+    var inst = Workflow.latestOf_('correspondence', l.id), st = inst && inst.status === 'running' ? Workflow.currentStep_(inst) : null;
+    return !!(st && (st.assignees || []).indexOf(ctx.user.id) >= 0);
   },
 
   visible_: function (ctx, id) {
@@ -275,6 +298,7 @@ var Correspondence = {
       typeId: type ? type.id : '', typeName: type ? type.name : COR.DIRECTION[l.direction] || '', typeCode: type ? type.code : '',
       confidentiality: conf, confidentialityLabel: COR.CONF[conf] || conf, readers: l.readers || [],
       version: l.version || 0, hasMainFile: !!l.mainFileId, restricted: access === 'meta',
+      locked: Correspondence.locked_(l), lockedAt: l.lockedAt || '', wf: Workflow.summary__('correspondence', l.id, m.users),
       fields: access === 'meta' ? [] : fields,
       listFields: access === 'meta' ? [] : fields.filter(function (f) { return f.inList && f.display; }).map(function (f) { return { label: f.label, display: f.display }; }),
       id: l.id, number: l.number, direction: l.direction, directionLabel: COR.DIRECTION[l.direction] || l.direction,
@@ -433,8 +457,95 @@ var Correspondence = {
       log: Correspondence.rows_('LetterLog').filter(function (x) { return x.letterId === l.id; })
         .sort(function (a, b) { return (a.at || '').localeCompare(b.at || ''); })
         .map(function (x) { return { id: x.id, kind: x.kind, kindLabel: COR.LOG[x.kind] || x.kind, body: x.body || '', byName: Correspondence.userName_(m, x.byId), at: x.at }; }),
-      can: { edit: Correspondence.canEdit_(ctx, l), remove: Correspondence.isMgr_(ctx), files: full }
+      can: { edit: Correspondence.canEdit_(ctx, l), remove: Correspondence.isMgr_(ctx), files: full, modify: Correspondence.canEdit_(ctx, l) && !Correspondence.locked_(l),
+        attach: full && !l.lockedAt && (Correspondence.canEdit_(ctx, l) || Correspondence.isHolder_(ctx, l)), reopen: Correspondence.isMgr_(ctx) && (!!l.lockedAt || l.status === 'rejected') },
+      workflow: Correspondence.chainView_(ctx, l), drive: Files.available_(),
+      submit: Correspondence.submitOptions_(ctx, l, m)
     };
+  },
+
+  chainView_: function (ctx, l) {
+    var inst = Workflow.latestOf_('correspondence', l.id);
+    return inst ? Workflow.view_(ctx, inst) : null;
+  },
+
+  /** يُرسل للسلسلة: المسودة، والوارد المستلم، والمعاد للتعديل (إعادة إرسال) — لمن يعدّل المستند */
+  submitOptions_: function (ctx, l, m) {
+    if (!Correspondence.canEdit_(ctx, l) || ['draft', 'received', 'returned'].indexOf(l.status) < 0) return null;
+    var type = Correspondence.typeOf_(l, m);
+    return {
+      resubmit: l.status === 'returned', defaultTemplateId: (type && type.templateId) || '',
+      templates: l.status === 'returned' ? [] : Workflow.templatesOf_('correspondence').map(function (t) { return { id: t.id, name: t.name, steps: t.steps.map(function (s) { return s.name; }) }; })
+    };
+  },
+
+  /**
+   * cor.submit: { id, templateId?, note? } — يبدأ سلسلة المستند أو يعيد إرسال المعاد.
+   * الحالة «قيد الإجراء» قبل البدء، لأن سلسلة كل مراحلها «اطلاع» تنتهي معتمدة فوراً.
+   */
+  submit: function (ctx, p) {
+    p = p || {};
+    return withLock(function () {
+      var l = Correspondence.visible_(ctx, p.id), note = optionalText(p.note, 500);
+      if (!Correspondence.canEdit_(ctx, l)) throw appError('لا يمكنك إرسال هذا المستند للسلسلة.', 'FORBIDDEN');
+      if (l.status === 'returned') {
+        var prev = Workflow.latestOf_('correspondence', l.id);
+        Db.update('correspondence', 'Letters', l.id, { status: 'in_review', updatedBy: ctx.user.id, updatedAt: nowIso() });
+        Workflow.resubmit_(ctx, prev.id, note);
+        Correspondence.log_(ctx, l.id, 'submit', note ? 'أعاد إرساله للسلسلة: ' + note : 'أعاد إرساله للسلسلة');
+        Audit.log(ctx.user, 'correspondence', 'letter.submit', 'Letter', l.id, { number: l.number, resubmit: true });
+      } else {
+        if (['draft', 'received'].indexOf(l.status) < 0) throw appError('يُرسل للسلسلة المستند المسودة أو الوارد المستلم.');
+        var type = Correspondence.typeOf_(l), templateId = String(p.templateId || (type && type.templateId) || '');
+        if (!templateId) throw appError('اختر السلسلة الإجرائية.');
+        Db.update('correspondence', 'Letters', l.id, { status: 'in_review', updatedBy: ctx.user.id, updatedAt: nowIso() });
+        var inst = Workflow.start_(ctx, 'correspondence', l.id, templateId);
+        Db.update('correspondence', 'Letters', l.id, { wfInstanceId: inst.id });
+        Correspondence.log_(ctx, l.id, 'submit', 'أرسله للسلسلة «' + inst.templateName + '»' + (note ? ': ' + note : ''));
+        Audit.log(ctx.user, 'correspondence', 'letter.submit', 'Letter', l.id, { number: l.number, template: inst.templateName });
+      }
+      return Correspondence.get(ctx, { id: l.id });
+    });
+  },
+
+  /** cor.reopen: مدير المستندات يفتح المعتمد أو المرفوض للتعديل بسبب، فيعود مسودة (أو مستلَماً للوارد) */
+  reopen: function (ctx, p) {
+    p = p || {};
+    return withLock(function () {
+      var l = Correspondence.visible_(ctx, p.id), note = optionalText(p.note, 500);
+      if (!Correspondence.isMgr_(ctx)) throw appError('يفتح المستند للتعديل مدير المستندات.', 'FORBIDDEN');
+      if (!l.lockedAt && l.status !== 'rejected') throw appError('المستند ليس معتمداً ولا مرفوضاً.');
+      if (!note) throw appError('اكتب سبب فتح المستند للتعديل.');
+      var to = l.direction === 'in' ? 'received' : 'draft';
+      Db.update('correspondence', 'Letters', l.id, { status: to, lockedAt: '', updatedBy: ctx.user.id, updatedAt: nowIso() });
+      Correspondence.log_(ctx, l.id, 'reopen', 'فتحه للتعديل: ' + note);
+      Audit.log(ctx.user, 'correspondence', 'letter.reopen', 'Letter', l.id, { number: l.number, from: l.status, note: note });
+      return Correspondence.get(ctx, { id: l.id });
+    });
+  },
+
+  // ───────── مضيف السلسلة (ModuleProviders_.workflowHost) ─────────
+  wfEntity_: function (id) {
+    var l = Db.get('correspondence', 'Letters', id);
+    if (!l) return null;
+    var type = Correspondence.typeOf_(l);
+    return { id: l.id, number: l.number, title: l.subject, createdBy: l.createdBy, version: l.version || 0, moduleLabel: type ? type.name : 'مستند', facts: [{ k: 'الجهة', v: l.party || '—' }] };
+  },
+
+  wfLink_: function (id) { return '/correspondence/' + id; },
+
+  /** نتيجة السلسلة: تُحدَّث حالة المستند في ملف المراسلات */
+  onWorkflow_: function (ctx, event, inst) {
+    var l = Db.get('correspondence', 'Letters', inst.entityId);
+    if (!l) return;
+    var ch = { updatedBy: ctx.user.id, updatedAt: nowIso() }, body = '';
+    if (event === 'approved') { ch.status = 'approved'; ch.lockedAt = nowIso(); body = 'اعتُمد في السلسلة «' + inst.templateName + '» وأُقفل'; }
+    else if (event === 'rejected') { ch.status = 'rejected'; body = 'رُفض في السلسلة «' + inst.templateName + '»'; }
+    else if (event === 'returned') { ch.status = 'returned'; body = 'أُعيد للتعديل في السلسلة «' + inst.templateName + '»'; }
+    else if (event === 'cancelled') { ch.status = l.direction === 'in' ? 'received' : 'draft'; body = 'أُلغيت السلسلة «' + inst.templateName + '»'; }
+    else return;
+    Db.update('correspondence', 'Letters', l.id, ch);
+    Correspondence.log_(ctx, l.id, 'chain', body);
   },
 
   // ───────── الإنشاء والتعديل ─────────
@@ -464,6 +575,7 @@ var Correspondence = {
     return withLock(function () {
       var cur = p.id ? Correspondence.visible_(ctx, p.id) : null;
       if (cur && !Correspondence.canEdit_(ctx, cur)) throw appError('لا يمكنك تعديل هذا الخطاب.', 'FORBIDDEN');
+      if (cur && Correspondence.locked_(cur)) throw Correspondence.lockError_(cur);
       if (cur && p.direction && p.direction !== cur.direction) throw appError('لا يُغيَّر اتجاه الخطاب بعد تسجيله.');
       var type = cur ? Correspondence.typeOf_(cur) : Correspondence.typeForNew_(p);
       if (cur && p.typeId && type && p.typeId !== type.id) throw appError('لا يُغيَّر نوع المستند بعد تسجيله.');
@@ -577,6 +689,9 @@ var Correspondence = {
       var l = Correspondence.visible_(ctx, p.id), to = Correspondence.enum_(p.status, COR.STATUS, 'الحالة');
       if (!Correspondence.canEdit_(ctx, l)) throw appError('لا يمكنك تغيير حالة هذا الخطاب.', 'FORBIDDEN');
       if (to === l.status) return Correspondence.view_(l, Correspondence.maps_(), ctx);
+      if (COR.CHAIN.indexOf(to) >= 0) throw appError('هذه الحالة تأتي من السلسلة الإجرائية.');
+      if (l.status === 'in_review' || l.status === 'returned') throw appError('المستند في السلسلة الإجرائية: تتغيّر حالته بقراراتها، أو بإلغاء السلسلة.');
+      if (to === 'draft' && l.lockedAt) throw appError('المستند معتمد ومقفل. افتحه للتعديل بدلاً من ذلك.');
       if (to === 'sent' && l.direction === 'in') throw appError('«مُرسل» حالة للصادر والداخلي فقط.');
       if (to === 'received' && l.direction !== 'in') throw appError('«مستلَم» حالة للوارد فقط.');
       if (to === 'replied' && l.direction === 'internal') throw appError('«تم الرد» حالة للوارد والصادر فقط.');
@@ -620,6 +735,7 @@ var Correspondence = {
         Db.remove('correspondence', 'LetterFiles', f.id);
       });
       Db.removeWhere('correspondence', 'DocVersions', function (x) { return x.letterId === l.id; });
+      Workflow.removeFor_('correspondence', l.id);
       Db.removeWhere('correspondence', 'LetterLog', function (x) { return x.letterId === l.id; });
       Db.remove('correspondence', 'Letters', l.id);
       Audit.log(ctx.user, 'correspondence', 'letter.delete', 'Letter', l.id, { number: l.number, subject: l.subject });
@@ -637,8 +753,11 @@ var Correspondence = {
     Files.require_();
     p = p || {};
     var l = Correspondence.visible_(ctx, p.letterId);
-    if (!Correspondence.canEdit_(ctx, l)) throw appError('لا يمكنك إرفاق ملفات بهذا الخطاب.', 'FORBIDDEN');
     var main = p.role === 'main';
+    // المرفقات لمن يعدّل المستند أو صاحب مرحلته الحالية؛ الملف الرئيسي لا يتغيّر وهو قيد الإجراء أو مقفل
+    if (!Correspondence.canFiles_(ctx, l) || !(Correspondence.canEdit_(ctx, l) || (!main && Correspondence.isHolder_(ctx, l)))) throw appError('لا يمكنك إرفاق ملفات بهذا الخطاب.', 'FORBIDDEN');
+    if (main && Correspondence.locked_(l)) throw Correspondence.lockError_(l);
+    if (!main && l.lockedAt) throw Correspondence.lockError_(l);
     if (p.role && !main && p.role !== 'attachment') throw appError('نوع الملف غير معروف.');
     var up = Files.decode_(p, Files.DOCS);
     var ver = main ? (l.version || 0) + 1 : l.version || 0;
@@ -734,7 +853,7 @@ var Correspondence = {
     return types.map(function (t) {
       return {
         id: t.id, name: t.name, code: t.code, direction: t.direction, directionLabel: COR.DIRECTION[t.direction] || t.direction,
-        numberPattern: t.numberPattern || COR.PATTERN, confidentiality: t.confidentiality || 'internal', builtin: !!t.builtin, active: !!t.active,
+        numberPattern: t.numberPattern || COR.PATTERN, confidentiality: t.confidentiality || 'internal', builtin: !!t.builtin, active: !!t.active, templateId: t.templateId || '',
         documents: count[t.id] || 0,
         fields: Correspondence.fieldsOf_(t.id, true).map(function (f) {
           return { id: f.id, key: f.key, label: f.label, kind: f.kind, kindLabel: COR.FIELD_KINDS[f.kind] || f.kind, options: f.options || [], required: !!f.required, inList: !!f.inList, active: !!f.active };
@@ -765,8 +884,14 @@ var Correspondence = {
       var rec = {
         name: name, code: code, direction: direction, numberPattern: pattern,
         confidentiality: p.confidentiality ? Correspondence.enum_(p.confidentiality, COR.CONF, 'درجة السرية') : 'internal',
-        active: cur && cur.builtin ? true : p.active !== false && p.active !== 'false', updatedAt: nowIso()
+        active: cur && cur.builtin ? true : p.active !== false && p.active !== 'false', updatedAt: nowIso(),
+        templateId: ''
       };
+      if (p.templateId) {
+        var tpl = Db.get('workflow', 'WfTemplates', String(p.templateId));
+        if (!tpl || tpl.module !== 'correspondence' || tpl.status !== 'published') throw appError('السلسلة الإجرائية غير متاحة.');
+        rec.templateId = tpl.id;
+      }
       var saved = cur ? Db.update('correspondence', 'DocTypes', cur.id, rec)
         : Db.insert('correspondence', 'DocTypes', Object.assign(rec, { builtin: false, sortOrder: rows.reduce(function (mx, r) { return Math.max(mx, r.sortOrder || 0); }, 0) + 1, createdAt: nowIso() }));
       var fieldNote = Array.isArray(p.fields) ? Correspondence.saveFields_(saved.id, p.fields) : '';
@@ -965,13 +1090,16 @@ var Correspondence = {
     return {
       'cor.lookups': { perm: any, fn: Correspondence.lookups },
       'cor.list': { perm: any, fn: Correspondence.list },
-      'cor.get': { perm: any, fn: Correspondence.get },
+      // صاحب مرحلة في السلسلة قد لا يكون له دور في المستندات: الاطلاع يُفحص في canSee_
+      'cor.get': { fn: Correspondence.get },
+      'cor.submit': { perm: any, fn: Correspondence.submit },
+      'cor.reopen': { perm: mgr, fn: Correspondence.reopen },
       'cor.save': { perm: any, fn: Correspondence.save },
       'cor.status': { perm: any, fn: Correspondence.setStatus },
       'cor.forward': { perm: any, fn: Correspondence.forward },
       'cor.remove': { perm: mgr, fn: Correspondence.remove },
-      'cor.file.upload': { perm: any, fn: Correspondence.fileUpload },
-      'cor.file.content': { perm: any, fn: Correspondence.fileContent },
+      'cor.file.upload': { fn: Correspondence.fileUpload },
+      'cor.file.content': { fn: Correspondence.fileContent },
       'cor.file.remove': { perm: any, fn: Correspondence.fileRemove },
       'cor.categories': { perm: any, fn: Correspondence.categories },
       'cor.category.save': { perm: mgr, fn: Correspondence.categorySave },

@@ -16,6 +16,7 @@ import { cx } from '../../ui/cx';
 import { DOC_ACCEPT, openFile } from '../custody/files';
 import { AttachButton, COR_KEYS, ConfBadge, DirectionMark, LetterDialog, LetterLine, StatusBadge, fieldDraft, linkTo, shortFileName, uploadLetterFiles, useCorLookups } from './shared';
 import type { DocVersion, LetterDetail, LetterFile, LetterStatus } from './types';
+import { ChainCard } from './Chain';
 
 export default function LetterDetailPage() {
   const { id = '' } = useParams();
@@ -28,22 +29,27 @@ export default function LetterDetailPage() {
   const [forwarding, setForwarding] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [reopening, setReopening] = useState(false);
   const status = useAction<{ id: string; status: LetterStatus; note?: string }>('cor.status', { invalidate: COR_KEYS, success: tr("حُدّثت الحالة") });
   const delFile = useAction('cor.file.remove', { invalidate: ['cor.get', 'cor.list'], success: tr("حُذف المرفق") });
+  const reopen = useAction<{ id: string; note: string }>('cor.reopen', { invalidate: COR_KEYS, success: tr("فُتح المستند للتعديل") });
   const remove = useAction('cor.remove', { invalidate: COR_KEYS, success: tr("حُذف الخطاب"), onSuccess: () => nav('/correspondence') });
 
   if (q.isError) return <ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} />;
   if (!q.data) return <Loader />;
   const { letter: l, original, replies, files, log, can, main, versions, readers } = q.data;
   const L = lk.data;
+  // صاحب المرحلة قد لا يملك دوراً في المستندات (فلا تصله cor.lookups)
+  const drive = q.data.drive;
   const view = (fid: string, preview?: boolean) => openFile('cor.file.content', { id: fid, preview: preview || undefined }).catch((e) => toast(e instanceof ApiError ? e.message : tr("تعذّر فتح الملف."), 'bad'));
   const link = linkTo(l);
   const internal = l.direction === 'internal';
   // أزرار الحالة حسب الاتجاه والحالة الحالية
   const actions: { to: LetterStatus; label: string; primary?: boolean }[] = [];
-  if (can.edit && l.status !== 'archived') {
-    if (l.direction !== 'in' && l.status === 'draft') actions.push({ to: 'sent', label: internal ? tr("تأكيد الإصدار") : tr("تأكيد الإرسال"), primary: true });
-    if (!internal && (l.status === 'sent' || l.status === 'received')) actions.push({ to: 'replied', label: tr("تسجيل أنه تم الرد") });
+  const inChain = l.status === 'in_review' || l.status === 'returned';
+  if (can.edit && l.status !== 'archived' && !inChain) {
+    if (l.direction !== 'in' && (l.status === 'draft' || l.status === 'approved')) actions.push({ to: 'sent', label: internal ? tr("تأكيد الإصدار") : tr("تأكيد الإرسال"), primary: l.status === 'approved' || !q.data.submit });
+    if (!internal && (l.status === 'sent' || l.status === 'received' || (l.direction === 'in' && l.status === 'approved'))) actions.push({ to: 'replied', label: tr("تسجيل أنه تم الرد") });
     if (l.direction !== 'in' && l.status === 'sent' && L?.isManager) actions.push({ to: 'draft', label: tr("إرجاع إلى مسودة") });
   }
   return (
@@ -64,15 +70,17 @@ export default function LetterDetailPage() {
             {actions.map((a) => (
               <Button key={a.to} variant={a.primary ? 'primary' : 'secondary'} loading={status.isPending && status.variables?.status === a.to} onClick={() => status.mutate({ id: l.id, status: a.to })}>{a.label}</Button>
             ))}
-            {can.edit && !internal && l.status !== 'archived' && <Button variant={actions.some((a) => a.primary) ? 'secondary' : 'primary'} icon="mail" onClick={() => setReplying(true)}>{l.direction === 'in' ? tr("تسجيل الرد") : tr("تسجيل رد الجهة")}</Button>}
-            {can.edit && l.status !== 'archived' && <Button variant="secondary" icon="user" onClick={() => setForwarding(true)}>{tr("إحالة")}</Button>}
-            {can.edit && can.files && L?.drive && <AttachButton letterId={l.id} size="md" variant="secondary" />}
-            {can.edit && <Button variant="ghost" icon="edit" onClick={() => setEditing(true)}>{tr("تعديل")}</Button>}
-            {can.edit && l.status !== 'archived' && <Button variant="ghost" icon="archive" onClick={() => setArchiving(true)}>{tr("أرشفة")}</Button>}
+            {can.edit && !internal && !inChain && l.status !== 'archived' && <Button variant={actions.some((a) => a.primary) ? 'secondary' : 'primary'} icon="mail" onClick={() => setReplying(true)}>{l.direction === 'in' ? tr("تسجيل الرد") : tr("تسجيل رد الجهة")}</Button>}
+            {can.edit && !inChain && l.status !== 'archived' && <Button variant="secondary" icon="user" onClick={() => setForwarding(true)}>{tr("إحالة")}</Button>}
+            {can.attach && drive && <AttachButton letterId={l.id} size="md" variant="secondary" />}
+            {can.modify && <Button variant="ghost" icon="edit" onClick={() => setEditing(true)}>{tr("تعديل")}</Button>}
+            {can.reopen && <Button variant="secondary" icon="lock" onClick={() => setReopening(true)}>{tr("فتح للتعديل")}</Button>}
+            {can.edit && !inChain && l.status !== 'archived' && <Button variant="ghost" icon="archive" onClick={() => setArchiving(true)}>{tr("أرشفة")}</Button>}
             {L?.isManager && l.status === 'archived' && <Button variant="secondary" icon="refresh" onClick={() => status.mutate({ id: l.id, status: l.direction === 'in' ? 'received' : 'sent' })}>{tr("إعادة من الأرشيف")}</Button>}
           </div>
         </div>
         {l.overdue && <div className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{tr("تأخر الرد عن موعده {0}.", dmy(l.dueDate))}</div>}
+        {l.lockedAt && <div className="flex items-center gap-2 rounded-lg bg-ok-bg px-3 py-2.5 text-ok"><Icon name="lock" size={16} />{tr("معتمد ومقفل منذ {0}: لا يُعدَّل محتواه ولا ملفه الرئيسي.", formatDateTime(l.lockedAt))}</div>}
         {l.restricted && <div className="flex items-center gap-2 rounded-lg bg-warn-bg px-3 py-2.5 text-warn"><Icon name="lock" size={16} />{tr("مستند سري: تظهر لك بياناته دون ملخصه وملفاته. يطّلع عليها من في قائمة الاطلاع.")}</div>}
         {l.summary ? <p className="m-0 whitespace-pre-wrap leading-relaxed">{l.summary}</p> : null}
         <Facts cols={3} items={[
@@ -96,15 +104,16 @@ export default function LetterDetailPage() {
 
       <div className="grid items-start gap-4 lg:grid-cols-[3fr_2fr]">
         <div className="flex flex-col gap-4">
+          <ChainCard d={q.data} />
           {can.files ? (
-            <MainFileCard letterId={l.id} number={l.number} main={main} versions={versions} canUpload={can.edit && !!L?.drive} onOpen={view} />
+            <MainFileCard letterId={l.id} number={l.number} main={main} versions={versions} canUpload={can.modify && !!drive} onOpen={view} />
           ) : null}
           <Card padded={false}>
-            <CardHeader title={files.length ? tr("المرفقات · {0}", files.length) : tr("المرفقات")} action={can.edit && can.files && L?.drive ? <AttachButton letterId={l.id} /> : undefined} />
+            <CardHeader title={files.length ? tr("المرفقات · {0}", files.length) : tr("المرفقات")} action={can.attach && drive ? <AttachButton letterId={l.id} /> : undefined} />
             {!can.files ? <p className="m-0 px-5 pb-4 text-[13px] text-muted">{tr("ملفات هذا المستند لمن في قائمة الاطلاع فقط.")}</p> : files.length ? files.map((f) => (
               <FileRow key={f.id} f={f} number={l.number} onOpen={view} onDelete={f.canDelete ? () => delFile.mutate({ id: f.id }) : undefined} />
-            )) : <p className="m-0 px-5 pb-4 text-[13px] text-muted">{L?.drive ? tr("PDF أو صور أو Word أو Excel أو PowerPoint حتى 25 ميجابايت.") : tr("رفع الملفات غير مفعّل بعد.")}</p>}
-            {can.edit && can.files && L?.drive && files.length > 0 && <div className="border-t border-line px-5 py-3"><AttachButton letterId={l.id} variant="ghost" label={tr("إضافة مرفقات أخرى")} /></div>}
+            )) : <p className="m-0 px-5 pb-4 text-[13px] text-muted">{drive ? tr("PDF أو صور أو Word أو Excel أو PowerPoint حتى 25 ميجابايت.") : tr("رفع الملفات غير مفعّل بعد.")}</p>}
+            {can.attach && drive && files.length > 0 && <div className="border-t border-line px-5 py-3"><AttachButton letterId={l.id} variant="ghost" label={tr("إضافة مرفقات أخرى")} /></div>}
           </Card>
 
           {!internal && (
@@ -151,6 +160,10 @@ export default function LetterDetailPage() {
             subject: tr("رد: {0}", l.subject), category: l.category, channel: l.channel || 'mail', assigneeId: l.assigneeId, linkedType: l.linkedType, linkedId: l.linkedId, linkedLabel: l.linkedLabel }} />
       )}
       <ForwardDialog open={forwarding} onClose={() => setForwarding(false)} letterId={l.id} current={l.assigneeId} people={L?.people || []} />
+      <ReasonDialog open={reopening} onClose={() => setReopening(false)} title={tr("فتح المستند للتعديل")} label={tr("سبب فتحه")} confirmLabel={tr("فتح للتعديل")}
+        onConfirm={(note) => reopen.mutateAsync({ id: l.id, note }).then(() => setReopening(false))}>
+        <p className="m-0 text-[13px] text-muted">{tr("يعود المستند مسودة قابلة للتعديل، ويبقى سجل سلسلته السابقة. يُرسل بعدها في سلسلة جديدة.")}</p>
+      </ReasonDialog>
       <ReasonDialog open={archiving} onClose={() => setArchiving(false)} title={tr("أرشفة الخطاب")} label={tr("ملاحظة الأرشفة")} confirmLabel={tr("أرشفة")}
         onConfirm={(note) => status.mutateAsync({ id: l.id, status: 'archived', note }).then(() => setArchiving(false))}>
         <p className="m-0 text-[13px] text-muted">{tr("يختفي الخطاب من الوارد والصادر ويبقى في الأرشيف قابلاً للبحث. يعيده مدير المراسلات عند الحاجة.")}</p>

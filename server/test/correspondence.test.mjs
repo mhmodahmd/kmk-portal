@@ -142,7 +142,7 @@ test('correspondence: attachments on Drive, log entries, and manager-only catego
   const f = c.ok('cor.file.upload', { letterId: l.id, fileName: 'العقد.png', mimeType: 'image/png', data: PNG }, c.T.sara);
   eq(f.fileName, 'IN-2026-0001_العقد.png');
   eq(c.ok('cor.file.content', { id: f.id }, c.T.huda).data, PNG);
-  eq(c.fail('cor.file.content', { id: f.id }, c.T.ahmad).code, 'FORBIDDEN');
+  eq(c.fail('cor.file.content', { id: f.id }, c.T.ahmad).code, 'NOT_FOUND', 'no role and not in its chain: the document is hidden');
   const d = c.ok('cor.get', { id: l.id }, c.T.sara);
   eq([d.files.length, d.letter.filesCount, d.log.map((x) => x.kind)], [1, 1, ['create', 'file']]);
   c.ok('cor.file.remove', { id: f.id }, c.T.sara);

@@ -4,7 +4,7 @@
  * يعمل من المشغّل اليومي (dailyMaintenance) أو يدوياً من مدير النظام (system.backup).
  */
 var BACKUP_KEEP_DAYS = 30;
-var BACKUP_DBS = ['core', 'hr', 'attendance', 'custody', 'tasks', 'crm'];
+var BACKUP_DBS = ['core', 'hr', 'attendance', 'custody', 'tasks', 'crm', 'correspondence', 'workflow', 'platforms', 'subscribers'];
 
 var Backup = {
   folder_: function () {

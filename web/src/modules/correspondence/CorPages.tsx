@@ -9,38 +9,41 @@ import { DataTable, Pager, SearchBox, Segmented, TabNav, useTable } from '../../
 import { Select } from '../../ui/Field';
 import { cx } from '../../ui/cx';
 import { downloadCsv } from '../attendance/shared';
-import { DirectionMark, DueText, LetterDialog, LetterLine, StatusBadge, useCorLookups } from './shared';
+import { ConfBadge, DirectionMark, DueText, LetterDialog, LetterLine, StatusBadge, useCorLookups, type LetterDraft } from './shared';
 import type { CorReport, LetterView } from './types';
 
 export function CorLayout() {
   const lk = useCorLookups();
-  const [creating, setCreating] = useState<'' | 'in' | 'out'>('');
+  const [creating, setCreating] = useState<LetterDraft | null>(null);
   const L = lk.data;
   const items = [
     { to: '/correspondence', label: tr("نظرة عامة"), end: true },
     { to: '/correspondence/in', label: tr("الوارد") },
     { to: '/correspondence/out', label: tr("الصادر") },
+    { to: '/correspondence/docs', label: tr("كل المستندات") },
     { to: '/correspondence/archive', label: tr("الأرشيف") },
     { to: '/correspondence/report', label: tr("التقرير") },
     ...(L?.isManager ? [{ to: '/correspondence/settings', label: tr("الإعدادات") }] : [])
   ];
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader eyebrow={tr("العمل")} title={tr("المراسلات")} actions={<>
-        <Button variant="primary" icon="plus" onClick={() => setCreating('in')}>{tr("تسجيل وارد")}</Button>
-        <Button variant="secondary" icon="plus" onClick={() => setCreating('out')}>{tr("تسجيل صادر")}</Button>
+      <PageHeader eyebrow={tr("العمل")} title={tr("المستندات")} actions={<>
+        <Button variant="primary" icon="plus" onClick={() => setCreating({ direction: 'in' })}>{tr("تسجيل وارد")}</Button>
+        <Button variant="secondary" icon="plus" onClick={() => setCreating({ direction: 'out' })}>{tr("تسجيل صادر")}</Button>
+        <Button variant="secondary" icon="file" disabled={!L?.types.some((t) => t.direction === 'internal')}
+          onClick={() => setCreating({ direction: 'internal', typeId: L?.types.find((t) => t.direction === 'internal')?.id })}>{tr("مستند داخلي")}</Button>
       </>} />
-      <TabNav label={tr("أقسام المراسلات")} items={items} />
+      <TabNav label={tr("أقسام المستندات")} items={items} />
       <Outlet />
-      {creating && <LetterDialog open onClose={() => setCreating('')} initial={{ direction: creating }} />}
+      {creating && <LetterDialog open onClose={() => setCreating(null)} initial={creating} />}
     </div>
   );
 }
 
 const sortValue = (l: LetterView, k: string) => (k === 'status' ? l.statusLabel : k === 'party' ? l.party : k === 'dueDate' ? l.dueDate : (l as unknown as Record<string, unknown>)[k]);
 
-/** جدول الوارد أو الصادر أو الأرشيف مع التصفية */
-export function LettersPage({ view }: { view: 'in' | 'out' | 'archive' }) {
+/** جدول الوارد أو الصادر أو كل المستندات أو الأرشيف مع التصفية */
+export function LettersPage({ view }: { view: 'in' | 'out' | 'docs' | 'archive' }) {
   const lk = useCorLookups();
   const nav = useNavigate();
   const L = lk.data;
@@ -53,29 +56,37 @@ export function LettersPage({ view }: { view: 'in' | 'out' | 'archive' }) {
   const [client, setClient] = useState('');
   const [direction, setDirection] = useState('');
   const [search, setSearch] = useState('');
+  const [typeId, setTypeId] = useState(params.get('type') || '');
+  const [conf, setConf] = useState('');
+  const showType = view === 'docs' || view === 'archive';
   const payload = view === 'archive'
     ? { archived: true, direction: direction || undefined }
-    : { direction: view, status: status === 'replied' ? 'replied' : undefined, overdue: status === 'overdue' || undefined };
-  const q = useApi<LetterView[]>('cor.list', { ...payload, year: year || undefined, assigneeId: assignee || undefined, category: category || undefined, clientId: client || undefined });
+    : { direction: view === 'docs' ? undefined : view, status: status === 'replied' ? 'replied' : undefined, overdue: status === 'overdue' || undefined };
+  const q = useApi<LetterView[]>('cor.list', {
+    ...payload, typeId: showType ? typeId || undefined : undefined, confidentiality: conf || undefined,
+    year: year || undefined, assigneeId: assignee || undefined, category: category || undefined, clientId: client || undefined
+  });
   const rows = useMemo(() => (q.data || []).filter((l) => {
     if (status === 'open' && !l.open) return false;
     const s = search.trim().toLowerCase();
-    return !s || [l.subject, l.number, l.party, l.refNo, l.assigneeName, l.tags.join(' ')].join(' ').toLowerCase().includes(s);
+    return !s || [l.subject, l.number, l.party, l.refNo, l.assigneeName, l.typeName, l.tags.join(' '), ...l.listFields.map((x) => x.display)].join(' ').toLowerCase().includes(s);
   }), [q.data, status, search]);
   const t = useTable(rows, { sort: { key: 'date', dir: 'desc' }, get: sortValue });
-  const exportCsv = () => downloadCsv(tr("المراسلات.csv"), [
-    [tr("الرقم"), tr("الاتجاه"), tr("الموضوع"), tr("الجهة"), tr("التاريخ"), tr("القناة"), tr("التصنيف"), tr("الحالة"), tr("موعد الرد"), tr("المسؤول"), tr("المشروع"), tr("رقم المرجع")],
-    ...rows.map((l) => [l.number, l.directionLabel, l.subject, l.party, dmy(l.date), l.channelLabel, l.category, l.statusLabel, dmy(l.dueDate), l.assigneeName, l.projectName, l.refNo])
+  const exportCsv = () => downloadCsv(tr("المستندات.csv"), [
+    [tr("الرقم"), tr("النوع"), tr("الموضوع"), tr("الجهة"), tr("التاريخ"), tr("القناة"), tr("التصنيف"), tr("الحالة"), tr("موعد الرد"), tr("المسؤول"), tr("المشروع"), tr("رقم المرجع")],
+    ...rows.map((l) => [l.number, l.typeName, l.subject, l.party, dmy(l.date), l.channelLabel, l.category, l.statusLabel, dmy(l.dueDate), l.assigneeName, l.projectName, l.refNo])
   ]);
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-end gap-3">
         {view === 'archive' ? (
-          <Segmented label={tr("الاتجاه")} value={direction} onChange={setDirection} options={[{ value: '', label: tr("الكل") }, { value: 'in', label: tr("وارد") }, { value: 'out', label: tr("صادر") }]} />
+          <Segmented label={tr("الاتجاه")} value={direction} onChange={setDirection} options={[{ value: '', label: tr("الكل") }, { value: 'in', label: tr("وارد") }, { value: 'out', label: tr("صادر") }, { value: 'internal', label: tr("داخلي") }]} />
         ) : (
           <Segmented label={tr("الحالة")} value={status} onChange={setStatus}
             options={[{ value: 'all', label: tr("الكل") }, { value: 'open', label: tr("بانتظار الرد") }, { value: 'overdue', label: tr("متأخرة") }, { value: 'replied', label: tr("تم الرد") }]} />
         )}
+        {showType && <Select label={tr("النوع")} className="w-40" value={typeId} onChange={(e) => setTypeId(e.target.value)} options={[{ value: '', label: tr("كل الأنواع") }, ...(L?.types || []).map((t) => ({ value: t.id, label: t.name }))]} />}
+        <Select label={tr("السرية")} className="w-32" value={conf} onChange={(e) => setConf(e.target.value)} options={[{ value: '', label: tr("الكل") }, ...(L?.confidentialities || []).map((c) => ({ value: c.id, label: c.label }))]} />
         <Select label={tr("السنة")} className="w-28" value={year} onChange={(e) => setYear(e.target.value)} options={[{ value: '', label: tr("الكل") }, ...(L?.years || []).map((y) => ({ value: y, label: y }))]} />
         {(L?.categories.length || 0) > 0 && <Select label={tr("التصنيف")} className="w-36" value={category} onChange={(e) => setCategory(e.target.value)} options={[{ value: '', label: tr("الكل") }, ...(L?.categories || []).map((c) => ({ value: c, label: c }))]} />}
         {(L?.clients.length || 0) > 0 && <Select label={tr("العميل")} className="w-44" value={client} onChange={(e) => setClient(e.target.value)} options={[{ value: '', label: tr("الكل") }, ...(L?.clients || []).map((c) => ({ value: c.id, label: c.name }))]} />}
@@ -85,7 +96,7 @@ export function LettersPage({ view }: { view: 'in' | 'out' | 'archive' }) {
       </div>
       <Card padded={false}>
         {q.isError ? <ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} /> : !q.data ? <Loader /> : rows.length === 0 ? (
-          <EmptyState title={view === 'archive' ? tr("لا خطابات مؤرشفة") : view === 'in' ? tr("لا خطابات واردة") : tr("لا خطابات صادرة")}
+          <EmptyState title={view === 'archive' ? tr("لا مستندات مؤرشفة") : view === 'in' ? tr("لا خطابات واردة") : view === 'out' ? tr("لا خطابات صادرة") : tr("لا مستندات")}
             body={view === 'archive' ? tr("الخطابات المنتهية تُنقل إلى الأرشيف من صفحتها، وتبقى قابلة للبحث هنا.") : tr("سجّل الخطاب من الزر أعلى الصفحة، واربطه بالعميل أو المشروع ليظهر في صفحتهما.")} />
         ) : (
           <DataTable sticky sort={t.sort} onSort={t.onSort} pager={<Pager {...t.pager} />} minWidth={820}
@@ -93,9 +104,9 @@ export function LettersPage({ view }: { view: 'in' | 'out' | 'archive' }) {
               { key: 'category', label: tr("التصنيف") }, { key: 'assigneeName', label: tr("المسؤول") }, { key: 'status', label: tr("الحالة") }, { key: 'dueDate', label: tr("موعد الرد") }]}>
             {t.rows.map((l) => (
               <tr key={l.id} className="cursor-pointer hover:bg-chip/40" onClick={() => nav('/correspondence/' + l.id)}>
-                <td className="whitespace-nowrap"><span className="flex items-center gap-1.5">{view === 'archive' && <DirectionMark l={l} short />}<span className="num">{l.number}</span></span></td>
-                <td><span className="flex flex-col"><Link to={'/correspondence/' + l.id} className="font-semibold text-fg no-underline">{l.subject}</Link>
-                  <span className="text-[12px] text-muted">{[l.channelLabel, l.refNo, l.projectName, l.replyToNumber ? tr("رد على {0}", l.replyToNumber) : '', l.filesCount ? tr("{0} مرفق", l.filesCount) : ''].filter(Boolean).join(' · ')}</span></span></td>
+                <td className="whitespace-nowrap"><span className="flex items-center gap-1.5">{showType && <DirectionMark l={l} short />}<span className="num">{l.number}</span></span>{showType && <span className="block text-[12px] text-muted">{l.typeName}</span>}</td>
+                <td><span className="flex flex-col"><span className="flex flex-wrap items-center gap-1.5"><Link to={'/correspondence/' + l.id} className="font-semibold text-fg no-underline">{l.subject}</Link><ConfBadge l={l} /></span>
+                  <span className="text-[12px] text-muted">{[...l.listFields.map((x) => x.label + ': ' + x.display), l.channelLabel, l.refNo, l.projectName, l.replyToNumber ? tr("رد على {0}", l.replyToNumber) : '', l.filesCount ? tr("{0} مرفق", l.filesCount) : ''].filter(Boolean).join(' · ')}</span></span></td>
                 <td className="text-[13px]">{l.clientId ? <Link to={'/crm/clients/' + l.clientId} className="text-fg no-underline hover:underline" onClick={(e) => e.stopPropagation()}>{l.party}</Link> : l.party}</td>
                 <td className="num whitespace-nowrap">{dmy(l.date)}</td>
                 <td className="text-[13px]">{l.category || '—'}</td>

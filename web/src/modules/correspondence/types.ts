@@ -1,11 +1,17 @@
 /** أنواع وحدة المراسلات */
-export type Direction = 'in' | 'out';
+export type Direction = 'in' | 'out' | 'internal';
+export type Confidentiality = 'public' | 'internal' | 'secret' | 'top_secret';
+export type FieldKind = 'text' | 'number' | 'money' | 'date' | 'select' | 'user' | 'client' | 'project';
 export type LetterStatus = 'draft' | 'sent' | 'received' | 'replied' | 'archived';
 export type Channel = 'mail' | 'hand' | 'whatsapp' | 'email' | 'fax';
 /** ما يمكن ربط الخطاب به (المشروع له حقله المستقل projectId أيضاً) */
 export type LinkType = 'client' | 'project' | 'custody' | 'employee' | 'task';
 
+export interface FieldView { key: string; label: string; kind: FieldKind; value: string | number; display: string; inList: boolean }
+
 export interface LetterView {
+  typeId: string; typeName: string; typeCode: string; confidentiality: Confidentiality; confidentialityLabel: string; readers: string[];
+  version: number; hasMainFile: boolean; restricted: boolean; fields: FieldView[]; listFields: { label: string; display: string }[]; canFiles: boolean;
   id: string; number: string; direction: Direction; directionLabel: string; subject: string; summary: string;
   party: string; clientId: string; clientName: string; date: string; receivedAt: string; sentAt: string; refNo: string;
   channel: Channel | ''; channelLabel: string; category: string; status: LetterStatus; statusLabel: string; open: boolean;
@@ -16,12 +22,17 @@ export interface LetterView {
   canEdit: boolean; canRemove: boolean;
 }
 
-export interface LetterFile { id: string; fileName: string; mimeType: string; isImage: boolean; fileSize: number; uploadedByName: string; uploadedAt: string; canDelete: boolean }
+export interface LetterFile {
+  id: string; fileName: string; mimeType: string; isImage: boolean; isPdf: boolean; hasPreview: boolean; fileSize: number;
+  role: 'main' | 'attachment'; version: number; uploadedByName: string; uploadedAt: string; canDelete: boolean;
+}
+export interface DocVersion { version: number; fileId: string; fileName: string; note: string; byName: string; at: string; current: boolean }
 export interface LetterLog { id: string; kind: string; kindLabel: string; body: string; byName: string; at: string }
 
 export interface LetterDetail {
   letter: LetterView; original: LetterView | null; replies: LetterView[]; files: LetterFile[]; log: LetterLog[];
-  can: { edit: boolean; remove: boolean };
+  main: LetterFile | null; versions: DocVersion[]; readers: { id: string; name: string }[];
+  can: { edit: boolean; remove: boolean; files: boolean };
 }
 
 export interface Opt { id: string; label: string }
@@ -30,6 +41,15 @@ export interface CorLookups {
   people: { id: string; name: string }[]; clients: { id: string; name: string }[]; projects: { id: string; name: string; clientId: string }[];
   directions: Opt[]; statuses: Opt[]; channels: Opt[]; categories: string[]; years: string[];
   links: Record<LinkType, { id: string; name: string }[]>;
+  confidentialities: Opt[]; fieldKinds: Opt[]; types: DocType[];
+}
+
+export interface DocField {
+  id: string; key: string; label: string; kind: FieldKind; kindLabel: string; options: string[]; required: boolean; inList: boolean; active: boolean;
+}
+export interface DocType {
+  id: string; name: string; code: string; direction: Direction; directionLabel: string; numberPattern: string; confidentiality: Confidentiality;
+  builtin: boolean; active: boolean; documents: number; fields: DocField[];
 }
 
 export interface Category { id: string; name: string; active: boolean }

@@ -44,7 +44,7 @@ const ACTIONS: Record<string, string> = {
   'proposal.accepted': tr("قبول عرض سعر"), 'proposal.rejected': tr("رفض عرض سعر"), 'proposal.negotiation': tr("عرض سعر قيد التفاوض"), 'proposal.draft': tr("عرض سعر مسودة"), 'proposal.delete': tr("حذف عرض سعر"),
   // المراسلات
   'letter.create': tr("تسجيل خطاب"), 'letter.update': tr("تعديل خطاب"), 'letter.status': tr("تغيير حالة خطاب"), 'letter.forward': tr("إحالة خطاب"), 'letter.delete': tr("حذف خطاب"),
-  'letter.file.upload': tr("إرفاق ملف بخطاب"), 'letter.file.delete': tr("حذف مرفق خطاب"), 'category.save': tr("حفظ تصنيف مراسلات"),
+  'letter.file.upload': tr("إرفاق ملف بخطاب"), 'letter.file.delete': tr("حذف مرفق خطاب"), 'category.save': tr("حفظ تصنيف مراسلات"), 'letter.version': tr("إصدار جديد لمستند"), 'letter.open': tr("فتح مستند سري جداً"), 'type.create': tr("إضافة نوع مستند"), 'type.update': tr("تعديل نوع مستند"),
   // المنصات
   'import': tr("استيراد ملف بوابة الدفع"), 'month.clear': tr("تفريغ شهر مبيعات"), 'month.approve': tr("اعتماد شهر مبيعات"), 'month.reopen': tr("إعادة فتح شهر مبيعات"),
   'fees.update': tr("تعديل عمولات البوابة"), 'package.create': tr("إضافة باقة"), 'package.update': tr("تعديل باقة"), 'package.remove': tr("حذف باقة"), 'platform.update': tr("تعديل منصة"),

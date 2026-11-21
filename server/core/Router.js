@@ -40,6 +40,7 @@ var Router = {
       'system.selftest': { perm: 'super', fn: function () { return { webauthn: WebAuthn.selfTest_() }; } },
       'system.jobs': { perm: 'super', fn: Jobs.status },
       'system.backup': { perm: 'super', fn: Backup.now },
+      'system.storage': { perm: 'super', fn: function () { return Files.storage_(); } },
       'system.migrate.legacyAttendance': { perm: 'super', fn: Migration.legacyAttendance },
       'system.migrate.legacyCustody': { perm: 'super', fn: Migration.legacyCustody },
       'system.migrate.legacyCrm': { perm: 'super', fn: MigrationCrm.run },

@@ -215,6 +215,7 @@ export default function App() {
                 <Route index element={<CorDashboardPage />} />
                 <Route path="in" element={<LettersPage view="in" />} />
                 <Route path="out" element={<LettersPage view="out" />} />
+                <Route path="docs" element={<LettersPage view="docs" />} />
                 <Route path="archive" element={<LettersPage view="archive" />} />
                 <Route path="report" element={<CorReportPage />} />
                 {corMgr && <Route path="settings" element={<CorSettingsPage />} />}

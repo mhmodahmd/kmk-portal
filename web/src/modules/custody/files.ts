@@ -4,6 +4,9 @@ import { tr } from '../../lib/i18n';
 
 export const ACCEPT = 'image/*,application/pdf';
 const MAX = 10 * 1024 * 1024;
+/** المستندات: Office والنصوص فوق الصور و PDF، حتى 25 ميجابايت (Files.DOCS في الخادم) */
+export const DOC_ACCEPT = 'image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv';
+export const DOC_MAX = 25 * 1024 * 1024;
 
 const readB64 = (blob: Blob) => new Promise<string>((resolve, reject) => {
   const r = new FileReader();
@@ -27,9 +30,9 @@ async function shrink(file: File): Promise<{ blob: Blob; name: string; type: str
   } catch { return { blob: file, name: file.name, type: file.type }; }
 }
 
-export async function filePayload(file: File) {
+export async function filePayload(file: File, max = MAX) {
   const s = await shrink(file);
-  if (s.blob.size > MAX) throw new Error(tr("حجم الملف يتجاوز 10 ميجابايت."));
+  if (s.blob.size > max) throw new Error(max === DOC_MAX ? tr("حجم الملف يتجاوز 25 ميجابايت.") : tr("حجم الملف يتجاوز 10 ميجابايت."));
   const type = s.type || (/\.pdf$/i.test(s.name) ? 'application/pdf' : /\.hei[cf]$/i.test(s.name) ? 'image/heic' : '');
   return { fileName: s.name, mimeType: type, data: await readB64(s.blob) };
 }

@@ -6,6 +6,7 @@ import type { CompanySettings } from '../../lib/types';
 import { formatDateTime } from '../../lib/format';
 import { useAction, useApi } from '../../lib/useApi';
 import { Card, ErrorBox, Loader, PageHeader } from '../../ui/Display';
+import { cx } from '../../ui/cx';
 import { Facts } from '../../ui/Controls';
 import { Button } from '../../ui/Button';
 import { Form, TextInput } from '../../ui/Field';
@@ -39,6 +40,7 @@ export default function CompanyPage() {
           </Form>
         )}
       </Card>
+      <StorageCard />
       <SystemCard />
     </div>
   );
@@ -79,6 +81,35 @@ function SystemCard() {
             {last?.folderUrl && <a href={last.folderUrl} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center gap-1.5 px-2 text-accent-fg no-underline sm:h-10">{tr("مجلد النسخ على درايف")}</a>}
           </div>
           {!s.backup?.available && <p className="m-0 text-[13px] text-muted">{tr("النسخ الاحتياطي يحتاج صلاحية درايف المفعّلة من مالك البوابة.")}</p>}
+        </>
+      )}
+    </Card>
+  );
+}
+
+/** مساحة Google Drive لحساب البوابة: تنبيه لمدير النظام عند 80% و95% (الصيانة اليومية) */
+function StorageCard() {
+  const q = useApi<{ used: number; limit: number; percent: number; warnAt: number } | null>('system.storage', {}, { staleTime: 10 * 60_000 });
+  const s = q.data;
+  const gb = (n: number) => (n / 1073741824).toFixed(n < 10737418240 ? 2 : 1);
+  const tone = !s ? '' : s.percent >= 95 ? 'bg-bad' : s.percent >= s.warnAt ? 'bg-warn' : 'bg-ok';
+  return (
+    <Card className="flex max-w-2xl flex-col gap-3">
+      <div className="flex flex-col">
+        <h2 className="m-0 text-[16px] font-semibold">{tr("مساحة Google Drive")}</h2>
+        <span className="text-[13px] text-muted">{tr("المرفقات والمستندات والنسخ الاحتياطية في حساب البوابة، ومعها بريده وصوره.")}</span>
+      </div>
+      {q.isError ? <ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} /> : q.isPending ? <Loader /> : !s ? (
+        <p className="m-0 text-[13px] text-muted">{tr("صلاحية درايف غير مفعّلة بعد.")}</p>
+      ) : (
+        <>
+          <div className="h-2.5 w-full overflow-hidden rounded-full bg-chip" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={s.percent} aria-label={tr("المستخدم من المساحة")}>
+            <div className={cx('h-full rounded-full', tone)} style={{ width: Math.min(100, s.percent) + '%' }} />
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[13px]">
+            <span className="num">{tr("{0} من {1} جيجابايت ({2}%)", gb(s.used), gb(s.limit), s.percent)}</span>
+            {s.percent >= s.warnAt && <span className="font-semibold text-bad">{tr("المساحة تقترب من الامتلاء: وسّعها من Google One أو احذف ما لا يلزم")}</span>}
+          </div>
         </>
       )}
     </Card>

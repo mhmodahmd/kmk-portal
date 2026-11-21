@@ -8,6 +8,13 @@
  * - الجهة: اسم حر أو عميل من وحدة العملاء (clientId). الربط: مشروع (projectId) وعنصر آخر (linkedType/linkedId: عميل، مشروع، عهدة، موظف، مهمة).
  * - المرفقات على درايف عبر Files (مجلد «المراسلات/YYYY»)، وسجل التتبع (LetterLog) لكل حدث.
  * - الإشعارات: إحالة خطاب إلى مسؤول، وتذكير بموعد الرد (قبل يومين وعند التأخر) لمن يتابعه.
+ *
+ * المستندات (المرحلة 1 من docs/08):
+ * - أنواع المستندات (DocTypes) وحقولها الخاصة (DocFields) من الإعدادات. الوارد والصادر نوعان مدمجان (IN, OUT)،
+ *   والخطاب القديم بلا typeId يُعدّ من نوع اتجاهه. الأنواع الداخلية (مذكرة، تعميم، قرار) اتجاهها internal.
+ * - الرقم من نمط النوع `{code}-{year}-{seq:4}`، فيبقى ترقيم الوارد والصادر كما هو.
+ * - السرية: عام · داخلي (الافتراضي، وهو سلوك المراسلات السابق) · سري · سري جداً، مع قائمة اطلاع (readers).
+ * - الملف الرئيسي بإصدارات (DocVersions)، والمرفقات حتى 25 ميجابايت بأنواع Office والنصوص، ومعاينة PDF لملفات Office.
  */
 var COR_SCHEMA = {
   Letters: [
@@ -15,24 +22,48 @@ var COR_SCHEMA = {
     ['party', 'text'], ['clientId', 'text'], ['date', 'date'], ['receivedAt', 'ts'], ['sentAt', 'ts'], ['refNo', 'text'],
     ['channel', 'text'], ['category', 'text'], ['status', 'text'], ['replyToId', 'text'], ['dueDate', 'date'], ['assigneeId', 'text'],
     ['linkedType', 'text'], ['linkedId', 'text'], ['projectId', 'text'], ['tags', 'json'], ['archivedAt', 'ts'],
-    ['createdBy', 'text'], ['createdAt', 'ts'], ['updatedBy', 'text'], ['updatedAt', 'ts']
+    ['createdBy', 'text'], ['createdAt', 'ts'], ['updatedBy', 'text'], ['updatedAt', 'ts'],
+    ['typeId', 'text'], ['fields', 'json'], ['confidentiality', 'text'], ['readers', 'json'], ['version', 'num'], ['mainFileId', 'text']
   ],
   LetterFiles: [
     ['id', 'text'], ['letterId', 'text'], ['fileName', 'text'], ['driveFileId', 'text'], ['mimeType', 'text'], ['fileSize', 'num'],
-    ['uploadedBy', 'text'], ['uploadedAt', 'ts']
+    ['uploadedBy', 'text'], ['uploadedAt', 'ts'], ['role', 'text'], ['version', 'num'], ['previewFileId', 'text'], ['sha256', 'text']
   ],
   LetterLog: [['id', 'text'], ['letterId', 'text'], ['kind', 'text'], ['body', 'text'], ['byId', 'text'], ['at', 'ts']],
-  Categories: [['id', 'text'], ['name', 'text'], ['active', 'bool'], ['sortOrder', 'num']]
+  Categories: [['id', 'text'], ['name', 'text'], ['active', 'bool'], ['sortOrder', 'num']],
+  DocTypes: [
+    ['id', 'text'], ['name', 'text'], ['code', 'text'], ['direction', 'text'], ['numberPattern', 'text'], ['confidentiality', 'text'],
+    ['builtin', 'bool'], ['active', 'bool'], ['sortOrder', 'num'], ['createdAt', 'ts'], ['updatedAt', 'ts']
+  ],
+  DocFields: [
+    ['id', 'text'], ['typeId', 'text'], ['key', 'text'], ['label', 'text'], ['kind', 'text'], ['options', 'json'],
+    ['required', 'bool'], ['inList', 'bool'], ['sortOrder', 'num'], ['active', 'bool']
+  ],
+  DocVersions: [
+    ['id', 'text'], ['letterId', 'text'], ['version', 'num'], ['fileId', 'text'], ['snapshot', 'json'], ['note', 'text'], ['byId', 'text'], ['at', 'ts']
+  ]
 };
 
 var COR = {
-  DIRECTION: { in: 'وارد', out: 'صادر' },
+  DIRECTION: { in: 'وارد', out: 'صادر', internal: 'داخلي' },
   STATUS: { draft: 'مسودة', sent: 'مُرسل', received: 'مستلَم', replied: 'تم الرد', archived: 'مؤرشف' },
   ORDER: ['draft', 'sent', 'received', 'replied', 'archived'],
   OPEN: ['draft', 'sent', 'received'],
   CHANNEL: { mail: 'بريد عادي', hand: 'باليد', whatsapp: 'واتساب', email: 'بريد إلكتروني', fax: 'فاكس' },
   LINKS: { client: 'عميل', project: 'مشروع', custody: 'عهدة', employee: 'موظف', task: 'مهمة' },
-  LOG: { create: 'تسجيل', update: 'تعديل', send: 'إرسال', receive: 'استلام', reply: 'رد', archive: 'أرشفة', restore: 'إعادة من الأرشيف', forward: 'إحالة', file: 'مرفق' },
+  LOG: { create: 'تسجيل', update: 'تعديل', send: 'إرسال', receive: 'استلام', reply: 'رد', archive: 'أرشفة', restore: 'إعادة من الأرشيف', forward: 'إحالة', file: 'مرفق', version: 'إصدار جديد' },
+  CONF: { public: 'عام', internal: 'داخلي', secret: 'سري', top_secret: 'سري جداً' },
+  FIELD_KINDS: { text: 'نص', number: 'رقم', money: 'مبلغ', date: 'تاريخ', select: 'قائمة', user: 'شخص', client: 'عميل', project: 'مشروع' },
+  PATTERN: '{code}-{year}-{seq:4}',
+  DEFAULT_TYPES: [
+    { code: 'IN', name: 'وارد', direction: 'in', builtin: true },
+    { code: 'OUT', name: 'صادر', direction: 'out', builtin: true },
+    { code: 'MEMO', name: 'مذكرة داخلية', direction: 'internal' },
+    { code: 'CIRC', name: 'تعميم', direction: 'internal' },
+    { code: 'DEC', name: 'قرار إداري', direction: 'internal' }
+  ],
+  MAX_FIELDS: 20,
+  MAX_READERS: 30,
   DUE_DAYS: 2,
   MAX_TAGS: 10,
   DEFAULT_CATEGORIES: ['عام', 'تعاقدي', 'مالي', 'إداري', 'شكوى']
@@ -44,13 +75,27 @@ var Correspondence = {
   isMgr_: function (ctx) { return Permissions.has(ctx, 'correspondence', ['manager']); },
   enabled_: function (key) { var m = moduleDef_(key); return !!(m && m.enabled); },
 
-  /** الموظف يرى ما سجّله أو أُحيل إليه، والمدير الكل */
-  canSee_: function (ctx, l) {
+  /**
+   * مستوى الاطلاع: 'full' (البيانات والملفات) · 'meta' (البيانات دون الملفات والملخص) · null.
+   * المنشئ والمسؤول وقائمة الاطلاع ومدير النظام دائماً full. ثم حسب السرية:
+   * عام: كل من له دور · داخلي: المدير · سري: المدير بياناته فقط · سري جداً: لا أحد غيرهم.
+   */
+  access_: function (ctx, l) {
     var u = ctx.user.id;
-    return Correspondence.isMgr_(ctx) || l.createdBy === u || l.assigneeId === u;
+    if (ctx.user.isSuperAdmin || l.createdBy === u || l.assigneeId === u || (l.readers || []).indexOf(u) >= 0) return 'full';
+    var conf = l.confidentiality || 'internal', mgr = Correspondence.isMgr_(ctx);
+    if (conf === 'public') return Permissions.has(ctx, 'correspondence') ? 'full' : null;
+    if (conf === 'internal') return mgr ? 'full' : null;
+    if (conf === 'secret') return mgr ? 'meta' : null;
+    return null;
   },
-  /** يعدّل ويغيّر الحالة ويحيل ويرفق: من سجّله أو المحال إليه أو المدير */
-  canEdit_: function (ctx, l) { return Correspondence.canSee_(ctx, l); },
+  canSee_: function (ctx, l) { return !!Correspondence.access_(ctx, l); },
+  canFiles_: function (ctx, l) { return Correspondence.access_(ctx, l) === 'full'; },
+  /** يعدّل ويغيّر الحالة ويحيل ويرفق: من سجّله أو المحال إليه، أو المدير فيما يطّلع عليه كاملاً */
+  canEdit_: function (ctx, l) {
+    var u = ctx.user.id;
+    return ctx.user.isSuperAdmin || l.createdBy === u || l.assigneeId === u || (Correspondence.isMgr_(ctx) && Correspondence.canFiles_(ctx, l));
+  },
 
   visible_: function (ctx, id) {
     var l = Db.get('correspondence', 'Letters', id);
@@ -58,10 +103,111 @@ var Correspondence = {
     return l;
   },
 
-  /** قيم مبدئية للتصنيفات عند أول تشغيل */
+  /** قيم مبدئية للتصنيفات وأنواع المستندات عند أول تشغيل */
   seed_: function () {
-    if (Correspondence.rows_('Categories').length) return;
-    Db.insertMany('correspondence', 'Categories', COR.DEFAULT_CATEGORIES.map(function (n, i) { return { name: n, active: true, sortOrder: i + 1 }; }));
+    if (!Correspondence.rows_('Categories').length) {
+      Db.insertMany('correspondence', 'Categories', COR.DEFAULT_CATEGORIES.map(function (n, i) { return { name: n, active: true, sortOrder: i + 1 }; }));
+    }
+    if (!Correspondence.rows_('DocTypes').length) {
+      Db.insertMany('correspondence', 'DocTypes', COR.DEFAULT_TYPES.map(function (t, i) {
+        return { name: t.name, code: t.code, direction: t.direction, numberPattern: COR.PATTERN, confidentiality: 'internal', builtin: !!t.builtin, active: true, sortOrder: i + 1, createdAt: nowIso(), updatedAt: nowIso() };
+      }));
+    }
+  },
+
+  // ───────── أنواع المستندات ─────────
+  typesSorted_: function () {
+    Correspondence.seed_();
+    return Correspondence.rows_('DocTypes').slice().sort(function (a, b) { return (a.sortOrder || 0) - (b.sortOrder || 0); });
+  },
+
+  /** حقول نوع (المفعّلة فقط إلا مع all) بالترتيب */
+  fieldsOf_: function (typeId, all) {
+    return Correspondence.rows_('DocFields').filter(function (f) { return f.typeId === typeId && (all || f.active); })
+      .sort(function (a, b) { return (a.sortOrder || 0) - (b.sortOrder || 0); });
+  },
+
+  /** نوع الخطاب: typeId، أو النوع المدمج لاتجاهه للخطابات المسجلة قبل الأنواع */
+  typeOf_: function (l, m) {
+    var types = m ? m.types : indexBy_(Correspondence.typesSorted_());
+    if (l.typeId && types[l.typeId]) return types[l.typeId];
+    var code = l.direction === 'in' ? 'IN' : l.direction === 'out' ? 'OUT' : '';
+    return Object.keys(types).map(function (k) { return types[k]; }).filter(function (t) { return t.builtin && t.code === code; })[0] || null;
+  },
+
+  builtinOf_: function (direction) {
+    var code = direction === 'in' ? 'IN' : 'OUT';
+    return Correspondence.typesSorted_().filter(function (t) { return t.builtin && t.code === code; })[0];
+  },
+
+  /** نمط الترقيم: ينتهي بـ -{seq} أو -{seq:N}، وفيه {code} حتى لا تتشارك الأنواع تسلسلاً واحداً */
+  parsePattern_: function (pattern) {
+    var m = /^((?:\{code\}|\{year\}|[A-Za-z0-9\/-])+)-\{seq(?::([3-6]))?\}$/.exec(String(pattern || ''));
+    if (!m || m[1].indexOf('{code}') < 0) return null;
+    return { prefix: m[1], pad: Number(m[2] || 4) };
+  },
+
+  numberFor_: function (type, date) {
+    var pp = Correspondence.parsePattern_(type.numberPattern) || Correspondence.parsePattern_(COR.PATTERN);
+    return Db.nextSerial(pp.prefix.replace(/\{code\}/g, type.code).replace(/\{year\}/g, date.slice(0, 4)), pp.pad);
+  },
+
+  /** قيمة حقل خاص بعد التحقق: '' للفارغ، والمبلغ بالفلس */
+  fieldValue_: function (f, v) {
+    var empty = v == null || String(v).trim() === '';
+    if (empty) {
+      if (f.required) throw appError('أدخل ' + f.label + '.');
+      return '';
+    }
+    switch (f.kind) {
+      case 'number': {
+        var n = Number(normalizeDigits(v).replace(/[,،\s]/g, ''));
+        if (!isFinite(n)) throw appError(f.label + ' غير صحيح.');
+        return n;
+      }
+      case 'money': return parseMoney_(v, f.label, { allowZero: true });
+      case 'date': return requireDate_(v, f.label);
+      case 'select':
+        if ((f.options || []).indexOf(String(v)) < 0) throw appError(f.label + ': القيمة غير موجودة في القائمة.');
+        return String(v);
+      case 'user': {
+        var u = Db.get('core', 'Users', String(v));
+        if (!u || !u.active) throw appError(f.label + ': الشخص غير موجود أو حسابه معطّل.');
+        return u.id;
+      }
+      case 'client': case 'project':
+        if (!Correspondence.enabled_('crm')) throw appError('وحدة العملاء غير مفعّلة.');
+        return Db.getOrThrow('crm', f.kind === 'client' ? 'Clients' : 'Projects', String(v), f.label).id;
+      default: return optionalText(v, 500);
+    }
+  },
+
+  /** قيم الحقول الخاصة لنوع. الحقول الموقوفة تحتفظ بقيمها السابقة */
+  fieldValues_: function (type, input, prev) {
+    var out = Object.assign({}, prev || {}), vals = input && typeof input === 'object' ? input : {};
+    Correspondence.fieldsOf_(type.id).forEach(function (f) { out[f.key] = Correspondence.fieldValue_(f, vals[f.key]); });
+    return out;
+  },
+
+  fieldDisplay_: function (f, v, m) {
+    if (v === '' || v == null) return '';
+    switch (f.kind) {
+      case 'money': return kwd_(v);
+      case 'date': return dmy_(v);
+      case 'user': return Correspondence.userName_(m, v);
+      case 'client': return m.clients[v] ? m.clients[v].name : '';
+      case 'project': return m.projects[v] ? m.projects[v].name : '';
+      default: return String(v);
+    }
+  },
+
+  /** قائمة الاطلاع: مستخدمون نشطون، بلا تكرار */
+  readers_: function (input) {
+    var list = (Array.isArray(input) ? input : String(input || '').split(',')).map(function (x) { return String(x).trim(); })
+      .filter(function (x, i, a) { return x && a.indexOf(x) === i; });
+    if (list.length > COR.MAX_READERS) throw appError('قائمة الاطلاع أكثر من ' + COR.MAX_READERS + ' شخصاً.');
+    list.forEach(function (id) { var u = Db.get('core', 'Users', id); if (!u || !u.active) throw appError('أحد أفراد قائمة الاطلاع غير موجود أو حسابه معطّل.'); });
+    return list;
   },
 
   activeCategories_: function () {
@@ -82,14 +228,25 @@ var Correspondence = {
 
   maps_: function () {
     var files = {}, replies = {};
-    Correspondence.rows_('LetterFiles').forEach(function (f) { files[f.letterId] = (files[f.letterId] || 0) + 1; });
+    // المرفقات فقط: إصدارات الملف الرئيسي لا تُعد مرفقات
+    Correspondence.rows_('LetterFiles').forEach(function (f) { if (f.role !== 'main') files[f.letterId] = (files[f.letterId] || 0) + 1; });
     Correspondence.rows_('Letters').forEach(function (l) { if (l.replyToId) replies[l.replyToId] = (replies[l.replyToId] || 0) + 1; });
-    var crm = Correspondence.enabled_('crm');
+    var crm = Correspondence.enabled_('crm'), fields = {};
+    Correspondence.rows_('DocFields').forEach(function (f) { if (f.active) (fields[f.typeId] = fields[f.typeId] || []).push(f); });
+    Object.keys(fields).forEach(function (k) { fields[k].sort(function (a, b) { return (a.sortOrder || 0) - (b.sortOrder || 0); }); });
     return {
       users: indexBy_(Db.view('core', 'Users')), emps: indexBy_(Staff.all_()), letters: indexBy_(Correspondence.rows_('Letters')),
       clients: crm ? indexBy_(Db.view('crm', 'Clients')) : {}, projects: crm ? indexBy_(Db.view('crm', 'Projects')) : {},
-      files: files, replies: replies
+      files: files, replies: replies, types: indexBy_(Correspondence.typesSorted_()), fields: fields
     };
+  },
+
+  /** الحقول الخاصة للعرض: [{ key, label, kind, value, display, inList }] */
+  fieldsView_: function (l, type, m) {
+    var vals = l.fields || {};
+    return (type && m.fields[type.id] || []).map(function (f) {
+      return { key: f.key, label: f.label, kind: f.kind, value: vals[f.key] == null ? '' : vals[f.key], display: Correspondence.fieldDisplay_(f, vals[f.key], m), inList: !!f.inList };
+    });
   },
 
   userName_: function (m, id) { var u = id && m.users[id]; return u ? u.fullName : ''; },
@@ -112,9 +269,16 @@ var Correspondence = {
   view_: function (l, m, ctx) {
     var today = localDate_(), open = COR.OPEN.indexOf(l.status) >= 0;
     var client = l.clientId && m.clients[l.clientId], proj = l.projectId && m.projects[l.projectId], orig = l.replyToId && m.letters[l.replyToId];
+    var type = Correspondence.typeOf_(l, m), conf = l.confidentiality || 'internal', access = ctx ? Correspondence.access_(ctx, l) : 'full';
+    var fields = Correspondence.fieldsView_(l, type, m);
     return {
+      typeId: type ? type.id : '', typeName: type ? type.name : COR.DIRECTION[l.direction] || '', typeCode: type ? type.code : '',
+      confidentiality: conf, confidentialityLabel: COR.CONF[conf] || conf, readers: l.readers || [],
+      version: l.version || 0, hasMainFile: !!l.mainFileId, restricted: access === 'meta',
+      fields: access === 'meta' ? [] : fields,
+      listFields: access === 'meta' ? [] : fields.filter(function (f) { return f.inList && f.display; }).map(function (f) { return { label: f.label, display: f.display }; }),
       id: l.id, number: l.number, direction: l.direction, directionLabel: COR.DIRECTION[l.direction] || l.direction,
-      subject: l.subject, summary: l.summary || '', party: l.party || (client ? client.name : ''), clientId: l.clientId || '', clientName: client ? client.name : '',
+      subject: l.subject, summary: access === 'meta' ? '' : l.summary || '', party: l.party || (client ? client.name : ''), clientId: l.clientId || '', clientName: client ? client.name : '',
       date: l.date || '', receivedAt: l.receivedAt || '', sentAt: l.sentAt || '', refNo: l.refNo || '',
       channel: l.channel || '', channelLabel: COR.CHANNEL[l.channel] || '', category: l.category || '',
       status: l.status, statusLabel: COR.STATUS[l.status] || l.status, open: open,
@@ -126,7 +290,7 @@ var Correspondence = {
       projectId: l.projectId || '', projectName: proj ? proj.name : '', tags: l.tags || [], archivedAt: l.archivedAt || '',
       createdBy: l.createdBy, createdByName: Correspondence.userName_(m, l.createdBy), createdAt: l.createdAt, updatedAt: l.updatedAt,
       filesCount: m.files[l.id] || 0, repliesCount: m.replies[l.id] || 0,
-      canEdit: !!ctx && Correspondence.canEdit_(ctx, l), canRemove: !!ctx && Correspondence.isMgr_(ctx)
+      canEdit: !!ctx && Correspondence.canEdit_(ctx, l), canRemove: !!ctx && Correspondence.isMgr_(ctx), canFiles: access === 'full'
     };
   },
 
@@ -189,13 +353,17 @@ var Correspondence = {
       projects: Correspondence.projects_(),
       directions: dict(COR.DIRECTION), statuses: COR.ORDER.map(function (k) { return { id: k, label: COR.STATUS[k] }; }), channels: dict(COR.CHANNEL),
       categories: Correspondence.activeCategories_(), years: Object.keys(years).sort().reverse(),
-      links: Correspondence.linkOptions_(ctx)
+      links: Correspondence.linkOptions_(ctx),
+      confidentialities: dict(COR.CONF), fieldKinds: dict(COR.FIELD_KINDS),
+      types: Correspondence.types().filter(function (t) { return t.active; }).map(function (t) {
+        return Object.assign({}, t, { fields: t.fields.filter(function (f) { return f.active; }) });
+      })
     };
   },
 
   /**
    * القوائم. المؤرشفة تُخفى إلا مع archived=true (المؤرشفة فقط) أو withArchived=true (الكل).
-   * التصفية: direction, status, year, clientId, projectId, assigneeId, category, channel, q, linkedType+linkedId, overdue
+   * التصفية: direction, typeId, confidentiality, status, year, clientId, projectId, assigneeId, category, channel, q, linkedType+linkedId, overdue
    */
   list: function (ctx, p) {
     p = p || {};
@@ -208,6 +376,8 @@ var Correspondence = {
       if (p.archived && l.status !== 'archived') return false;
       if (!p.archived && !p.withArchived && !p.status && l.status === 'archived') return false;
       if (p.direction && l.direction !== p.direction) return false;
+      if (p.typeId) { var ty = Correspondence.typeOf_(l, m); if (!ty || ty.id !== p.typeId) return false; }
+      if (p.confidentiality && (l.confidentiality || 'internal') !== p.confidentiality) return false;
       if (p.status && l.status !== p.status) return false;
       if (p.year && (l.date || '').slice(0, 4) !== String(p.year)) return false;
       if (p.clientId && l.clientId !== p.clientId && !(l.linkedType === 'client' && l.linkedId === p.clientId) && !clientProjects[l.projectId]) return false;
@@ -218,8 +388,9 @@ var Correspondence = {
       if (p.linkedType && (l.linkedType !== p.linkedType || l.linkedId !== p.linkedId)) return false;
       if (p.overdue && !(COR.OPEN.indexOf(l.status) >= 0 && l.dueDate && l.dueDate < today)) return false;
       if (q) {
-        var client = l.clientId && m.clients[l.clientId];
-        var hay = [l.number, l.subject, l.summary, l.party, client ? client.name : '', l.refNo, (l.tags || []).join(' ')].join(' ').toLowerCase();
+        var client = l.clientId && m.clients[l.clientId], full = Correspondence.canFiles_(ctx, l);
+        var extra = full ? Correspondence.fieldsView_(l, Correspondence.typeOf_(l, m), m).map(function (f) { return f.display; }) : [];
+        var hay = [l.number, l.subject, full ? l.summary : '', l.party, client ? client.name : '', l.refNo, (l.tags || []).join(' ')].concat(extra).join(' ').toLowerCase();
         if (hay.indexOf(q) < 0) return false;
       }
       return true;
@@ -227,23 +398,42 @@ var Correspondence = {
     return Correspondence.sort_(rows).map(function (l) { return Correspondence.view_(l, m, ctx); });
   },
 
+  fileView_: function (f, m, ctx) {
+    return { id: f.id, fileName: f.fileName, mimeType: f.mimeType, isImage: /^image\//.test(f.mimeType || ''), isPdf: f.mimeType === 'application/pdf',
+      hasPreview: !!f.previewFileId, fileSize: f.fileSize || 0, role: f.role || 'attachment', version: f.version || 0,
+      uploadedByName: Correspondence.userName_(m, f.uploadedBy), uploadedAt: f.uploadedAt,
+      canDelete: f.role !== 'main' && (f.uploadedBy === ctx.user.id || Correspondence.isMgr_(ctx)) };
+  },
+
   get: function (ctx, p) {
     var l = Correspondence.visible_(ctx, p && p.id), m = Correspondence.maps_();
+    var full = Correspondence.canFiles_(ctx, l), u = ctx.user.id;
+    // السري جداً يفتحه مدير النظام من خارج المعنيين: يُسجَّل كل فتح
+    if (l.confidentiality === 'top_secret' && l.createdBy !== u && l.assigneeId !== u && (l.readers || []).indexOf(u) < 0) {
+      Audit.log(ctx.user, 'correspondence', 'letter.open', 'Letter', l.id, { number: l.number, confidentiality: 'top_secret' });
+    }
     var orig = l.replyToId ? Db.get('correspondence', 'Letters', l.replyToId) : null;
     var replies = Correspondence.rows_('Letters').filter(function (x) { return x.replyToId === l.id && Correspondence.canSee_(ctx, x); })
       .sort(function (a, b) { return (a.date || '').localeCompare(b.date || ''); });
+    var files = full ? Correspondence.rows_('LetterFiles').filter(function (f) { return f.letterId === l.id; }) : [];
+    var byId = indexBy_(files);
+    var versions = full ? Correspondence.rows_('DocVersions').filter(function (v) { return v.letterId === l.id; })
+      .sort(function (a, b) { return b.version - a.version; }).map(function (v) {
+        var f = byId[v.fileId];
+        return { version: v.version, fileId: v.fileId, fileName: f ? f.fileName : '', note: v.note || '', byName: Correspondence.userName_(m, v.byId), at: v.at, current: v.version === (l.version || 0) };
+      }) : [];
     return {
       letter: Correspondence.view_(l, m, ctx),
       original: orig && Correspondence.canSee_(ctx, orig) ? Correspondence.view_(orig, m, ctx) : null,
       replies: replies.map(function (x) { return Correspondence.view_(x, m, ctx); }),
-      files: Correspondence.rows_('LetterFiles').filter(function (f) { return f.letterId === l.id; }).map(function (f) {
-        return { id: f.id, fileName: f.fileName, mimeType: f.mimeType, isImage: /^image\//.test(f.mimeType || ''), fileSize: f.fileSize || 0,
-          uploadedByName: Correspondence.userName_(m, f.uploadedBy), uploadedAt: f.uploadedAt, canDelete: f.uploadedBy === ctx.user.id || Correspondence.isMgr_(ctx) };
-      }),
+      main: l.mainFileId && byId[l.mainFileId] ? Correspondence.fileView_(byId[l.mainFileId], m, ctx) : null,
+      versions: versions,
+      readers: (l.readers || []).map(function (id) { return { id: id, name: Correspondence.userName_(m, id) }; }),
+      files: files.filter(function (f) { return f.role !== 'main'; }).map(function (f) { return Correspondence.fileView_(f, m, ctx); }),
       log: Correspondence.rows_('LetterLog').filter(function (x) { return x.letterId === l.id; })
         .sort(function (a, b) { return (a.at || '').localeCompare(b.at || ''); })
         .map(function (x) { return { id: x.id, kind: x.kind, kindLabel: COR.LOG[x.kind] || x.kind, body: x.body || '', byName: Correspondence.userName_(m, x.byId), at: x.at }; }),
-      can: { edit: Correspondence.canEdit_(ctx, l), remove: Correspondence.isMgr_(ctx) }
+      can: { edit: Correspondence.canEdit_(ctx, l), remove: Correspondence.isMgr_(ctx), files: full }
     };
   },
 
@@ -254,22 +444,43 @@ var Correspondence = {
     return u;
   },
 
-  /** إنشاء أو تعديل خطاب. الاتجاه لا يتغيّر بعد التسجيل */
+  /** نوع خطاب جديد: typeId، أو النوع المدمج للاتجاه (الوارد والصادر كما كانا) */
+  typeForNew_: function (p) {
+    var type;
+    if (p.typeId) {
+      type = Db.getOrThrow('correspondence', 'DocTypes', String(p.typeId), 'نوع المستند');
+      if (!type.active) throw appError('نوع المستند موقوف.');
+      if (p.direction && p.direction !== type.direction) throw appError('اتجاه الخطاب لا يطابق نوع المستند.');
+      return type;
+    }
+    var direction = Correspondence.enum_(p.direction, COR.DIRECTION, 'اتجاه الخطاب');
+    if (direction === 'internal') throw appError('اختر نوع المستند.');
+    return Correspondence.builtinOf_(direction);
+  },
+
+  /** إنشاء أو تعديل خطاب. الاتجاه والنوع لا يتغيّران بعد التسجيل */
   save: function (ctx, p) {
     p = p || {};
     return withLock(function () {
       var cur = p.id ? Correspondence.visible_(ctx, p.id) : null;
       if (cur && !Correspondence.canEdit_(ctx, cur)) throw appError('لا يمكنك تعديل هذا الخطاب.', 'FORBIDDEN');
-      var direction = cur ? cur.direction : Correspondence.enum_(p.direction, COR.DIRECTION, 'اتجاه الخطاب');
       if (cur && p.direction && p.direction !== cur.direction) throw appError('لا يُغيَّر اتجاه الخطاب بعد تسجيله.');
+      var type = cur ? Correspondence.typeOf_(cur) : Correspondence.typeForNew_(p);
+      if (cur && p.typeId && type && p.typeId !== type.id) throw appError('لا يُغيَّر نوع المستند بعد تسجيله.');
+      var direction = cur ? cur.direction : type.direction;
+      var internal = direction === 'internal';
       var rec = {
         subject: requireText(p.subject, 'موضوع الخطاب', 200),
         summary: optionalText(p.summary, 4000),
         date: requireDate_(p.date, 'تاريخ الخطاب'),
         refNo: optionalText(p.refNo, 60),
-        channel: p.channel ? Correspondence.enum_(p.channel, COR.CHANNEL, 'قناة الخطاب') : 'mail',
+        channel: p.channel ? Correspondence.enum_(p.channel, COR.CHANNEL, 'قناة الخطاب') : internal ? '' : 'mail',
         category: '', party: '', clientId: '', projectId: '', linkedType: '', linkedId: '',
         dueDate: optionalDate_(p.dueDate, 'موعد الرد'),
+        confidentiality: p.confidentiality ? Correspondence.enum_(p.confidentiality, COR.CONF, 'درجة السرية')
+          : cur ? cur.confidentiality || 'internal' : (type && type.confidentiality) || 'internal',
+        readers: p.readers !== undefined ? Correspondence.readers_(p.readers) : cur ? cur.readers || [] : [],
+        fields: type ? Correspondence.fieldValues_(type, p.fields, cur && cur.fields) : (cur && cur.fields) || {},
         updatedBy: ctx.user.id, updatedAt: nowIso()
       };
       if (p.category) {
@@ -284,7 +495,8 @@ var Correspondence = {
         rec.clientId = client.id;
         rec.party = optionalText(p.party, 160) || client.name;
       } else {
-        rec.party = requireText(p.party, 'الجهة', 160);
+        // المستند الداخلي بلا جهة خارجية: الجهة (القسم أو المعنيون) اختيارية
+        rec.party = internal ? optionalText(p.party, 160) : requireText(p.party, 'الجهة', 160);
       }
       if (p.projectId) {
         if (!Correspondence.enabled_('crm')) throw appError('وحدة العملاء غير مفعّلة.');
@@ -318,6 +530,7 @@ var Correspondence = {
       var orig = null;
       if (!cur && p.replyToId) {
         orig = Correspondence.visible_(ctx, String(p.replyToId));
+        if (internal || orig.direction === 'internal') throw appError('الرد يكون بين خطاب وارد وآخر صادر.');
         if (orig.direction === direction) throw appError('الرد يكون في الاتجاه المقابل للخطاب الأصلي.');
         rec.replyToId = orig.id;
         if (!rec.clientId && orig.clientId) rec.clientId = orig.clientId;
@@ -330,6 +543,8 @@ var Correspondence = {
         if (cur.assigneeId !== assignee) changes.push('أحاله إلى ' + Correspondence.userName_({ users: indexBy_(Db.view('core', 'Users')) }, assignee));
         if ((cur.dueDate || '') !== rec.dueDate) changes.push(rec.dueDate ? 'غيّر موعد الرد إلى ' + dmy_(rec.dueDate) : 'أزال موعد الرد');
         if ((cur.date || '') !== rec.date) changes.push('غيّر تاريخ الخطاب إلى ' + dmy_(rec.date));
+        if ((cur.confidentiality || 'internal') !== rec.confidentiality) changes.push('غيّر درجة السرية إلى «' + COR.CONF[rec.confidentiality] + '»');
+        if (JSON.stringify(cur.readers || []) !== JSON.stringify(rec.readers)) changes.push('عدّل قائمة الاطلاع');
         saved = Db.update('correspondence', 'Letters', cur.id, rec);
         Correspondence.log_(ctx, cur.id, 'update', changes.length ? changes.join(' · ') : 'عدّل بيانات الخطاب');
         Audit.log(ctx.user, 'correspondence', 'letter.update', 'Letter', cur.id, { number: cur.number, subject: rec.subject, changes: changes.join(' · '), assigneeChanged: cur.assigneeId !== assignee });
@@ -339,7 +554,7 @@ var Correspondence = {
         else if (p.status === 'sent' || bool_(p.sent)) { status = 'sent'; extra.sentAt = nowIso(); }
         else status = 'draft';
         saved = Db.insert('correspondence', 'Letters', Object.assign(rec, extra, {
-          number: Db.nextSerial((direction === 'out' ? 'OUT' : 'IN') + '-' + rec.date.slice(0, 4), 4),
+          number: Correspondence.numberFor_(type, rec.date), typeId: type.id, version: 0, mainFileId: '',
           direction: direction, status: status, replyToId: rec.replyToId || '', createdBy: ctx.user.id, createdAt: nowIso()
         }));
         Correspondence.log_(ctx, saved.id, 'create', orig ? 'سجّل الخطاب ' + saved.number + ' رداً على ' + orig.number : 'سجّل الخطاب ' + saved.number);
@@ -362,9 +577,10 @@ var Correspondence = {
       var l = Correspondence.visible_(ctx, p.id), to = Correspondence.enum_(p.status, COR.STATUS, 'الحالة');
       if (!Correspondence.canEdit_(ctx, l)) throw appError('لا يمكنك تغيير حالة هذا الخطاب.', 'FORBIDDEN');
       if (to === l.status) return Correspondence.view_(l, Correspondence.maps_(), ctx);
-      if (to === 'sent' && l.direction !== 'out') throw appError('«مُرسل» حالة للصادر فقط.');
+      if (to === 'sent' && l.direction === 'in') throw appError('«مُرسل» حالة للصادر والداخلي فقط.');
       if (to === 'received' && l.direction !== 'in') throw appError('«مستلَم» حالة للوارد فقط.');
-      if (to === 'draft' && (l.direction !== 'out' || !Correspondence.isMgr_(ctx))) throw appError('إعادة الخطاب إلى مسودة لمدير المراسلات وللصادر فقط.', 'FORBIDDEN');
+      if (to === 'replied' && l.direction === 'internal') throw appError('«تم الرد» حالة للوارد والصادر فقط.');
+      if (to === 'draft' && (l.direction === 'in' || !Correspondence.isMgr_(ctx))) throw appError('إعادة الخطاب إلى مسودة لمدير المراسلات وللصادر والداخلي فقط.', 'FORBIDDEN');
       if (l.status === 'archived' && !Correspondence.isMgr_(ctx)) throw appError('يعيد الخطاب من الأرشيف مدير المراسلات.', 'FORBIDDEN');
       var note = optionalText(p.note, 500), ch = { status: to, updatedBy: ctx.user.id, updatedAt: nowIso() };
       var kind = to === 'sent' ? 'send' : to === 'received' ? 'receive' : to === 'replied' ? 'reply' : to === 'archived' ? 'archive' : 'restore';
@@ -399,7 +615,11 @@ var Correspondence = {
     return withLock(function () {
       var l = Correspondence.visible_(ctx, p && p.id);
       if (Correspondence.rows_('Letters').some(function (x) { return x.replyToId === l.id; })) throw appError('لا يُحذف خطاب له ردود مرتبطة. احذف الردود أولاً أو أرشفه.');
-      Correspondence.rows_('LetterFiles').filter(function (f) { return f.letterId === l.id; }).forEach(function (f) { Files.trash_(f.driveFileId); Db.remove('correspondence', 'LetterFiles', f.id); });
+      Correspondence.rows_('LetterFiles').filter(function (f) { return f.letterId === l.id; }).forEach(function (f) {
+        Files.trash_(f.driveFileId); if (f.previewFileId) Files.trash_(f.previewFileId);
+        Db.remove('correspondence', 'LetterFiles', f.id);
+      });
+      Db.removeWhere('correspondence', 'DocVersions', function (x) { return x.letterId === l.id; });
       Db.removeWhere('correspondence', 'LetterLog', function (x) { return x.letterId === l.id; });
       Db.remove('correspondence', 'Letters', l.id);
       Audit.log(ctx.user, 'correspondence', 'letter.delete', 'Letter', l.id, { number: l.number, subject: l.subject });
@@ -408,30 +628,62 @@ var Correspondence = {
   },
 
   // ───────── المرفقات ─────────
+  /**
+   * رفع ملف. role: 'attachment' (مرفق، الافتراضي) أو 'main' (الملف الرئيسي للمستند):
+   * كل رفع للملف الرئيسي إصدار جديد (DocVersions) يحفظ نسخة من البيانات وقته، والإصدارات السابقة تبقى.
+   * ملفات Office تُنشأ لها معاينة PDF إن أمكن.
+   */
   fileUpload: function (ctx, p) {
     Files.require_();
     p = p || {};
     var l = Correspondence.visible_(ctx, p.letterId);
     if (!Correspondence.canEdit_(ctx, l)) throw appError('لا يمكنك إرفاق ملفات بهذا الخطاب.', 'FORBIDDEN');
-    var up = Files.decode_(p);
-    var name = l.number + '_' + Files.safeName_(p.fileName || ('مرفق.' + up.ext)); // i18n:line
-    var f = Files.save_(Files.folder_('', ['المراسلات', (l.date || l.createdAt).slice(0, 4)]), up, name); // i18n:line
-    var row = Db.insert('correspondence', 'LetterFiles', { letterId: l.id, fileName: name, driveFileId: f.id, mimeType: up.mime, fileSize: f.size, uploadedBy: ctx.user.id, uploadedAt: nowIso() });
-    Correspondence.log_(ctx, l.id, 'file', 'أرفق ' + name);
-    Audit.log(ctx.user, 'correspondence', 'letter.file.upload', 'LetterFile', row.id, { letter: l.number, file: name, kb: Math.round(f.size / 1024) });
-    return { id: row.id, fileName: name };
+    var main = p.role === 'main';
+    if (p.role && !main && p.role !== 'attachment') throw appError('نوع الملف غير معروف.');
+    var up = Files.decode_(p, Files.DOCS);
+    var ver = main ? (l.version || 0) + 1 : l.version || 0;
+    var name = l.number + (main ? '_v' + ver : '') + '_' + Files.safeName_(p.fileName || ('مرفق.' + up.ext)); // i18n:line
+    var folder = Files.folder_('', ['المراسلات', (l.date || l.createdAt).slice(0, 4)]); // i18n:line
+    var f = Files.save_(folder, up, name);
+    var preview = up.convert ? Files.preview_(f.id, up.convert, folder, name) : '';
+    var row = Db.insert('correspondence', 'LetterFiles', {
+      letterId: l.id, fileName: name, driveFileId: f.id, mimeType: up.mime, fileSize: f.size, uploadedBy: ctx.user.id, uploadedAt: nowIso(),
+      role: main ? 'main' : 'attachment', version: ver, previewFileId: preview,
+      sha256: bytesToHex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, up.bytes))
+    });
+    if (main) {
+      var note = optionalText(p.note, 300);
+      Db.insert('correspondence', 'DocVersions', {
+        letterId: l.id, version: ver, fileId: row.id, note: note, byId: ctx.user.id, at: nowIso(),
+        snapshot: { subject: l.subject, summary: l.summary || '', date: l.date, party: l.party || '', fields: l.fields || {}, confidentiality: l.confidentiality || 'internal' }
+      });
+      Db.update('correspondence', 'Letters', l.id, { version: ver, mainFileId: row.id, updatedBy: ctx.user.id, updatedAt: nowIso() });
+      Correspondence.log_(ctx, l.id, 'version', 'رفع الإصدار ' + ver + ' من الملف الرئيسي' + (note ? ': ' + note : ''));
+    } else {
+      Correspondence.log_(ctx, l.id, 'file', 'أرفق ' + name);
+    }
+    Audit.log(ctx.user, 'correspondence', main ? 'letter.version' : 'letter.file.upload', 'LetterFile', row.id, { letter: l.number, file: name, version: ver, kb: Math.round(f.size / 1024) });
+    return { id: row.id, fileName: name, version: ver, hasPreview: !!preview };
   },
 
+  /** محتوى ملف. preview=true: معاينة PDF لملف Office */
   fileContent: function (ctx, p) {
     var f = Db.getOrThrow('correspondence', 'LetterFiles', p && p.id, 'المرفق');
-    Correspondence.visible_(ctx, f.letterId);
+    var l = Correspondence.visible_(ctx, f.letterId);
+    if (!Correspondence.canFiles_(ctx, l)) throw appError('ملفات هذا المستند لمن في قائمة الاطلاع فقط.', 'FORBIDDEN');
+    if (p.preview) {
+      if (!f.previewFileId) throw appError('لا توجد معاينة لهذا الملف. نزّله لفتحه.', 'NOT_FOUND');
+      return Files.content_(f.previewFileId, f.fileName.replace(/\.[^.]+$/, '') + '.pdf', 'application/pdf');
+    }
     return Files.content_(f.driveFileId, f.fileName, f.mimeType);
   },
 
   fileRemove: function (ctx, p) {
     var f = Db.getOrThrow('correspondence', 'LetterFiles', p && p.id, 'المرفق'), l = Correspondence.visible_(ctx, f.letterId);
-    if (f.uploadedBy !== ctx.user.id && !Correspondence.isMgr_(ctx)) throw appError('لا يمكنك حذف هذا المرفق.', 'FORBIDDEN');
+    if (f.role === 'main') throw appError('لا يُحذف إصدار من الملف الرئيسي. ارفع إصداراً جديداً بدلاً منه.');
+    if (!Correspondence.canFiles_(ctx, l) || (f.uploadedBy !== ctx.user.id && !Correspondence.isMgr_(ctx))) throw appError('لا يمكنك حذف هذا المرفق.', 'FORBIDDEN');
     Files.trash_(f.driveFileId);
+    if (f.previewFileId) Files.trash_(f.previewFileId);
     Db.remove('correspondence', 'LetterFiles', f.id);
     Correspondence.log_(ctx, l.id, 'file', 'حذف المرفق ' + f.fileName);
     Audit.log(ctx.user, 'correspondence', 'letter.file.delete', 'LetterFile', f.id, { letter: l.number, file: f.fileName });
@@ -472,6 +724,91 @@ var Correspondence = {
     Db.update('correspondence', 'Categories', rows[i].id, { sortOrder: rows[j].sortOrder || j + 1 });
     Db.update('correspondence', 'Categories', rows[j].id, { sortOrder: rows[i].sortOrder || i + 1 });
     return Correspondence.categories();
+  },
+
+  // ───────── أنواع المستندات وحقولها (مدير المراسلات) ─────────
+  /** كل الأنواع بحقولها (والموقوف منها) وعدد مستنداتها */
+  types: function () {
+    var count = {}, types = Correspondence.typesSorted_(), byId = indexBy_(types);
+    Correspondence.rows_('Letters').forEach(function (l) { var t = Correspondence.typeOf_(l, { types: byId }); if (t) count[t.id] = (count[t.id] || 0) + 1; });
+    return types.map(function (t) {
+      return {
+        id: t.id, name: t.name, code: t.code, direction: t.direction, directionLabel: COR.DIRECTION[t.direction] || t.direction,
+        numberPattern: t.numberPattern || COR.PATTERN, confidentiality: t.confidentiality || 'internal', builtin: !!t.builtin, active: !!t.active,
+        documents: count[t.id] || 0,
+        fields: Correspondence.fieldsOf_(t.id, true).map(function (f) {
+          return { id: f.id, key: f.key, label: f.label, kind: f.kind, kindLabel: COR.FIELD_KINDS[f.kind] || f.kind, options: f.options || [], required: !!f.required, inList: !!f.inList, active: !!f.active };
+        })
+      };
+    });
+  },
+
+  /**
+   * حفظ نوع مع حقوله: { id?, name, code, direction, numberPattern, confidentiality, active, fields: [...] }.
+   * الوارد والصادر المدمجان: لا يتغير رمزهما واتجاههما ولا يُوقفان. الحقل لا يتغير نوعه بعد إنشائه،
+   * والحقل المحذوف من القائمة يُوقف وتبقى قيمه في المستندات.
+   */
+  typeSave: function (ctx, p) {
+    p = p || {};
+    return withLock(function () {
+      var rows = Correspondence.typesSorted_();
+      var cur = p.id ? Db.getOrThrow('correspondence', 'DocTypes', String(p.id), 'نوع المستند') : null;
+      var name = requireText(p.name, 'اسم النوع', 60);
+      if (rows.some(function (r) { return r.name === name && (!cur || r.id !== cur.id); })) throw appError('اسم النوع مستخدم مسبقاً.');
+      var code = cur && cur.builtin ? cur.code : String(p.code || '').trim().toUpperCase();
+      if (!/^[A-Z][A-Z0-9]{1,9}$/.test(code)) throw appError('رمز النوع حروف إنجليزية كبيرة وأرقام (2–10)، ويبدأ بحرف.');
+      if (rows.some(function (r) { return r.code === code && (!cur || r.id !== cur.id); })) throw appError('رمز النوع مستخدم مسبقاً.');
+      var direction = cur && cur.builtin ? cur.direction : Correspondence.enum_(p.direction, COR.DIRECTION, 'اتجاه النوع');
+      if (cur && direction !== cur.direction && Correspondence.rows_('Letters').some(function (l) { return l.typeId === cur.id; })) throw appError('لا يُغيَّر اتجاه نوع له مستندات.');
+      var pattern = String(p.numberPattern || COR.PATTERN).trim();
+      if (!Correspondence.parsePattern_(pattern)) throw appError('نمط الترقيم غير صحيح. مثال: {code}-{year}-{seq:4}، ويجب أن يحتوي {code} وينتهي بـ -{seq}.');
+      var rec = {
+        name: name, code: code, direction: direction, numberPattern: pattern,
+        confidentiality: p.confidentiality ? Correspondence.enum_(p.confidentiality, COR.CONF, 'درجة السرية') : 'internal',
+        active: cur && cur.builtin ? true : p.active !== false && p.active !== 'false', updatedAt: nowIso()
+      };
+      var saved = cur ? Db.update('correspondence', 'DocTypes', cur.id, rec)
+        : Db.insert('correspondence', 'DocTypes', Object.assign(rec, { builtin: false, sortOrder: rows.reduce(function (mx, r) { return Math.max(mx, r.sortOrder || 0); }, 0) + 1, createdAt: nowIso() }));
+      var fieldNote = Array.isArray(p.fields) ? Correspondence.saveFields_(saved.id, p.fields) : '';
+      Audit.log(ctx.user, 'correspondence', cur ? 'type.update' : 'type.create', 'DocType', saved.id, { name: name, code: code, direction: direction, active: rec.active, fields: fieldNote });
+      return Correspondence.types();
+    });
+  },
+
+  saveFields_: function (typeId, list) {
+    var existing = Correspondence.fieldsOf_(typeId, true), byId = indexBy_(existing), keep = {}, labels = {};
+    if (list.filter(function (x) { return x && x.active !== false; }).length > COR.MAX_FIELDS) throw appError('الحد الأقصى ' + COR.MAX_FIELDS + ' حقلاً لكل نوع.');
+    var maxKey = existing.reduce(function (mx, f) { return Math.max(mx, Number(String(f.key).replace(/\D/g, '')) || 0); }, 0);
+    list.forEach(function (x, i) {
+      x = x || {};
+      var cur = x.id ? byId[x.id] : null;
+      if (x.id && !cur) throw appError('الحقل غير موجود.', 'NOT_FOUND');
+      var label = requireText(x.label, 'اسم الحقل', 60);
+      if (labels[label]) throw appError('اسم الحقل «' + label + '» مكرر.');
+      labels[label] = true;
+      var kind = cur ? cur.kind : Correspondence.enum_(x.kind, COR.FIELD_KINDS, 'نوع الحقل');
+      if (cur && x.kind && x.kind !== cur.kind) throw appError('لا يتغيّر نوع الحقل «' + cur.label + '» بعد إنشائه. أوقفه وأضف حقلاً جديداً.');
+      var options = [];
+      if (kind === 'select') {
+        options = (Array.isArray(x.options) ? x.options : String(x.options || '').split(/[,،\n]/)).map(function (o) { return optionalText(o, 60); })
+          .filter(function (o, j, a) { return o && a.indexOf(o) === j; }).slice(0, 50);
+        if (!options.length) throw appError('أضف خيارات القائمة للحقل «' + label + '».');
+      }
+      var rec = { label: label, options: options, required: bool_(x.required), inList: bool_(x.inList), sortOrder: i + 1, active: x.active !== false && x.active !== 'false' };
+      if (cur) { Db.update('correspondence', 'DocFields', cur.id, rec); keep[cur.id] = true; }
+      else Db.insert('correspondence', 'DocFields', Object.assign(rec, { typeId: typeId, key: 'f' + (++maxKey), kind: kind }));
+    });
+    existing.forEach(function (f) { if (!keep[f.id] && f.active) Db.update('correspondence', 'DocFields', f.id, { active: false }); });
+    return list.length + ' حقل';
+  },
+
+  typeMove: function (ctx, p) {
+    var rows = Correspondence.typesSorted_();
+    var i = rows.map(function (r) { return r.id; }).indexOf(p && p.id), j = i + (p && p.dir === 'up' ? -1 : 1);
+    if (i < 0 || j < 0 || j >= rows.length) return Correspondence.types();
+    Db.update('correspondence', 'DocTypes', rows[i].id, { sortOrder: rows[j].sortOrder || j + 1 });
+    Db.update('correspondence', 'DocTypes', rows[j].id, { sortOrder: rows[i].sortOrder || i + 1 });
+    return Correspondence.types();
   },
 
   // ───────── التقرير ─────────
@@ -639,6 +976,9 @@ var Correspondence = {
       'cor.categories': { perm: any, fn: Correspondence.categories },
       'cor.category.save': { perm: mgr, fn: Correspondence.categorySave },
       'cor.category.move': { perm: mgr, fn: Correspondence.categoryMove },
+      'cor.types': { perm: any, fn: Correspondence.types },
+      'cor.type.save': { perm: mgr, fn: Correspondence.typeSave },
+      'cor.type.move': { perm: mgr, fn: Correspondence.typeMove },
       'cor.report': { perm: any, fn: Correspondence.report },
       'cor.dashboard': { perm: any, fn: Correspondence.dashboard }
     };

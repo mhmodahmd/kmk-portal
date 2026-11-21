@@ -4,7 +4,7 @@
  */
 var APP = {
   NAME: 'KMK One',
-  VERSION: '0.12.0',
+  VERSION: '0.13.0',
   // أقدم إصدار واجهة مسموح به. الواجهة الأقدم تُطلب منها إعادة التحميل.
   MIN_CLIENT: '0.1.0',
   TZ: 'Asia/Kuwait',
@@ -38,8 +38,8 @@ var MODULES = [
   { key: 'crm', label: 'العملاء', enabled: true,
     roles: { sales: 'مبيعات', accountant: 'محاسب', manager: 'مدير مبيعات' } },
   // المراسلات (0.9.7): موظف مراسلات يسجّل ويؤرشف ويرى ما سجّله أو أُحيل إليه، ومدير يرى الكل ويحذف ويضبط التصنيفات
-  { key: 'correspondence', label: 'المراسلات', enabled: true,
-    roles: { clerk: 'موظف مراسلات', manager: 'مدير المراسلات' } },
+  { key: 'correspondence', label: 'المستندات', enabled: true,
+    roles: { clerk: 'موظف مستندات', manager: 'مدير المستندات' } },
   // المنصات (0.10.0): إيرادات صاد القرآني ومقرأة تراث — مبيعات التطبيق من ملف البوابة، والرعايات والعقود من العملاء
   { key: 'platforms', label: 'المنصات', enabled: true,
     roles: { viewer: 'مشاهد', accountant: 'محاسب المنصات', manager: 'مدير المنصات' } },

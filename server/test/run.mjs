@@ -13,6 +13,7 @@ import './notify.test.mjs';
 import './crm.test.mjs';
 import './jobs.test.mjs';
 import './correspondence.test.mjs';
+import './documents.test.mjs';
 import './platforms.test.mjs';
 import './subscribers.test.mjs';
 import './dashboards.test.mjs';

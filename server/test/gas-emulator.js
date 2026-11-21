@@ -67,6 +67,8 @@ function hmacSha256(keyBytes, msgBytes) {
 const utf8 = (s) => new TextEncoder().encode(String(s));
 /** Apps Script يعيد البايتات كأعداد موقّعة (-128..127) */
 const signed = (u8) => Array.from(u8, (b) => (b > 127 ? b - 256 : b));
+/** ملف PDF صغير صالح (معاينة ملفات Office في المحاكي) */
+const MINI_PDF = '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj 3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 100]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n';
 
 function base64(bytes) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
@@ -256,6 +258,11 @@ export function createGas({ storage, clock, log } = {}) {
     return {
       getId: () => id, getName: () => it.name, getUrl: () => 'https://drive.test/file/' + id, isTrashed: () => !!it.trashed,
       setTrashed(v) { it.trashed = !!v; touch(); }, getBlob: () => blobOf(it.bytes, it.mime, it.name),
+      // تصدير صيغة جوجل (مستند، جدول، عرض) إلى PDF: ملف PDF صغير صالح
+      getAs(mime) {
+        if (mime !== 'application/pdf' || !/^application\/vnd\.google-apps\./.test(it.mime)) throw new Error('Conversion from ' + it.mime + ' to ' + mime + ' failed.');
+        return blobOf(Array.from(new TextEncoder().encode(MINI_PDF)), 'application/pdf', it.name + '.pdf');
+      },
       getDateCreated: () => new Dt(it.created || 0), getSize: () => (it.bytes ? it.bytes.length : 0),
       makeCopy(name, folder) {
         const nid = 'fi' + (++state.seq);
@@ -310,6 +317,24 @@ export function createGas({ storage, clock, log } = {}) {
       // جدول بيانات يُرى في درايف ملفاً أيضاً
       if (!D[id] && state.files[id]) D[id] = { kind: 'file', name: state.files[id].name, mime: 'application/vnd.google-apps.spreadsheet', parent: 'root', ssId: id, created: Dt.now() };
       return fileApi(need(id, 'file'));
+    },
+    // المساحة: مجموع أحجام الملفات غير المحذوفة، والحد 15 جيجا (أو state.driveLimit في الاختبارات)
+    getStorageUsed: () => Object.keys(D).reduce((n, k) => n + (D[k].kind === 'file' && !D[k].trashed && D[k].bytes ? D[k].bytes.length : 0), 0) + (state.driveExtraUsed || 0),
+    getStorageLimit: () => state.driveLimit || 15 * 1024 ** 3
+  };
+
+  // ───── خدمة Drive المتقدمة (v3): التحويل إلى صيغة جوجل عند الإنشاء فقط ─────
+  const Drive = {
+    Files: {
+      create(resource, blob) {
+        const parent = (resource.parents || ['root'])[0];
+        need(parent, 'folder');
+        if (state.driveConvertFails) throw new Error('Conversion failed');
+        const nid = 'fi' + (++state.seq);
+        D[nid] = { kind: 'file', name: resource.name, mime: resource.mimeType || (blob ? blob.getContentType() : ''), bytes: blob ? Array.from(blob.getBytes()) : [], parent, created: Dt.now() };
+        touch();
+        return { id: nid, name: resource.name, mimeType: D[nid].mime };
+      }
     }
   };
 
@@ -378,7 +403,7 @@ export function createGas({ storage, clock, log } = {}) {
     logs,
     mail,
     triggers,
-    globals: { SpreadsheetApp, PropertiesService, CacheService, LockService, Utilities, DriveApp, MailApp, ScriptApp, Logger, ContentService, Session, console: consoleShim, Date: Dt },
+    globals: { SpreadsheetApp, PropertiesService, CacheService, LockService, Utilities, DriveApp, Drive, MailApp, ScriptApp, Logger, ContentService, Session, console: consoleShim, Date: Dt },
     /** يحفظ الحالة إن تغيّرت */
     flush() { if (dirty && storage) storage.save(state); dirty = false; }
   };

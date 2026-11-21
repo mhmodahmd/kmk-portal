@@ -113,6 +113,39 @@
 | **LetterLog** | letterId, kind (`create`/`update`/`send`/`receive`/`reply`/`archive`/`restore`/`forward`/`file`), body (نص عربي يُترجم في الواجهة), byId, at |
 | **Categories** | name, active, sortOrder (إعادة التسمية تُطبَّق على الخطابات المسجلة) |
 
+### 6ب-2. المستندات (معتمد · 2026-11-21 · التفاصيل في [08](08-documents.md))
+
+> في ملف `KMK-Correspondence` نفسه. الأعمدة الجديدة في `Letters` يضيفها `Db.ensureSchema_` بلا حذف، فالخطابات الحالية تبقى كما هي: نوعها «وارد» أو «صادر»، وسريتها «داخلي»، وبلا سلسلة.
+
+| الجدول | الأعمدة الرئيسية |
+|---|---|
+| **Letters** (أعمدة جديدة) | typeId (ref:DocTypes), fields (json: قيم الحقول الخاصة بمفاتيحها؛ المبالغ بالفلس), confidentiality (`public`/`internal`/`secret`/`top_secret`), readers (json: userIds قائمة الاطلاع للسري), version (رقم الإصدار الحالي), mainFileId (ref:LetterFiles الملف الرئيسي), wfInstanceId (ref:`KMK-Workflow`.WfInstances), lockedAt, historical (bool للأرشيف التاريخي), originalNo (الرقم الأصلي للمستند القديم), reviewStatus (`pending`/`done` لتدقيق الأرشيف) · حالات جديدة في status: `in_review`, `returned`, `approved`, `rejected`, `cancelled` |
+| **LetterFiles** (أعمدة جديدة) | role (`main`/`attachment`/`signed`/`preview`), version, previewFileId (PDF معاينة لملفات Office), ocrDocId (نسخة Google Doc للبحث بعد OCR), sha256 |
+| **DocTypes** | name, code (`MEMO`…), direction (`in`/`out`/`internal`), numberPattern (`{code}-{year}-{seq:4}`), confidentiality (الافتراضية), templateId (السلسلة الافتراضية، ref:WfTemplates), needsSignature (bool), printTemplate (json: الترويسة ومواضع التواقيع), restartOnEdit (bool: تعديل المعتمد يعيد السلسلة), active, sortOrder · البذرة: وارد، صادر، مذكرة داخلية، تعميم، قرار إداري |
+| **DocFields** | typeId, key, label, kind (`text`/`number`/`money`/`date`/`select`/`user`/`client`/`project`), options (json للقائمة), required (bool), inList (bool), sortOrder, active |
+| **DocVersions** | letterId, version, fileId (ref:LetterFiles), snapshot (json: البيانات والحقول وقت الإصدار), note, byId, at |
+| **DocLinks** | fromId, toId, kind (`follow_up` إلحاقاً لـ / `cancels` يلغي / `reference` مرجع) · `replyToId` في Letters يبقى للرد |
+
+### 6ج. السلسلة الإجرائية — `KMK-Workflow` (معتمد · 2026-11-21)
+
+> قاعدة بيانات مستقلة (`DB_WORKFLOW` في Script Properties). الوحدة لا تعرف المستندات: تُستدعى بـ `module` و`entityId`، وتقرأ قيم الحقول التي تمررها لها الوحدة عند البدء.
+
+| الجدول | الأعمدة الرئيسية |
+|---|---|
+| **WfTemplates** | name, description, module (`correspondence`), version (الإصدار المنشور الحالي), status (`draft`/`published`/`retired`), createdBy, updatedAt |
+| **WfSteps** | templateId, templateVersion, order, group (المراحل المتوازية تشترك في الرقم), name, kind (`review`/`approve`/`sign`/`route`/`execute`/`inform`), assignee (json: `{type: user/role/direct_manager/dept_manager/creator_dept_manager/picked, id, module, role}`), mode (`single`/`all`/`any`/`count`), count, actions (json), noteRequired (json), fields (json: مفاتيح حقول يكملها صاحب المرحلة), condition (json: `{field, op, value}`), slaHours, workingDays (bool), escalation (json: `{remindAt, notifyManagerAt, reassignTo}`), onReject (`end`/`creator`/`step:<order>`) |
+| **WfRules** | module, typeId, departmentId, field, op, value, confidentiality, templateId, priority, active |
+| **WfInstances** | module, entityId, templateId, templateVersion, status (`running`/`approved`/`rejected`/`returned`/`cancelled`), currentGroup, startedBy, startedAt, endedAt |
+| **WfInstanceSteps** | instanceId, order, group, name, kind, mode, count, assignees (json: userIds محسوبة عند تفعيل المرحلة), status (`pending`/`current`/`done`/`rejected`/`returned`/`skipped`), dueAt, escalationLevel, startedAt, endedAt, config (json: نسخة إعدادات المرحلة كاملة) |
+| **WfActions** | instanceId, stepId, action (`start`/`approve`/`reject`/`return`/`forward`/`ask`/`answer`/`delegate`/`sign`/`skip`/`reassign`/`cancel`/`escalate`), byId, onBehalfOf, entityVersion, note, at · **إضافة فقط**، ويُغلق سنوياً في ملف أرشيف كبقية الحركات |
+| **Delegations** | fromUserId, toUserId, from (date), to (date), module (أو الكل), active, createdAt |
+
+### 6د. التواقيع في النواة (معتمد · 2026-11-21)
+| الجدول | الأعمدة الرئيسية |
+|---|---|
+| **Signatures** (ينتقل من `KMK-Custody` إلى `KMK-Core`) | userId, data (صورة PNG)، status (`pending`/`approved`), approvedBy, approvedAt, updatedAt · الختم الرسمي سجل بـ `role` بدل `userId` |
+| **SignatureLog** | module, entityId, entityVersion, userId, onBehalfOf, method (`passkey`/`password`), sourceSha256 (بصمة الملف قبل التوقيع), signedSha256, fileId, ip, at |
+
 ## 7. العملاء — `KMK-CRM` 🆕
 
 > **Projects** في وحدة العملاء: `billing` (`fixed` عقد ثابت / `open` اشتراك أو مفتوح)، وللاشتراك `billingCycle` (`monthly`/`quarterly`/`yearly`) و`cycleAmount` (فلس): الدورات تبدأ من `startDate`، والمستحق للدورة الحالية = قيمتها − المحصّل خلالها. أُضيف العمودان في 0.9.2 (الدفعة 2 من المراجعة) ويُنشئهما `Db.ensureSchema_` تلقائياً بلا حذف.

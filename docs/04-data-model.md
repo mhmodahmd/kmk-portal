@@ -151,7 +151,7 @@
 - **المستحق** = الدفعات المجدولة + مستحق دورة الاشتراك الحالية للمشاريع المفتوحة (القاعدة الحالية في العملاء). **نسبة التحصيل** = المحصّل ÷ (المحصّل + المستحق حتى اليوم).
 - شهر المبيعات المعتمد لا يُستبدل إلا بإعادة فتحه من مدير المنصات (يُسجَّل في السجل).
 
-## 7ج. متابعة المشتركين — `KMK-Subscribers` (معتمد · المرحلة 1 مبنية 0.11.0)
+## 7ج. متابعة المشتركين — `KMK-Subscribers` (معتمد · المرحلة 1 مبنية 0.11.0 · سجل التواصل والقوالب والبريد التلقائي 0.12.0)
 
 > متابعة مشتركي باقات صاد: من سارٍ، ومن يقترب انتهاؤه، ومن انتهى ولم يجدد، والتواصل معهم تلقائياً (البريد أولاً ثم واتساب). قاعدة مستقلة (`DB_SUBSCRIBERS`). **هذه الوحدة وحدها تحفظ بيانات التواصل، مشفّرة**؛ وحدة المنصات تبقى بلا بيانات شخصية كما هي.
 
@@ -161,10 +161,14 @@
 |---|---|
 | **Subscribers** | platformId, buyerKey (الرمز نفسه في `Sales`، فريد لكل منصة)، nameEnc, mobileEnc, emailEnc (مشفّرة)، mobileMask (`5•••••12` للعرض)، hasMobile, hasEmail, country, firstPaidAt, lastPaidAt, purchases, totalPaid (money), currentPackageId, expiresAt (date: آخر انتهاء), status (محسوبة: `active` سارٍ / `expiring` ينتهي خلال 7 أيام / `lapsed` انتهى ولم يجدد / `winback` عاد بعد انقطاع)، consent (`yes` / `no` / `unknown`)، consentAt, consentSource, optOut (bool), optOutAt, optOutChannel, assignedTo (userId)، notes, forgottenAt, createdAt, updatedAt |
 | **Cycles** | دورة لكل اشتراك: subscriberId, saleGatewayId, packageId, paidAt, expiresAt, outcome (`open` سارية / `pending` انتهت وبانتظار كشف الشهر التالي / `renewed` جدّد / `lapsed` لم يجدد)، renewedBySaleId, afterReminder (bool: جدّد بعد تذكير)، closedAt |
-| **Messages** | subscriberId, cycleId, channel (`email` / `whatsapp` / `call` / `app`)، kind (`before` / `on_expiry` / `after` / `winback` / `manual`)، templateId, status (`queued` / `sent` / `failed` / `delivered` / `read` / `replied` / `skipped`)، skipReason (`opted_out` / `no_contact` / `quiet_hours` / `cap`)، error, sentAt, byId (فارغ للآلي)، dedupeKey (cycleId+kind+channel يمنع الإرسال مرتين) |
-| **Templates** | key, channel, name, subject, body (متغيرات: `{الاسم}` `{الباقة}` `{تاريخ_الانتهاء}` `{رابط_التجديد}` `{رابط_الإيقاف}`)، waTemplate (اسم القالب المعتمد في Meta)، lang, active |
+| **Messages** (سجل التواصل · 0.12.0) | subscriberId, ref (`platformId|buyerKey`)، cycleId (رقم عملية الدورة الأخيرة وقت التواصل)، channel (`whatsapp` / `email` / `call` / `app`)، direction (`out` منّا / `in` من المشترك)، kind (`before14` / `before7` / `on_expiry` / `after7` / `winback` / `general` / `manual`)، templateId, subject (للبريد)، status (`sent` / `failed` / `skipped`)، skipReason (`opted_out` / `no_contact`)، error, auto (bool: آلي)، byId (فارغ للآلي)، replyStatus، replyAt, replyBy, nextFollowUpAt (date)، note, dedupeKey (للآلي: cycleId+kind+channel يمنع الإرسال مرتين)، createdAt, updatedAt. **نص الرسالة لا يُحفظ** (فيه الاسم)، يكفي القالب |
+| **Templates** (0.12.0) | channel (`whatsapp` / `email`)، kind (كما في Messages بلا `manual`)، name, subject, body (متغيرات: `{الاسم}` `{الباقة}` `{المنصة}` `{تاريخ_الانتهاء}` `{الأيام_المتبقية}` `{رابط_التجديد}` `{اسم_الموظف}`، ورابط الإيقاف يُلحق بكل بريد تلقائياً)، active, sort, updatedBy, updatedAt. تُنشأ قوالب افتراضية أول مرة |
+
+**حالات الرد (`replyStatus`):** `waiting` بانتظار الرد · `no_answer` لم يرد · `interested` رد مهتم · `promised` وعد بالتجديد · `renewed` جدّد · `refused` رفض · `wrong_contact` رقم أو بريد خاطئ · `optout` طلب إيقاف الرسائل. التواصل اليدوي الصادر يبدأ `waiting`، والآلي بلا حالة رد. «جدّد» هنا قول المشترك؛ التجديد الفعلي من كشف البوابة. «طلب إيقاف الرسائل» يجعل المشترك `optOut`. **آخر تواصل** = آخر سطر غير متخطٍّ ولا فاشل، و**تُوصل معه في هذه الدورة** = له سطر صادر بنفس `cycleId`.
 | **Campaigns** | name, filter (json: منقطع منذ أكثر من N يوماً، الباقة، الدولة)، templateId, channel, status (`draft` / `scheduled` / `sent` / `cancelled`)، scheduledAt, counts (json: مستهدف، أُرسل، تخطّى، جدّد بعدها)، createdBy |
-| **Config** | key, value (json): مواعيد التذكير (−7 و0 و+7 أيام)، ساعات الإرسال (9:00–21:00 بتوقيت الكويت)، الحد اليومي، رابط التجديد (رابط واحد للتطبيق أو المتجر)، اسم المرسل، مدة الاحتفاظ (24 شهراً)، تفعيل كل قناة |
+| **Config** | key, value (json): رابط التجديد (رابط واحد للتطبيق أو المتجر)، مدة الاحتفاظ (24 شهراً)، **البريد التلقائي** (0.12.0): `autoEmail` (تشغيل)، `autoKinds` (المواعيد المفعّلة من −14 و−7 و0 و+7 أيام)، `sendFrom`–`sendTo` (9–21 بتوقيت الكويت)، `dailyCap` (الحد اليومي للآلي، افتراضياً 50)، `senderName` (اسم المرسل) |
+
+**البريد التلقائي (0.12.0):** مشغّل كل ساعة (`subscriberReminders`)، ويُشغَّل يدوياً من الإعدادات (`sub.reminders.run`). داخل ساعات الإرسال وحتى الحد اليومي: لكل مشترك آخر دوراته، ولكل موعد مفعّل حلّ يومه (أو قبل يومين على الأكثر، تعويضاً لما فات)، يُرسل قالب البريد النشط لذلك النوع. `after7` فقط لمن لم يجدد. من أوقف الرسائل يُتخطّى ويُسجَّل ذلك مرة لكل موعد (`opted_out`)، ومن بلا بريد يُتخطّى دون تسجيل (يُعدّ في نتيجة التشغيل فقط). حصة البريد من حساب Google يُترك منها 5 رسائل لإشعارات البوابة. **صفحة الإيقاف:** رمز عشوائي لكل مشترك (`unsubToken` في `Subscribers`) يُنشأ مع أول بريد، والرابط `#/unsub/<رمز>`.
 
 **التشفير:** Apps Script لا يوفّر AES، فيُستخدم تشفير متماثل بمفتاح في Script Properties (`SUB_DATA_KEY`): تدفق مفتاح من HMAC-SHA256 بوضع العدّاد مع قيمة عشوائية لكل حقل، ورمز تحقق HMAC يكشف أي عبث (encrypt-then-MAC). ملف Sheets وحده لا يكشف شيئاً، والمفتاح لا يغادر الخادم. البحث بالجوال يتم عبر `buyerKey` لا بفك التشفير.
 
@@ -207,7 +211,7 @@
 | `plt.month.approved` | المنصات | المالية لاحقاً (قيد إيراد بمصدره `platforms`) |
 | `plt.campaign.ending` (قبل 7 أيام) | المنصات | الإشعارات: مدير المنصات إن كان للمسابقة رعاية لم تُحصَّل كاملة |
 | `plt.import.done` (مع بيانات التواصل في الذاكرة) 🆕 | المنصات | متابعة المشتركين: حفظ التواصل مشفّراً، فتح الدورات وإغلاقها، تحديث الحالات |
-| `sub.reminder.due` (يومياً) 🆕 | متابعة المشتركين | البريد ثم واتساب: تذكير قبل الانتهاء بـ 7 أيام، ويوم الانتهاء، وبعده بـ 7 أيام لمن لم يجدد |
+| `subscriberReminders` (كل ساعة · 0.12.0) | متابعة المشتركين | البريد التلقائي حسب الإعدادات: قبل الانتهاء بـ 14 و7 أيام، ويومه، وبعده بـ 7 أيام لمن لم يجدد. واتساب يدوي من الموظف (wa.me) حتى ربط Meta |
 | `sub.lapsed` (بعد آخر تذكير بـ 3 أيام، ولم يظهر تجديد في الكشوف) 🆕 | متابعة المشتركين | المهام: «اتصل بمشترك لم يجدد» لمسؤول المشترك أو لموظف المتابعة |
 
 ## 10. نقل البيانات من النظامين الحاليين

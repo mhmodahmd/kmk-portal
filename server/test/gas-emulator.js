@@ -393,6 +393,6 @@ export function loadServer(sources, globals) {
   const code = ordered.map((s) => '// ── ' + s.path + '\n' + s.code).join('\n;\n');
   const names = Object.keys(globals);
   // eslint-disable-next-line no-new-func
-  const factory = new Function(...names, code + '\n;return { Router: Router, setup: setup, doPost: doPost, processMailQueue: processMailQueue, dailyMaintenance: dailyMaintenance, installTriggers: installTriggers, Notify: Notify, Backup: Backup, Db: Db, Hr: Hr, Tasks: Tasks, Auth: Auth };');
+  const factory = new Function(...names, code + '\n;return { Router: Router, setup: setup, doPost: doPost, processMailQueue: processMailQueue, dailyMaintenance: dailyMaintenance, subscriberReminders: subscriberReminders, installTriggers: installTriggers, Notify: Notify, Backup: Backup, Db: Db, Hr: Hr, Tasks: Tasks, Auth: Auth };');
   return factory(...names.map((n) => globals[n]));
 }

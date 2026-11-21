@@ -2,11 +2,13 @@
  * المهام المؤجّلة (المشغّلات الزمنية).
  * - processMailQueue: كل دقيقة، يرسل ما في طابور البريد (Notify.drainMail_).
  * - dailyMaintenance: يومياً فجراً، النسخة الاحتياطية وتنظيف السجلات.
+ * - subscriberReminders: كل ساعة، البريد التلقائي للمشتركين حسب إعدادات «المشتركون».
  * تُركَّب المشغّلات تلقائياً أول مرة يدخل مدير النظام بعد النشر (Jobs.ensure_)، أو من المحرر بتشغيل installTriggers.
  */
 var JOBS_ = [
   { fn: 'processMailQueue', build: function (t) { return t.timeBased().everyMinutes(1); } },
-  { fn: 'dailyMaintenance', build: function (t) { return t.timeBased().everyDays(1).atHour(3).inTimezone(APP.TZ); } }
+  { fn: 'dailyMaintenance', build: function (t) { return t.timeBased().everyDays(1).atHour(3).inTimezone(APP.TZ); } },
+  { fn: 'subscriberReminders', build: function (t) { return t.timeBased().everyHours(1); } }
 ];
 
 var Jobs = {

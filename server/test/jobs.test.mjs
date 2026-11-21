@@ -6,11 +6,11 @@ test('jobs: triggers are installed once when the system admin signs in; status l
   c.ok('auth.me', {}, c.T.sara);
   eq(c.gas.triggers.length, 0, 'an ordinary user does not install anything');
   c.ok('auth.me', {}, c.A);
-  eq(c.gas.triggers.map((t) => t.getHandlerFunction()).sort(), ['dailyMaintenance', 'processMailQueue'], 'installed when the system admin signs in');
+  eq(c.gas.triggers.map((t) => t.getHandlerFunction()).sort(), ['dailyMaintenance', 'processMailQueue', 'subscriberReminders'], 'installed when the system admin signs in');
   c.ok('auth.me', {}, c.A);
-  eq(c.gas.triggers.length, 2, 'not duplicated');
+  eq(c.gas.triggers.length, 3, 'not duplicated');
   const st = c.ok('system.jobs', {}, c.A);
-  eq([st.available, st.triggers.sort(), st.mailQueue], [true, ['dailyMaintenance', 'processMailQueue'], 0]);
+  eq([st.available, st.triggers.sort(), st.mailQueue], [true, ['dailyMaintenance', 'processMailQueue', 'subscriberReminders'], 0]);
   eq(c.fail('system.jobs', {}, c.T.sara).code, 'FORBIDDEN');
   eq(c.srv.installTriggers(), [], 'editor helper is idempotent');
 });

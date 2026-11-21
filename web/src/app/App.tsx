@@ -87,6 +87,9 @@ const SubOverviewPage = lazy(() => import('../modules/subscribers/SubPages').the
 const SubListPage = lazy(() => import('../modules/subscribers/SubPages').then((m) => ({ default: m.SubListPage })));
 const SubDetailPage = lazy(() => import('../modules/subscribers/SubPages').then((m) => ({ default: m.SubDetailPage })));
 const SubSettingsPage = lazy(() => import('../modules/subscribers/SubPages').then((m) => ({ default: m.SubSettingsPage })));
+const SubFollowupPage = lazy(() => import('../modules/subscribers/SubFollowup').then((m) => ({ default: m.SubFollowupPage })));
+const SubReportsPage = lazy(() => import('../modules/subscribers/SubFollowup').then((m) => ({ default: m.SubReportsPage })));
+const UnsubPage = lazy(() => import('../modules/subscribers/UnsubPage'));
 
 const SOON: Record<string, { label: string; phase: number }> = {
   finance: { label: tr("المالية"), phase: 5 }
@@ -110,6 +113,9 @@ export default function App() {
   // صفحة توقيع المدير تُفتح بلا حساب: #/sign/<الرمز>
   const sign = /^#\/sign\/([0-9a-f]{64})$/.exec(location.hash);
   if (sign) return <Suspense fallback={<Loader />}><SignPage token={sign[1]} /></Suspense>;
+  // صفحة إيقاف رسائل المشتركين من رابط البريد، بلا حساب: #/unsub/<الرمز>
+  const unsub = /^#\/unsub\/([0-9a-f]{32})$/.exec(location.hash);
+  if (unsub) return <Suspense fallback={<Loader />}><UnsubPage token={unsub[1]} /></Suspense>;
   if (status === 'loading') return <div className="min-h-screen bg-bg"><Loader label={tr("جارٍ فتح البوابة")} /></div>;
   if (status === 'out') return <LoginPage />;
   if (user?.mustChangePassword) return <ForcedChangePassword />;
@@ -228,7 +234,9 @@ export default function App() {
             {sub && (
               <Route path="/subscribers" element={<SubLayout />}>
                 <Route index element={<SubOverviewPage />} />
+                {subStaff && <Route path="followup" element={<SubFollowupPage />} />}
                 {subStaff && <Route path="list" element={<SubListPage />} />}
+                <Route path="reports" element={<SubReportsPage />} />
                 {subStaff && <Route path="s/:ref" element={<SubDetailPage />} />}
                 {subMgr && <Route path="settings" element={<SubSettingsPage />} />}
               </Route>

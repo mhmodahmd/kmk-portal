@@ -6,60 +6,29 @@ import { errorText, useAction, useApi } from '../../lib/useApi';
 import { dateText, dmy, monthLabel } from '../../lib/format';
 import { Badge, Card, CardHeader, EmptyState, ErrorBox, Loader, PageHeader } from '../../ui/Display';
 import { Bars, Kpi, PanelTitle, TrendBars } from '../../ui/Dashboard';
-import { Button } from '../../ui/Button';
+import { Button, IconAction } from '../../ui/Button';
+import { Icon } from '../../ui/Icon';
 import { DataTable, Facts, Pager, SearchBox, TabNav, useTable } from '../../ui/Controls';
-import { Select, TextInput, Textarea } from '../../ui/Field';
+import { Checkbox, Select, TextInput, Textarea } from '../../ui/Field';
 import { Dialog, useToast } from '../../ui/Overlay';
 import { ReasonDialog } from '../../ui/Decide';
 import { kwd } from '../custody/shared';
+import { ContactButtons, ReplyDialog } from './SubContact';
+import { KEYS, LastContactCell, ReplyBadge, StatusBadge, detailLink, useSubLookups, useTemplates, type AutoKind, type Contact, type SubDashboard, type SubDetail, type SubRow, type Template, type Status } from './shared';
 import { downloadCsv } from '../attendance/shared';
 import { DashboardSkeleton } from '../correspondence/CorDashboardPage';
-
-type Status = 'active' | 'expiring' | 'pending' | 'lapsed';
-interface SubLookups {
-  isManager: boolean; isStaff: boolean; today: string; statuses: { id: Status; label: string }[]; packages: { id: string; name: string }[];
-  platforms: { id: string; key: string; name: string }[]; people: { id: string; name: string }[]; settings: { renewalLink: string; retentionMonths: number } | null;
-}
-interface SubRow {
-  id: string; ref: string; platformId: string; status: Status; statusLabel: string; packageId: string; packageName: string; expiresAt: string; daysLeft: number | null;
-  waitFor: string; lastPaidAt: string; firstPaidAt: string; purchases: number; totalPaid: number; winback: boolean; name: string; mobileMask: string; emailMask: string;
-  hasContact: boolean; country: string; optOut: boolean; forgotten: boolean; assignedTo: string; assignedName: string;
-}
-interface SubDetail extends SubRow {
-  notes: string; optOutAt: string; optOutReason: string;
-  cycles: { gatewayId: string; packageName: string; paidAt: string; expiresAt: string; amount: number; outcome: string; outcomeLabel: string; waitFor: string }[];
-}
-interface SubDashboard {
-  today: string; lastMonth: string; counts: Record<Status, number>;
-  coverage: { total: number; withContact: number; withMobile: number; withEmail: number; optOut: number; winback: number };
-  byPackage: { packageId: string; name: string; active: number; expiring: number; pending: number; lapsed: number }[];
-  renewal: { month: string; total: number; renewed: number; pending: number; lapsed: number; rate: number | null; final: boolean }[];
-}
-
-const KEYS = ['sub.lookups', 'sub.dashboard', 'sub.list', 'sub.get'];
-const useSubLookups = () => useApi<SubLookups>('sub.lookups', {}, { staleTime: 5 * 60_000 });
-const TONE: Record<Status, 'ok' | 'warn' | 'info' | 'bad'> = { active: 'ok', expiring: 'warn', pending: 'info', lapsed: 'bad' };
-const detailLink = (ref: string) => '/subscribers/s/' + encodeURIComponent(ref);
-
-function StatusBadge({ s }: { s: Pick<SubRow, 'status' | 'statusLabel' | 'waitFor' | 'winback'> }) {
-  return (
-    <span className="inline-flex flex-wrap items-center gap-1">
-      <Badge tone={TONE[s.status]}>{s.status === 'pending' && s.waitFor ? tr("لم يجدد — بانتظار كشف {0}", monthLabel(s.waitFor)) : s.statusLabel}</Badge>
-      {s.winback && (s.status === 'active' || s.status === 'expiring') && <Badge tone="info">{tr("عاد بعد انقطاع")}</Badge>}
-    </span>
-  );
-}
 
 export function SubLayout() {
   const L = useSubLookups().data;
   const items = [
     { to: '/subscribers', label: tr("نظرة عامة"), end: true },
-    ...(L?.isStaff ? [{ to: '/subscribers/list', label: tr("المشتركون") }] : []),
+    ...(L?.isStaff ? [{ to: '/subscribers/followup', label: tr("متابعة التجديد") }, { to: '/subscribers/list', label: tr("المشتركون") }] : []),
+    { to: '/subscribers/reports', label: tr("التقارير") },
     ...(L?.isManager ? [{ to: '/subscribers/settings', label: tr("الإعدادات") }] : [])
   ];
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader eyebrow={tr("المالية")} title={tr("المشتركون")} subtitle={tr("من جدّد ومن لم يجدد، من كشوف بوابة الدفع الشهرية")} />
+      <PageHeader eyebrow={tr("المالية")} title={tr("المشتركون")} subtitle={tr("من جدّد ومن لم يجدد، ومتابعة التواصل معهم")} />
       <TabNav label={tr("أقسام المشتركين")} items={items} />
       <Outlet />
     </div>
@@ -152,9 +121,9 @@ export function SubListPage() {
         {q.isError ? <ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} /> : !q.data ? <Loader /> : rows.length === 0 ? (
           <EmptyState title={tr("لا مشتركين بهذه التصفية")} />
         ) : (
-          <DataTable sticky sort={t.sort} onSort={t.onSort} pager={<Pager {...t.pager} />} minWidth={760}
+          <DataTable sticky sort={t.sort} onSort={t.onSort} pager={<Pager {...t.pager} />} minWidth={880}
             head={[{ key: 'name', label: tr("المشترك") }, { key: 'packageName', label: tr("الباقة") }, { key: 'expiresAt', label: tr("ينتهي") }, { key: 'status', label: tr("الحالة") },
-              { key: 'purchases', label: tr("مرات الشراء") }, { key: 'assignedName', label: tr("المسؤول") }]}>
+              { key: 'lastContactAt', label: tr("آخر تواصل") }, { key: 'purchases', label: tr("مرات الشراء") }, { key: 'assignedName', label: tr("المسؤول") }]}>
             {t.rows.map((r) => (
               <tr key={r.ref} className="cursor-pointer hover:bg-chip/40" onClick={() => nav(detailLink(r.ref))}>
                 <td><span className="flex flex-col"><Link to={detailLink(r.ref)} className="font-semibold text-fg no-underline">{r.name || (r.forgotten ? tr("(حُذفت بياناته)") : tr("(بلا اسم)"))}</Link>
@@ -162,6 +131,7 @@ export function SubListPage() {
                 <td className="text-[13px]">{r.packageName}</td>
                 <td className="num whitespace-nowrap text-[13px]">{dmy(r.expiresAt)}{r.daysLeft != null && r.daysLeft <= 7 && <div className="text-[11px] text-warn">{tr("بعد {0} يوم", r.daysLeft)}</div>}</td>
                 <td><StatusBadge s={r} />{r.optOut && <Badge>{tr("أوقف الرسائل")}</Badge>}</td>
+                <td><LastContactCell r={r} />{r.reply && <div className="mt-0.5"><ReplyBadge reply={r.reply} label={r.replyLabel} /></div>}</td>
                 <td className="num">{r.purchases}</td>
                 <td className="text-[13px]">{r.assignedName || '—'}</td>
               </tr>
@@ -220,7 +190,10 @@ export function SubDetailPage() {
         ]} />
         {shown && <p className="m-0 text-[12px] text-muted">{tr("سُجّل إظهار التواصل في سجل العمليات.")}</p>}
         {!s.id && <p className="m-0 rounded-lg bg-warn-bg px-3 py-2 text-[13px] text-warn">{tr("لا بيانات تواصل لهذا المشترك. أعد رفع ملف البوابة الذي فيه عملياته من «المنصات».")}</p>}
+        {s.id && !s.forgotten && <div className="border-t border-line pt-3"><ContactButtons s={s} /></div>}
       </Card>
+
+      {s.id && <ContactLog contacts={s.contacts} />}
 
       <Card padded={false}>
         <CardHeader title={tr("دورات الاشتراك")} />
@@ -267,19 +240,181 @@ export function SubDetailPage() {
   );
 }
 
-/** الإعدادات (مدير المتابعة) */
+/** سجل التواصل في صفحة المشترك: من الأحدث، مع تحديث الرد لكل سطر */
+function ContactLog({ contacts }: { contacts: Contact[] }) {
+  const [editing, setEditing] = useState<Contact | null>(null);
+  const icon = (c: Contact) => (c.channel === 'whatsapp' ? 'chat' : c.channel === 'email' ? 'mail' : c.channel === 'call' ? 'phone' : 'user') as 'chat' | 'mail' | 'phone' | 'user';
+  return (
+    <Card padded={false}>
+      <CardHeader title={tr("سجل التواصل")} />
+      {contacts.length === 0 ? <EmptyState title={tr("لم يُتواصل معه بعد")} body={tr("كل رسالة أو مكالمة تُسجَّل هنا بتاريخها ومن قام بها وحالة الرد.")} /> : (
+        <ul className="m-0 flex list-none flex-col divide-y divide-line p-0">
+          {contacts.map((c) => (
+            <li key={c.id} className="flex flex-wrap items-start gap-3 px-4 py-3 sm:px-5">
+              <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-chip text-muted"><Icon name={icon(c)} size={16} /></span>
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <div className="flex flex-wrap items-center gap-1.5 text-[14px]">
+                  <span className="font-semibold">{c.channelLabel}</span>
+                  {c.direction === 'in' && <Badge tone="info">{tr("وارد")}</Badge>}
+                  {(c.templateName || c.kind !== 'manual') && <span className="text-muted">· {c.templateName || c.kindLabel}</span>}
+                  <ReplyBadge reply={c.reply} label={c.replyLabel} />
+                  {c.status !== 'sent' && <Badge tone={c.status === 'failed' ? 'bad' : 'neutral'}>{c.skipLabel ? tr("{0}: {1}", c.statusLabel, c.skipLabel) : c.statusLabel}</Badge>}
+                </div>
+                <div className="text-[12px] text-muted"><span className="num">{dateText(c.createdAt)}</span> · {c.auto ? tr("آلي") : c.byName || '—'}
+                  {c.replyByName && c.replyAt && <> · {tr("الرد سجّله {0}", c.replyByName)}</>}
+                  {c.nextFollowUpAt && <> · <span className="num">{tr("متابعة {0}", dmy(c.nextFollowUpAt))}</span></>}
+                </div>
+                {c.subject && <div className="text-[13px]">{c.subject}</div>}
+                {c.note && <p className="m-0 whitespace-pre-wrap text-[13px]">{c.note}</p>}
+                {c.error && <p className="m-0 text-[12px] text-bad">{c.error}</p>}
+              </div>
+              {c.status === 'sent' && <Button size="sm" variant="ghost" icon="edit" onClick={() => setEditing(c)}>{tr("تحديث الرد")}</Button>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {editing && <ReplyDialog id={editing.id} reply={editing.reply} next={editing.nextFollowUpAt} note={editing.note} onClose={() => setEditing(null)} />}
+    </Card>
+  );
+}
+
+const AUTO_KINDS: AutoKind[] = ['before14', 'before7', 'on_expiry', 'after7'];
+const HOURS = Array.from({ length: 25 }, (_, h) => ({ value: String(h), label: String(h).padStart(2, '0') + ':00' }));
+
+/** الإعدادات (مدير المتابعة): البريد التلقائي، القوالب، الرابط والاحتفاظ */
 export function SubSettingsPage() {
   const L = useSubLookups().data;
+  const toast = useToast();
   const [f, setF] = useState<{ renewalLink: string; retentionMonths: string } | null>(null);
-  const save = useAction('sub.settings.save', { invalidate: KEYS, success: tr("حُفظت الإعدادات") });
+  const [a, setA] = useState<{ autoEmail: boolean; autoKinds: Record<AutoKind, boolean>; sendFrom: string; sendTo: string; dailyCap: string; senderName: string } | null>(null);
+  const [running, setRunning] = useState(false);
+  const save = useAction('sub.settings.save', { invalidate: KEYS, success: tr("حُفظت الإعدادات"), onSuccess: () => { setF(null); setA(null); } });
   if (!L?.settings) return <Loader />;
-  const v = f || { renewalLink: L.settings.renewalLink, retentionMonths: String(L.settings.retentionMonths) };
+  const st = L.settings;
+  const v = f || { renewalLink: st.renewalLink, retentionMonths: String(st.retentionMonths) };
+  const av = a || { autoEmail: st.autoEmail, autoKinds: st.autoKinds, sendFrom: String(st.sendFrom), sendTo: String(st.sendTo), dailyCap: String(st.dailyCap), senderName: st.senderName };
+  const kindLabel = (k: string) => L.kinds.find((x) => x.id === k)?.label || k;
+  const run = async () => {
+    setRunning(true);
+    try {
+      const r = await api<{ sent: number; skipped: number; failed: number; noEmail: number; reason: string }>('sub.reminders.run', {});
+      const why: Record<string, string> = {
+        off: tr("البريد التلقائي متوقف."), hours: tr("خارج ساعات الإرسال."), mail: tr("إرسال البريد غير مفعّل في الخادم."), running: tr("يعمل الآن من المشغّل الزمني."),
+        no_templates: tr("لا قوالب بريد نشطة للمواعيد المفعّلة."), cap: tr("بلغ الحد اليومي."), quota: tr("انتهت حصة البريد اليوم.")
+      };
+      toast([tr("أُرسل {0} · تخطّى {1} · فشل {2} · بلا بريد {3}", r.sent, r.skipped, r.failed, r.noEmail), r.reason ? why[r.reason] || '' : ''].filter(Boolean).join(' '), r.failed ? 'bad' : undefined);
+    } catch (e) { toast(errorText(e), 'bad'); } finally { setRunning(false); }
+  };
   return (
-    <Card className="flex max-w-2xl flex-col gap-3">
-      <TextInput label={tr("رابط التجديد في الرسائل")} ltr value={v.renewalLink} onChange={(e) => setF({ ...v, renewalLink: e.target.value })} placeholder="https://" hint={tr("يُضاف إلى رسائل التذكير. اتركه فارغاً حتى يُحدَّد.")} />
-      <TextInput label={tr("مدة الاحتفاظ ببيانات التواصل (شهر)")} ltr inputMode="numeric" value={v.retentionMonths} onChange={(e) => setF({ ...v, retentionMonths: e.target.value })} hint={tr("بعدها بلا شراء تُمسح بيانات التواصل تلقائياً")} />
-      <div><Button variant="primary" loading={save.isPending} onClick={() => save.mutate(v)}>{tr("حفظ")}</Button></div>
-      <p className="m-0 text-[13px] text-muted">{tr("التذكيرات الآلية بالبريد وواتساب في المرحلة التالية.")}</p>
+    <div className="flex max-w-3xl flex-col gap-4">
+      <Card className="flex flex-col gap-3">
+        <PanelTitle title={tr("البريد التلقائي")} action={<Button size="sm" variant="ghost" icon="refresh" loading={running} onClick={run}>{tr("تشغيل الآن")}</Button>} />
+        <Checkbox label={tr("إرسال التذكيرات بالبريد تلقائياً")} description={tr("كل ساعة داخل ساعات الإرسال، من حساب Google للبوابة. لا يصل لمن أوقف الرسائل، ولا يتكرر للدورة نفسها.")}
+          checked={av.autoEmail} onChange={(x) => setA({ ...av, autoEmail: x })} />
+        <div className="grid gap-2 sm:grid-cols-2">
+          {AUTO_KINDS.map((k) => <Checkbox key={k} label={kindLabel(k)} checked={!!av.autoKinds[k]} disabled={!av.autoEmail} onChange={(x) => setA({ ...av, autoKinds: { ...av.autoKinds, [k]: x } })} />)}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-4">
+          <Select label={tr("من الساعة")} value={av.sendFrom} onChange={(e) => setA({ ...av, sendFrom: e.target.value })} options={HOURS.slice(0, 24)} />
+          <Select label={tr("إلى الساعة")} value={av.sendTo} onChange={(e) => setA({ ...av, sendTo: e.target.value })} options={HOURS.slice(1)} />
+          <TextInput label={tr("الحد اليومي")} ltr inputMode="numeric" value={av.dailyCap} onChange={(e) => setA({ ...av, dailyCap: e.target.value })} />
+          <TextInput label={tr("اسم المرسل")} value={av.senderName} onChange={(e) => setA({ ...av, senderName: e.target.value })} placeholder={tr("اسم المنصة")} />
+        </div>
+        <p className="m-0 text-[12px] text-muted">{tr("يُستخدم أول قالب بريد نشط لكل موعد. حصة حساب Gmail نحو 100 رسالة يومياً.")}</p>
+        <div><Button variant="primary" loading={save.isPending} disabled={!a} onClick={() => save.mutate(av)}>{tr("حفظ")}</Button></div>
+      </Card>
+
+      <TemplatesCard />
+
+      <Card className="flex flex-col gap-3">
+        <PanelTitle title={tr("عام")} />
+        <TextInput label={tr("رابط التجديد في الرسائل")} ltr value={v.renewalLink} onChange={(e) => setF({ ...v, renewalLink: e.target.value })} placeholder="https://" hint={tr("يحل محل {رابط_التجديد} في القوالب. بدونه يُحذف سطره من الرسالة.")} />
+        <TextInput label={tr("مدة الاحتفاظ ببيانات التواصل (شهر)")} ltr inputMode="numeric" value={v.retentionMonths} onChange={(e) => setF({ ...v, retentionMonths: e.target.value })} hint={tr("بعدها بلا شراء تُمسح بيانات التواصل تلقائياً")} />
+        <div><Button variant="primary" loading={save.isPending} disabled={!f} onClick={() => save.mutate(v)}>{tr("حفظ")}</Button></div>
+      </Card>
+    </div>
+  );
+}
+
+type TplForm = { id?: string; channel: 'whatsapp' | 'email'; kind: string; name: string; subject: string; body: string; active: boolean };
+
+/** قوالب الرسائل: لكل قناة ونوع، مع معاينة بقيم تجريبية */
+function TemplatesCard() {
+  const q = useTemplates();
+  const [form, setForm] = useState<TplForm | null>(null);
+  const [removing, setRemoving] = useState<Template | null>(null);
+  const del = useAction('sub.template.remove', { invalidate: ['sub.templates'], success: tr("حُذف القالب"), onSuccess: () => setRemoving(null) });
+  const groups: { ch: 'whatsapp' | 'email'; label: string }[] = [{ ch: 'whatsapp', label: tr("واتساب") }, { ch: 'email', label: tr("البريد") }];
+  return (
+    <Card padded={false}>
+      <CardHeader title={tr("قوالب الرسائل")} action={<Button size="sm" variant="secondary" icon="plus" onClick={() => setForm({ channel: 'whatsapp', kind: 'before7', name: '', subject: '', body: '', active: true })}>{tr("قالب جديد")}</Button>} />
+      {q.isError ? <ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} /> : !q.data ? <Loader /> : groups.map((g) => {
+        const list = q.data.filter((t) => t.channel === g.ch);
+        return (
+          <div key={g.ch} className="border-t border-line">
+            <div className="px-4 pt-3 text-[13px] font-semibold text-muted sm:px-5">{g.label}</div>
+            {list.length === 0 ? <p className="m-0 px-4 pb-3 pt-1 text-[13px] text-muted sm:px-5">{tr("لا قوالب")}</p> : (
+              <ul className="m-0 flex list-none flex-col p-0">
+                {list.map((t) => (
+                  <li key={t.id} className="flex items-center gap-2 px-4 py-2.5 sm:px-5">
+                    <button type="button" className="min-w-0 flex-1 cursor-pointer border-0 bg-transparent p-0 text-start text-fg" onClick={() => setForm({ id: t.id, channel: t.channel, kind: t.kind, name: t.name, subject: t.subject, body: t.body, active: t.active })}>
+                      <span className="block truncate font-semibold">{t.name}</span>
+                      <span className="block truncate text-[12px] text-muted">{t.kindLabel}{t.subject ? ' · ' + t.subject : ''}</span>
+                    </button>
+                    {!t.active && <Badge>{tr("موقوف")}</Badge>}
+                    <IconAction icon="edit" label={tr("تعديل")} onClick={() => setForm({ id: t.id, channel: t.channel, kind: t.kind, name: t.name, subject: t.subject, body: t.body, active: t.active })} />
+                    <IconAction icon="trash" label={tr("حذف")} danger onClick={() => setRemoving(t)} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      })}
+      {form && <TemplateDialog value={form} onClose={() => setForm(null)} />}
+      <Dialog open={!!removing} onClose={() => setRemoving(null)} title={tr("حذف القالب")}
+        footer={<><Button variant="danger" className="flex-1" loading={del.isPending} onClick={() => removing && del.mutate({ id: removing.id })}>{tr("حذف")}</Button><Button variant="ghost" onClick={() => setRemoving(null)}>{tr("تراجع")}</Button></>}>
+        <p className="m-0">{tr("يُحذف القالب «{0}». السجلات السابقة تبقى.", removing?.name || '')}</p>
+      </Dialog>
     </Card>
+  );
+}
+
+function TemplateDialog({ value, onClose }: { value: TplForm; onClose: () => void }) {
+  const L = useSubLookups().data;
+  const toast = useToast();
+  const [f, setF] = useState<TplForm>(value);
+  const [pv, setPv] = useState<{ subject: string; body: string } | null>(null);
+  const save = useAction('sub.template.save', { invalidate: ['sub.templates'], success: tr("حُفظ القالب"), onSuccess: onClose });
+  const preview = async () => {
+    try { setPv(await api<{ subject: string; body: string }>('sub.message.preview', { subject: f.channel === 'email' ? f.subject : '', body: f.body })); }
+    catch (e) { toast(errorText(e), 'bad'); }
+  };
+  const insert = (token: string) => setF({ ...f, body: f.body + (f.body && !f.body.endsWith(' ') && !f.body.endsWith('\n') ? ' ' : '') + token });
+  return (
+    <Dialog open onClose={onClose} title={f.id ? tr("تعديل القالب") : tr("قالب جديد")} wide
+      onSubmit={() => save.mutate(f)}
+      footer={<><Button type="submit" variant="primary" className="flex-1" loading={save.isPending}>{tr("حفظ")}</Button><Button variant="ghost" onClick={preview}>{tr("معاينة")}</Button><Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button></>}>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Select label={tr("القناة")} value={f.channel} onChange={(e) => setF({ ...f, channel: e.target.value as TplForm['channel'] })} options={[{ value: 'whatsapp', label: tr("واتساب") }, { value: 'email', label: tr("البريد") }]} />
+        <Select label={tr("النوع")} value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })} options={(L?.kinds || []).map((k) => ({ value: k.id, label: k.label }))} />
+      </div>
+      <TextInput label={tr("اسم القالب")} required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+      {f.channel === 'email' && <TextInput label={tr("عنوان البريد")} required value={f.subject} onChange={(e) => setF({ ...f, subject: e.target.value })} />}
+      <Textarea label={tr("نص الرسالة")} required rows={8} value={f.body} onChange={(e) => setF({ ...f, body: e.target.value })} />
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[12px] text-muted">{tr("المتغيرات:")}</span>
+        {(L?.vars || []).map((x) => <button key={x} type="button" className="cursor-pointer rounded-md border border-line bg-chip px-2 py-1 text-[12px] text-fg" onClick={() => insert(x)}>{x}</button>)}
+      </div>
+      <p className="m-0 text-[12px] text-muted">{f.channel === 'email' ? tr("يُلحق رابط «إيقاف الرسائل» بكل بريد تلقائياً.") : tr("أضف في آخر الرسالة طريقة الإيقاف، مثل: لإيقاف هذه الرسائل أرسل: إيقاف")}</p>
+      <Checkbox label={tr("القالب نشط")} checked={f.active} onChange={(x) => setF({ ...f, active: x })} />
+      {pv && (
+        <div className="rounded-lg border border-line bg-chip/40 p-3 text-[14px]">
+          <div className="mb-1 text-[12px] font-semibold text-muted">{tr("معاينة بقيم تجريبية")}</div>
+          {pv.subject && <div className="mb-2 font-semibold">{pv.subject}</div>}
+          <p className="m-0 whitespace-pre-wrap">{pv.body}</p>
+        </div>
+      )}
+    </Dialog>
   );
 }

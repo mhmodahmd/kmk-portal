@@ -114,6 +114,6 @@ test('settings: company update goes through Db and is read back', () => {
   const s = withAdmin();
   s.ok('settings.update', { company: { name: 'كي ام كي للتجارة', address: 'الكويت', phone: '12345678' } }, s.admin);
   s.ok('settings.update', { company: { name: 'كي ام كي للتجارة', address: 'حولي', phone: '12345678' } }, s.admin);
-  eq(s.ok('settings.get', {}, s.admin).company, { name: 'كي ام كي للتجارة', address: 'حولي', phone: '12345678' });
+  eq(s.ok('settings.get', {}, s.admin).company, { name: 'كي ام كي للتجارة', address: 'حولي', phone: '12345678', managerUserId: '' });
   eq(s.srv.Db.view('core', 'Settings').filter((r) => r.key === 'company').length, 1, 'one row per key');
 });

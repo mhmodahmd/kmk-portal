@@ -20,7 +20,7 @@ export const DAY_TONE: Record<DayStatus, Tone> = {
 };
 export const BOARD_LABEL: Record<BoardStatus, string> = { in: tr("داخل الدوام"), out: tr("انصرف"), absent: tr("غائب"), none: tr("لم يسجّل بعد"), leave: tr("إجازة"), off: tr("عطلة") };
 export const BOARD_TONE: Record<BoardStatus, Tone> = { in: 'ok', out: 'neutral', absent: 'bad', none: 'warn', leave: 'info', off: 'neutral' };
-export const CORR_TONE: Record<Correction['status'], Tone> = { pending: 'warn', approved: 'ok', rejected: 'bad', cancelled: 'neutral' };
+export const CORR_TONE: Record<Correction['status'], Tone> = { pending: 'warn', approved: 'ok', rejected: 'bad', cancelled: 'neutral', in_chain: 'info', returned: 'warn' };
 
 /** هل يرى المستخدم شاشات الفريق (حضور اليوم والتقارير)؟ */
 export function useAttendanceScope() {

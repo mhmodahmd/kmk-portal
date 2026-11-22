@@ -92,13 +92,13 @@ export default function CustodyDetailPage() {
         {can.signOpen && openVoucher && (
           <div className="flex flex-col gap-2 rounded-lg border border-line p-3 no-print">
             <span className="font-semibold">{tr("سند الصرف {0} بانتظار موافقة الإدارة", openVoucher.number)}</span>
-            <SignActions kind="voucher" id={openVoucher.id} info={q.data.signLinks.openVoucher} />
+            <SignActions kind="voucher" id={openVoucher.id} info={q.data.signLinks.openVoucher} chain={q.data.chains?.openVoucher} />
           </div>
         )}
         {can.signStatement && (
           <div className="flex flex-col gap-2 rounded-lg border border-line p-3 no-print">
             <span className="font-semibold">{tr("كشف التسوية بانتظار توقيع الإدارة")}</span>
-            <SignActions kind="statement" id={c.id} info={q.data.signLinks.statement} />
+            <SignActions kind="statement" id={c.id} info={q.data.signLinks.statement} chain={q.data.chains?.statement} />
           </div>
         )}
       </Card>

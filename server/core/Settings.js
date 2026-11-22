@@ -20,7 +20,7 @@ var Settings = {
   },
 
   company_: function () {
-    return Object.assign({ name: 'شركة كي ام كي', address: '', phone: '' }, Settings.get_('company', {}));
+    return Object.assign({ name: 'شركة كي ام كي', address: '', phone: '', managerUserId: '' }, Settings.get_('company', {}));
   },
 
   get: function () {
@@ -32,8 +32,15 @@ var Settings = {
     var next = {
       name: requireText(c.name, 'اسم الشركة', 100),
       address: optionalText(c.address, 200),
-      phone: optionalText(normalizeDigits(c.phone), 30)
+      phone: optionalText(normalizeDigits(c.phone), 30),
+      // مدير الشركة: مسؤول «مدير الشركة» في السلاسل الإجرائية (docs/09)
+      managerUserId: ''
     };
+    if (c.managerUserId) {
+      var mu = Db.get('core', 'Users', String(c.managerUserId));
+      if (!mu || !mu.active) throw appError('مدير الشركة غير موجود أو حسابه معطّل.');
+      next.managerUserId = mu.id;
+    }
     Settings.set_('company', next, ctx.user);
     Audit.log(ctx.user, 'core', 'settings.update', 'Settings', 'company', next);
     return { company: next };

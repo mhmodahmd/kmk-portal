@@ -4,6 +4,7 @@ import { IS_EN, tr } from '../../lib/i18n';
 import { useAction, useApi } from '../../lib/useApi';
 import { dmy } from '../../lib/format';
 import { Badge, ListRow } from '../../ui/Display';
+import { TimelineMini } from '../../ui/Timeline';
 import { Button } from '../../ui/Button';
 import { Checkbox, Select, TextInput, Textarea } from '../../ui/Field';
 import { Dialog } from '../../ui/Overlay';
@@ -63,6 +64,13 @@ export function DueText({ t, today }: { t: Pick<TaskView, 'dueDate' | 'overdue'>
 }
 
 /** سطر مهمة في القوائم */
+/** مرحلة المراجعة في القوائم: خط مصغّر بالمرحلة الحالية وصاحبها (سلسلة أو «من أسندها») */
+function ReviewMini({ t }: { t: TaskView }) {
+  if (t.wf) return <TimelineMini statuses={t.wf.dots} overdue={t.wf.overdue} label={[t.wf.stepName, t.wf.assigneeNames.join('، ')].filter(Boolean).join(' · ')} />;
+  const cur = t.steps?.find((s) => s.status === 'current');
+  return cur ? <TimelineMini statuses={t.steps.map((s) => s.status)} label={[cur.name, (cur.assignees || []).join('، ')].filter(Boolean).join(' · ')} /> : null;
+}
+
 export function TaskRow({ t, today, showAssignee, onToggle }: { t: TaskView; today?: string; showAssignee?: boolean; onToggle?: (t: TaskView) => void }) {
   const closed = t.status === 'done' || t.status === 'cancelled';
   // دائرة الإنجاز 24px بصرياً، وهدف لمسها 44px على الجوال (32px على الحاسوب)
@@ -87,6 +95,7 @@ export function TaskRow({ t, today, showAssignee, onToggle }: { t: TaskView; tod
           {t.checklistTotal > 0 && <span className="num">{t.checklistDone}/{t.checklistTotal}</span>}
           {t.commentsCount > 0 && <span className="num">💬 {t.commentsCount}</span>}
           {t.recurrenceLabel && <span className="inline-flex items-center gap-1"><Icon name="refresh" size={13} />{t.recurrenceLabel}</span>}
+          {t.status === 'review' && <ReviewMini t={t} />}
         </span>
       }
       badge={

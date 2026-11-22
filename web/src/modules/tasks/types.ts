@@ -4,7 +4,9 @@ export type Priority = 'urgent' | 'high' | 'normal' | 'low';
 /** ما يمكن ربط المهمة به من الحوار (المشروع له حقله الخاص projectId) */
 export type LinkType = 'client' | 'custody' | 'employee';
 
-export interface TaskView {
+import type { RequestChain } from '../../lib/types';
+
+export interface TaskView extends RequestChain {
   id: string; number: string; title: string; description: string; status: TaskStatus; statusLabel: string;
   priority: Priority; priorityLabel: string; assigneeId: string; assigneeName: string; watchers: { id: string; name: string }[];
   dueDate: string; startDate: string; completedAt: string; overdue: boolean; projectId: string; projectName: string;

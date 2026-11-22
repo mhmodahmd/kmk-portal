@@ -94,6 +94,7 @@ export interface CompanySettings {
   name: string;
   address: string;
   phone: string;
+  managerUserId?: string;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -125,13 +126,18 @@ export interface Balance {
   typeId: string; name: string; paid: boolean; active: boolean; unlimited: boolean; entitled: number;
   adjustment: number; used: number; pending: number; available: number | null; adjNote: string;
 }
-export type LeaveStatus = 'pending_manager' | 'pending_hr' | 'approved' | 'rejected' | 'cancelled';
+import type { ChainBrief, TlStep } from '../ui/Timeline';
+export type LeaveStatus = 'pending_manager' | 'pending_hr' | 'approved' | 'rejected' | 'cancelled' | 'in_chain' | 'returned';
+/** مراحل الطلب: سلسلة (wf) أو المسار المدمج (steps) — docs/09 */
+export interface RequestChain { wfInstanceId: string; wf: ChainBrief | null; steps: TlStep[] }
 export interface LeaveView {
   id: string; employeeId: string; name: string; typeId: string; typeName: string; from: string; to: string; days: number;
   reason: string; status: LeaveStatus; statusLabel: string; managerId: string; managerName: string; managerNote: string;
   decidedBy: string; decidedAt: string; decisionNote: string; createdAt: string;
 }
-export type OtStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+export interface LeaveView extends RequestChain {}
+export type OtStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'in_chain' | 'returned';
+export interface OtView extends RequestChain {}
 export interface OtView {
   id: string; employeeId: string; name: string; date: string; minutes: number; reason: string;
   status: OtStatus; statusLabel: string; createdByName: string; decidedBy: string; decidedAt: string; decisionNote: string; createdAt: string;
@@ -182,6 +188,7 @@ export interface Board {
 export interface RecordRow extends Session { employeeId: string; name: string; date: string; dayName: string; inLoc: string; outLoc: string; editedBy: string }
 export interface Correction {
   id: string; employeeId: string; name: string; date: string; dayName: string; kind: 'missingOut' | 'missingIn' | 'wrongTime'; kindLabel: string;
-  inTime: string; outTime: string; reason: string; status: 'pending' | 'approved' | 'rejected' | 'cancelled'; statusLabel: string;
+  inTime: string; outTime: string; reason: string; status: 'pending' | 'approved' | 'rejected' | 'cancelled' | 'in_chain' | 'returned'; statusLabel: string;
   decidedBy: string; decidedAt: string; decisionNote: string; createdAt: string;
 }
+export interface Correction extends RequestChain {}

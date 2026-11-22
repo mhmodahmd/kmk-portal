@@ -8,7 +8,9 @@
  * - الإجراءات: اعتماد · رفض · إعادة للتعديل · إحالة · طلب استيضاح (ويجيب المنشئ) · إلغاء · إعادة إسناد (المدير).
  *   سجل الإجراءات (WfActions) إضافة فقط.
  * - المنشئ لا يعتمد مستنده: يُستبعد من مراحل «اعتماد»، وتنتقل إلى مديره المباشر إن لم يبقَ غيره.
- * - الوحدة المضيفة تقدّم في ModuleProviders_ الحقل workflowHost: { entity_(id), onEvent_(ctx, event, inst), link_(id, userId) }.
+ * - المضيفون في WorkflowHosts_ (Router.js) بمفتاح نوع الطلب: { module, label, entity_(id), onEvent_(ctx, event, inst), link_?(id, userId), ... }.
+ *   المستندات مضيف بمفتاح 'correspondence'، وطلبات الوحدات (system: true) مثل 'hr.leave' تُربط بسلاسل عامة (module = 'system')
+ *   من «النظام ← السلاسل الإجرائية» عبر WfBindings (docs/09). بلا ربط يبقى الطلب على مساره المدمج في وحدته.
  * - صندوق الموافقات: المرحلة الحالية لمسؤوليها (always: لمن ليس له دور في الوحدة المضيفة أيضاً).
  *
  * المرحلة 3: شرط ظهور لكل مرحلة ({ field, op, value } على قيم السجل التي يقدّمها المضيف في entity_.values)،
@@ -42,6 +44,7 @@ var WF_SCHEMA = {
     ['assignees', 'json'], ['status', 'text'], ['dueAt', 'ts'], ['escalationLevel', 'num'], ['startedAt', 'ts'], ['endedAt', 'ts'],
     ['actedBy', 'text'], ['asking', 'bool'], ['fallback', 'bool'], ['config', 'json'], ['approvals', 'json']
   ],
+  WfBindings: [['id', 'text'], ['requestType', 'text'], ['templateId', 'text'], ['updatedBy', 'text'], ['updatedAt', 'ts']],
   Delegations: [
     ['id', 'text'], ['fromUserId', 'text'], ['toUserId', 'text'], ['from', 'date'], ['to', 'date'], ['module', 'text'], ['reason', 'text'],
     ['active', 'bool'], ['createdAt', 'ts'], ['endedAt', 'ts']
@@ -54,7 +57,7 @@ var WF_SCHEMA = {
 
 var WF = {
   KIND: { review: 'مراجعة', approve: 'اعتماد', sign: 'توقيع', execute: 'تنفيذ', inform: 'اطلاع' },
-  ASSIGNEE: { user: 'مستخدم محدد', role: 'دور في الوحدة', direct_manager: 'المدير المباشر للمنشئ', dept_manager: 'مدير قسم محدد', creator_dept_manager: 'مدير قسم المنشئ' },
+  ASSIGNEE: { user: 'مستخدم محدد', role: 'دور في الوحدة', direct_manager: 'المدير المباشر للمنشئ', dept_manager: 'مدير قسم محدد', creator_dept_manager: 'مدير قسم المنشئ', company_manager: 'مدير الشركة', party: 'طرف في الطلب' },
   ON_REJECT: { end: 'إنهاء السلسلة (مرفوض)', creator: 'إعادة إلى المنشئ للتعديل' },
   STATUS: { running: 'جارية', returned: 'معادة للتعديل', approved: 'معتمدة', rejected: 'مرفوضة', cancelled: 'ملغاة' },
   STEP: { pending: 'لم تبدأ', current: 'حالية', done: 'مكتملة', rejected: 'مرفوضة', returned: 'معادة', skipped: 'متخطاة', cancelled: 'ملغاة' },
@@ -76,12 +79,26 @@ var Workflow = {
   rows_: function (t) { return Db.view('workflow', t); },
 
   host_: function (module) {
-    var p = ModuleProviders_().filter(function (x) { return x.key === module && x.workflowHost; })[0];
-    if (!p) throw appError('الوحدة لا تدعم السلسلة الإجرائية.');
-    return p.workflowHost;
+    var h = WorkflowHosts_()[module];
+    if (!h) throw appError('الوحدة لا تدعم السلسلة الإجرائية.');
+    return h;
   },
 
-  isModuleMgr_: function (ctx, module) { return Permissions.has(ctx, module, ['manager']); },
+  /** مدير السلاسل لنوع: مدير النظام للعامة (system)، وإلا من له دور الإدارة في وحدة المضيف */
+  isModuleMgr_: function (ctx, module) {
+    if (module === 'system') return !!ctx.user.isSuperAdmin;
+    var h = WorkflowHosts_()[module];
+    return !!h && Permissions.has(ctx, h.module || module, h.managerRoles || ['manager']);
+  },
+
+  /** هل تصلح سلسلة القالب لنوع الطلب؟ سلاسل المستندات لها، والعامة (system) لطلبات الوحدات */
+  fits_: function (t, type) {
+    var h = WorkflowHosts_()[type];
+    return !!h && (t.module === type || (t.module === 'system' && !!h.system));
+  },
+
+  /** رابط الطلب لمستخدم: صفحة الوحدة إن قدّمها المضيف، وإلا صفحة السلسلة العامة */
+  linkOf_: function (host, inst, userId) { return (host.link_ && host.link_(inst.entityId, userId)) || '/chain/' + inst.id; },
 
   userName_: function (users, id) { var u = id && users[id]; return u ? u.fullName : ''; },
 
@@ -136,8 +153,8 @@ var Workflow = {
 
   empUser_: function (empId, emps) { var e = empId && emps[empId]; return e && e.userId && e.status !== 'terminated' ? e.userId : ''; },
 
-  /** المسؤولون عن مرحلة لسجل منشئه createdBy. يعيد { ids, fallback } */
-  resolve_: function (cfg, module, createdBy) {
+  /** المسؤولون عن مرحلة لسجل منشئه createdBy، وأطرافه parties ({ مفتاح: مستخدم }، من entity_). يعيد { ids, fallback } */
+  resolve_: function (cfg, module, createdBy, parties) {
     var users = indexBy_(Db.view('core', 'Users')), emps = indexBy_(Staff.all_()), depts = indexBy_(Staff.depts_());
     var creatorEmp = Staff.byUser_(createdBy), a = cfg.assignee || {}, ids = [];
     var deptMgr = function (deptId) { var d = deptId && depts[deptId]; return d && d.active !== false ? Workflow.empUser_(d.managerId, emps) : ''; };
@@ -146,6 +163,8 @@ var Workflow = {
     else if (a.type === 'direct_manager') ids = [Workflow.empUser_(Staff.managerIdOf_(creatorEmp, depts), emps)];
     else if (a.type === 'dept_manager') ids = [deptMgr(a.id)];
     else if (a.type === 'creator_dept_manager') ids = [deptMgr(creatorEmp && creatorEmp.departmentId)];
+    else if (a.type === 'company_manager') ids = [Settings.company_().managerUserId || ''];
+    else if (a.type === 'party') ids = [(parties || {})[a.key] || ''];
     var ok = function (list) { return list.filter(function (id, i, arr) { return id && users[id] && users[id].active && arr.indexOf(id) === i; }); };
     ids = ok(ids);
     // المنشئ لا يعتمد مستنده ولا يوقّعه
@@ -203,6 +222,14 @@ var Workflow = {
   },
 
   condFields_: function (module) {
+    if (module === 'system') {
+      var hosts = WorkflowHosts_(), seen = {}, out = [];
+      Object.keys(hosts).forEach(function (k) {
+        if (!hosts[k].system || !hosts[k].conditionFields_) return;
+        hosts[k].conditionFields_().forEach(function (f) { if (!seen[f.key]) { seen[f.key] = true; out.push(f); } });
+      });
+      return out;
+    }
     var host = Workflow.host_(module);
     return host.conditionFields_ ? host.conditionFields_() : [];
   },
@@ -268,7 +295,7 @@ var Workflow = {
       var module = cur ? cur.module : String(p.module || '');
       if (!Workflow.isModuleMgr_(ctx, module)) throw appError('يضبط قواعد التوجيه مدير الوحدة.', 'FORBIDDEN');
       var t = Db.get('workflow', 'WfTemplates', String(p.templateId || ''));
-      if (!t || t.module !== module || t.status !== 'published') throw appError('اختر سلسلة منشورة للقاعدة.');
+      if (!t || !Workflow.fits_(t, module) || t.status !== 'published') throw appError('اختر سلسلة منشورة للقاعدة.');
       var fields = Workflow.condFields_(module), opt = function (key, v) {
         if (!v) return '';
         var f = fields.filter(function (x) { return x.key === key; })[0];
@@ -319,7 +346,9 @@ var Workflow = {
     p = p || {};
     var module = String(p.module || '');
     if (!Workflow.isModuleMgr_(ctx, module)) throw appError('المحاكاة لمدير الوحدة.', 'FORBIDDEN');
-    var host = Workflow.host_(module), ent = host.simEntity_(ctx, p);
+    var host = Workflow.host_(module);
+    var ent = host.simEntity_ ? host.simEntity_(ctx, p) : { createdBy: p.createdBy && Db.get('core', 'Users', String(p.createdBy)) ? String(p.createdBy) : ctx.user.id, values: p.values || {}, defaultTemplateId: '' };
+    if (!host.simEntity_ && host.system) { var bnd = Workflow.bindingOf_(module); ent.defaultTemplateId = bnd ? bnd.templateId : ''; }
     var picked = p.templateId ? { templateId: String(p.templateId), ruleName: '' } : Workflow.route_(module, ent.values) || (ent.defaultTemplateId ? { templateId: ent.defaultTemplateId, ruleName: '' } : null);
     if (!picked) return { template: null, source: 'none', steps: [] };
     var t = Db.getOrThrow('workflow', 'WfTemplates', picked.templateId, 'السلسلة'), users = indexBy_(Db.view('core', 'Users'));
@@ -328,7 +357,7 @@ var Workflow = {
       template: { id: t.id, name: t.name, version: t.version }, source: p.templateId ? 'chosen' : picked.ruleId ? 'rule' : 'default', ruleName: picked.ruleName || '',
       steps: Workflow.templateSteps_(t).map(function (s) {
         var cfg = { kind: s.kind, assignee: s.assignee }, skipped = !Workflow.test_(s.condition, ent.values);
-        var r = skipped ? { ids: [], fallback: false } : Workflow.resolve_(cfg, module, ent.createdBy);
+        var r = skipped ? { ids: [], fallback: false } : Workflow.resolve_(cfg, module, ent.createdBy, ent.parties);
         return { order: s.order, name: s.name, kind: s.kind, kindLabel: WF.KIND[s.kind] || s.kind, skipped: skipped, condition: Workflow.condLabel_(module, s.condition, fields),
           assignees: r.ids.map(function (u) { return Workflow.userName_(users, u); }), fallback: r.fallback };
       })
@@ -344,9 +373,25 @@ var Workflow = {
   assigneeLabel_: function (a, maps) {
     a = a || {};
     if (a.type === 'user') return Workflow.userName_(maps.users, a.id) || WF.ASSIGNEE.user;
-    if (a.type === 'role') { var m = moduleDef_(a.module); return (m && m.roles[a.role]) || a.role; }
+    if (a.type === 'role') { var m = moduleDef_(a.module); return m ? (m.roles[a.role] || a.role) + (a.module !== 'correspondence' ? ' · ' + m.label : '') : a.role; }
+    if (a.type === 'company_manager') { var cm = Settings.company_().managerUserId; return 'مدير الشركة' + (cm && maps.users[cm] ? ' (' + maps.users[cm].fullName + ')' : ''); }
     if (a.type === 'dept_manager') { var d = maps.depts[a.id]; return 'مدير ' + (d ? d.name : 'القسم'); }
+    if (a.type === 'party') { var pt = Workflow.partiesOf_('*').filter(function (x) { return x.id === a.key; })[0]; return pt ? pt.label : WF.ASSIGNEE.party; }
     return WF.ASSIGNEE[a.type] || '';
+  },
+
+  /**
+   * أطراف الطلب المتاحة مسؤولاً («من أسند المهمة»…) يعلنها المضيف في parties_ { مفتاح: اسم }.
+   * للوحدة: أطراف مضيفها؛ لـ system: أطراف كل الأنواع العامة؛ و'*' للكل. يعيد [{ id, label }] بلا تكرار.
+   */
+  partiesOf_: function (module) {
+    var hosts = WorkflowHosts_(), out = [], seen = {};
+    Object.keys(hosts).forEach(function (k) {
+      var h = hosts[k];
+      if (!h.parties_ || !(module === '*' || k === module || (module === 'system' && h.system))) return;
+      Object.keys(h.parties_).forEach(function (key) { if (!seen[key]) { seen[key] = 1; out.push({ id: key, label: h.parties_[key] }); } });
+    });
+    return out;
   },
 
   templateView_: function (t, maps) {
@@ -374,19 +419,25 @@ var Workflow = {
 
   templates: function (ctx, p) {
     var module = String((p && p.module) || '');
-    if (!Permissions.has(ctx, module)) throw appError('ليست لديك صلاحية لهذا الإجراء.', 'FORBIDDEN');
+    if (module === 'system' ? !ctx.user.isSuperAdmin : !Permissions.has(ctx, module)) throw appError('ليست لديك صلاحية لهذا الإجراء.', 'FORBIDDEN');
     return Workflow.templatesOf_(module, Workflow.isModuleMgr_(ctx, module));
   },
 
   /** خيارات محرر القالب: أنواع المراحل والمسؤولين وأدوار الوحدة والأقسام والمستخدمون */
   lookups: function (ctx, p) {
     // متاحة لكل مستخدم: صاحب المرحلة قد لا يكون له دور في الوحدة ويحتاج قائمة الأشخاص للإحالة
-    var module = String((p && p.module) || ''), def = moduleDef_(module);
+    // system والأنواع (hr.leave…) بلا أدوار خاصة؛ أدوار كل الوحدات في allRoles
+    var module = String((p && p.module) || ''), def = module === 'system' || (WorkflowHosts_()[module] && !moduleDef_(module)) ? { roles: {} } : moduleDef_(module);
     if (!def) throw appError('الوحدة غير معروفة.');
+    // السلاسل العامة: أدوار كل الوحدات المفعّلة بصيغة «الوحدة|الدور»
+    var allRoles = [];
+    MODULES.forEach(function (m) { if (m.enabled) Object.keys(m.roles).forEach(function (r) { allRoles.push({ id: m.key + '|' + r, label: m.label + ': ' + m.roles[r] }); }); });
     var dict = function (d) { return Object.keys(d).map(function (k) { return { id: k, label: d[k] }; }); };
     return {
       kinds: dict(WF.KIND), assignees: dict(WF.ASSIGNEE), onReject: dict(WF.ON_REJECT), ops: dict(WF.OPS), modes: dict(WF.MODE), conditionFields: Workflow.condFields_(module),
-      roles: Object.keys(def.roles).map(function (k) { return { id: k, label: def.roles[k] }; }),
+      roles: module === 'system' || !moduleDef_(module) ? allRoles : Object.keys(def.roles).map(function (k) { return { id: k, label: def.roles[k] }; }),
+      companyManager: Settings.company_().managerUserId || '',
+      parties: Workflow.partiesOf_(module),
       departments: Staff.depts_().filter(function (d) { return d.active !== false; }).map(function (d) { return { id: d.id, name: d.name }; }),
       people: Db.view('core', 'Users').filter(function (u) { return u.active; }).map(function (u) { return { id: u.id, name: u.fullName }; })
         .sort(function (a, b) { return a.name.localeCompare(b.name, 'ar'); })
@@ -416,7 +467,7 @@ var Workflow = {
     return withLock(function () {
       var cur = p.id ? Db.getOrThrow('workflow', 'WfTemplates', String(p.id), 'السلسلة') : null;
       var module = cur ? cur.module : String(p.module || '');
-      if (!moduleDef_(module) || !ModuleProviders_().some(function (x) { return x.key === module && x.workflowHost; })) throw appError('الوحدة لا تدعم السلسلة الإجرائية.');
+      if (module !== 'system' && !WorkflowHosts_()[module]) throw appError('الوحدة لا تدعم السلسلة الإجرائية.');
       if (!Workflow.isModuleMgr_(ctx, module)) throw appError('يضبط السلاسل مدير الوحدة.', 'FORBIDDEN');
       var name = requireText(p.name, 'اسم السلسلة', 80);
       if (Workflow.rows_('WfTemplates').some(function (t) { return t.module === module && t.name === name && (!cur || t.id !== cur.id); })) throw appError('اسم السلسلة مستخدم مسبقاً.');
@@ -424,19 +475,30 @@ var Workflow = {
       if (!list.length) throw appError('أضف مرحلة واحدة على الأقل.');
       if (list.length > WF.MAX_STEPS) throw appError('الحد الأقصى ' + WF.MAX_STEPS + ' مرحلة.');
       if (!list.some(function (s) { return s && s.kind !== 'inform'; })) throw appError('السلسلة تحتاج مرحلة واحدة على الأقل غير «اطلاع».');
-      var users = indexBy_(Db.view('core', 'Users')), depts = indexBy_(Staff.depts_()), def = moduleDef_(module), group = 0;
+      var users = indexBy_(Db.view('core', 'Users')), depts = indexBy_(Staff.depts_()), def = module === 'system' ? { roles: {} } : moduleDef_(module), group = 0;
       var steps = list.map(function (s, i) {
         s = s || {};
         var label = 'المرحلة ' + (i + 1);
         var stepName = requireText(s.name, 'اسم ' + label, 60);
         var kind = s.kind && WF.KIND[s.kind] ? s.kind : null;
         if (!kind) throw appError(label + ': نوع المرحلة غير صحيح.');
-        if (kind === 'sign' && !Workflow.host_(module).sign_) throw appError(label + ': الوحدة لا تدعم التوقيع.');
+        if (kind === 'sign' && (module === 'system' || !Workflow.host_(module).sign_)) throw appError(label + ': الوحدة لا تدعم التوقيع.');
         var a = s.assignee || {}, type = WF.ASSIGNEE[a.type] ? a.type : null, assignee = { type: type };
         if (!type) throw appError(label + ': حدّد المسؤول عن المرحلة.');
         if (type === 'user') { if (!users[a.id] || !users[a.id].active) throw appError(label + ': المستخدم غير موجود أو حسابه معطّل.'); assignee.id = a.id; }
-        if (type === 'role') { if (!def.roles[a.role]) throw appError(label + ': الدور غير معروف.'); assignee.module = module; assignee.role = a.role; }
+        if (type === 'role') {
+          // في السلاسل العامة: «الوحدة|الدور» أو { module, role }
+          var rm = module === 'system' ? String(a.module || String(a.role || '').split('|')[0]) : module, rr = String(a.role || '').split('|').pop();
+          var rdef = moduleDef_(rm);
+          if (!rdef || !rdef.roles[rr]) throw appError(label + ': الدور غير معروف.');
+          assignee.module = rm; assignee.role = rr;
+        }
+        if (type === 'company_manager' && !Settings.company_().managerUserId) throw appError(label + ': حدّد «مدير الشركة» في بيانات الشركة أولاً.');
         if (type === 'dept_manager') { if (!depts[a.id]) throw appError(label + ': القسم غير موجود.'); assignee.id = a.id; }
+        if (type === 'party') {
+          if (!Workflow.partiesOf_(module).some(function (x) { return x.id === a.key; })) throw appError(label + ': اختر الطرف من أطراف الطلب.');
+          assignee.key = String(a.key);
+        }
         var onReject = s.onReject && WF.ON_REJECT[s.onReject] ? s.onReject : 'end';
         var condition = s.condition && s.condition.field ? Workflow.normalizeCond_(module, s.condition, label) : null;
         var mode = WF.MODE[s.mode] ? s.mode : 'any', count = mode === 'count' ? Math.floor(Number(s.count) || 0) : 1;
@@ -579,7 +641,7 @@ var Workflow = {
           Workflow.record_(ctx, inst, s, 'skip', 'لم يتحقق شرط المرحلة');
           return;
         }
-        var r = Workflow.resolve_(cfg, inst.module, ent.createdBy);
+        var r = Workflow.resolve_(cfg, inst.module, ent.createdBy, ent.parties);
         if (cfg.kind === 'inform') {
           Db.update('workflow', 'WfInstanceSteps', s.id, { assignees: r.ids, status: 'done', startedAt: nowIso(), endedAt: nowIso(), fallback: r.fallback });
           Workflow.record_(ctx, inst, s, 'inform', '');
@@ -614,7 +676,7 @@ var Workflow = {
     var prev = Workflow.latestOf_(module, entityId);
     if (prev && (prev.status === 'running' || prev.status === 'returned')) throw appError('للمستند سلسلة جارية.');
     var t = Db.getOrThrow('workflow', 'WfTemplates', String(templateId || ''), 'السلسلة');
-    if (t.module !== module || t.status !== 'published') throw appError('السلسلة غير متاحة.');
+    if (!Workflow.fits_(t, module) || t.status !== 'published') throw appError('السلسلة غير متاحة.');
     var tsteps = Workflow.templateSteps_(t);
     if (!tsteps.length) throw appError('السلسلة بلا مراحل.');
     var inst = Db.insert('workflow', 'WfInstances', {
@@ -687,7 +749,8 @@ var Workflow = {
     return {
       act: live && !!mine && !step.asking, ask: live && !!mine && !step.asking, sign: live && !!mine && !step.asking && step.kind === 'sign',
       answer: live && asking && ent.createdBy === u,
-      cancel: (live || inst.status === 'returned') && (mgr || (ent.createdBy === u && !approvedOnce)),
+      // canCancel_ في المضيف: من يدير السجل في وحدته (من أسند المهمة…) يلغي سلسلته
+      cancel: (live || inst.status === 'returned') && (mgr || (ent.createdBy === u && !approvedOnce) || Workflow.hostCancels_(ctx, inst)),
       reassign: live && mgr && Workflow.currentSteps_(inst).length > 0
     };
   },
@@ -905,7 +968,7 @@ var Workflow = {
   /** wf.settings / wf.settings.save: { digest } — مدير وحدة تستضيف السلاسل أو مدير النظام */
   settings: function () { return Workflow.settings_(); },
   settingsSave: function (ctx, p) {
-    var canEdit = ctx.user.isSuperAdmin || ModuleProviders_().some(function (x) { return x.workflowHost && Workflow.isModuleMgr_(ctx, x.key); });
+    var canEdit = ctx.user.isSuperAdmin || Object.keys(WorkflowHosts_()).some(function (k) { return Workflow.isModuleMgr_(ctx, k); });
     if (!canEdit) throw appError('ليست لديك صلاحية لهذا الإجراء.', 'FORBIDDEN');
     Settings.set_('workflow', Object.assign(Workflow.settings_(), { digest: bool_(p && p.digest) }), ctx.user);
     Audit.log(ctx.user, 'workflow', 'wf.settings', 'Settings', 'workflow', { digest: bool_(p && p.digest) });
@@ -937,6 +1000,115 @@ var Workflow = {
     return q.length;
   },
 
+  // ───────── أدوات لمضيفي طلبات الوحدات ─────────
+  /** آخر ملاحظة قرار في سلسلة (سبب الرفض أو الإعادة) */
+  lastNote_: function (instanceId) {
+    var a = Workflow.rows_('WfActions').filter(function (x) { return x.instanceId === instanceId && x.note && ['approve', 'sign', 'reject', 'return', 'cancel'].indexOf(x.action) >= 0; })
+      .sort(function (x, y) { return (x.at || '').localeCompare(y.at || ''); });
+    return a.length ? a[a.length - 1].note : '';
+  },
+
+  /**
+   * يبدأ سلسلة طلب وحدة إن كان نوعه مربوطاً (أو تنطبق عليه قاعدة). setStatus(true) يُستدعى قبل البدء ليضع الطلب «قيد الإجراء».
+   * يعيد المثيل أو null (المسار المدمج).
+   */
+  startIfBound_: function (ctx, type, entityId, setStatus) {
+    var tid = Workflow.templateFor_(type, entityId);
+    if (!tid) return null;
+    setStatus();
+    return Workflow.start_(ctx, type, entityId, tid);
+  },
+
+  hostCancels_: function (ctx, inst) { var h = Workflow.host_(inst.module); return !!(h.canCancel_ && h.canCancel_(ctx, inst.entityId)); },
+
+  /** المثيل إن كان جارياً أو معاداً، وإلا null */
+  liveOf_: function (instanceId) {
+    var i = instanceId ? Db.get('workflow', 'WfInstances', instanceId) : null;
+    return i && (i.status === 'running' || i.status === 'returned') ? i : null;
+  },
+
+  /** إعادة إرسال سلسلة معادة من وحدتها (صاحب الطلب حين يعيد العمل) */
+  resubmitFor_: function (ctx, instanceId, note) { Workflow.resubmit_(ctx, instanceId, optionalText(note, 500)); },
+
+  /** إلغاء سلسلة طلب من صاحبه (يُطبَّق أثرها «ملغى» في الوحدة عبر onEvent_) */
+  cancelFor_: function (ctx, instanceId, note) { return Workflow.cancel(ctx, { instanceId: instanceId, note: note }); },
+
+  /** ملخص لعمود القوائم في الوحدات (خط مصغّر) أو null */
+  summaryFor_: function (type, entityId) { return Workflow.summary__(type, entityId, indexBy_(Db.view('core', 'Users'))); },
+
+  // ───────── ربط طلبات الوحدات بالسلاسل (docs/09) ─────────
+  bindingOf_: function (type) { return Workflow.rows_('WfBindings').filter(function (b) { return b.requestType === type; })[0] || null; },
+
+  /** سلسلة طلب جديد: قاعدة التوجيه للنوع، ثم الربط. '' = المسار المدمج */
+  templateFor_: function (type, entityId) {
+    var host = Workflow.host_(type), ent = host.entity_(entityId) || {};
+    var r = Workflow.route_(type, ent.values || {});
+    if (r) return r.templateId;
+    var b = Workflow.bindingOf_(type);
+    if (!b || !b.templateId) return '';
+    var t = Db.get('workflow', 'WfTemplates', b.templateId);
+    return t && t.status === 'published' && Workflow.fits_(t, type) ? t.id : '';
+  },
+
+  /** wf.bindings (مدير النظام): كل أنواع الطلبات وسلسلة كل نوع وعدد الجاري */
+  bindings: function () {
+    var hosts = WorkflowHosts_(), tpl = indexBy_(Workflow.rows_('WfTemplates')), running = {};
+    Workflow.rows_('WfInstances').forEach(function (i) { if (i.status === 'running' || i.status === 'returned') running[i.module] = (running[i.module] || 0) + 1; });
+    return Object.keys(hosts).filter(function (k) { return hosts[k].system; }).map(function (k) {
+      var h = hosts[k], b = Workflow.bindingOf_(k), t = b && b.templateId ? tpl[b.templateId] : null, m = moduleDef_(h.module);
+      return { requestType: k, label: h.label, moduleLabel: m ? m.label : h.module, builtin: h.builtinLabel || '', templateId: t ? t.id : '', templateName: t ? t.name : '', templateLive: !!(t && t.status === 'published'), running: running[k] || 0, rules: Workflow.rows_('WfRules').filter(function (r) { return r.module === k && r.active; }).length };
+    });
+  },
+
+  /** wf.binding.save (مدير النظام): { requestType, templateId } — '' يعيد النوع إلى مساره المدمج. الجاري يكمل على ما بدأ به */
+  bindingSave: function (ctx, p) {
+    p = p || {};
+    return withLock(function () {
+      var type = String(p.requestType || ''), h = WorkflowHosts_()[type];
+      if (!h || !h.system) throw appError('نوع الطلب غير معروف.');
+      var tid = String(p.templateId || '');
+      if (tid) {
+        var t = Db.get('workflow', 'WfTemplates', tid);
+        if (!t || t.module !== 'system' || t.status !== 'published') throw appError('اختر سلسلة عامة منشورة.');
+      }
+      var cur = Workflow.bindingOf_(type), rec = { requestType: type, templateId: tid, updatedBy: ctx.user.id, updatedAt: nowIso() };
+      if (cur) Db.update('workflow', 'WfBindings', cur.id, rec); else Db.insert('workflow', 'WfBindings', rec);
+      Audit.log(ctx.user, 'workflow', 'wf.binding', 'WfBinding', type, { type: type, template: tid });
+      return Workflow.bindings();
+    });
+  },
+
+  /**
+   * wf.get: { instanceId } أو { module, entityId } — صفحة السلسلة العامة لطلب: بياناته المختصرة وخطه وقراراته.
+   * يراها المشارك والمنشئ ومدير السلاسل للنوع، ومن يرى الطلب في وحدته (canSee_ في المضيف).
+   */
+  get: function (ctx, p) {
+    p = p || {};
+    var inst = p.instanceId ? Db.get('workflow', 'WfInstances', String(p.instanceId)) : Workflow.latestOf_(String(p.module || ''), String(p.entityId || ''));
+    if (!inst) throw appError('السلسلة غير موجودة.', 'NOT_FOUND');
+    var host = Workflow.host_(inst.module), ent = host.entity_(inst.entityId);
+    if (!ent) throw appError('الطلب غير موجود.', 'NOT_FOUND');
+    var u = ctx.user.id, ok = ctx.user.isSuperAdmin || ent.createdBy === u || Workflow.isParticipant_(inst.module, inst.entityId, u)
+      || Workflow.isModuleMgr_(ctx, inst.module) || (host.canSee_ && host.canSee_(ctx, inst.entityId));
+    if (!ok) throw appError('السلسلة غير موجودة.', 'NOT_FOUND');
+    return {
+      entity: { number: ent.number, title: ent.title, moduleLabel: ent.moduleLabel, facts: ent.facts || [], link: host.page_ ? host.page_(inst.entityId, ctx) : '', canResubmit: inst.status === 'returned' && ent.createdBy === u && !!host.resubmit_ },
+      chain: Workflow.view_(ctx, inst)
+    };
+  },
+
+  /** wf.resubmit: صاحب الطلب يعيد إرسال طلب وحدة معاد للتعديل (المستندات تستخدم cor.submit) */
+  resubmit: function (ctx, p) {
+    p = p || {};
+    return withLock(function () {
+      var inst = Db.getOrThrow('workflow', 'WfInstances', String(p.instanceId || ''), 'السلسلة'), host = Workflow.host_(inst.module), ent = host.entity_(inst.entityId) || {};
+      if (!host.resubmit_ || ent.createdBy !== ctx.user.id) throw appError('ليست لديك صلاحية لهذا الإجراء.', 'FORBIDDEN');
+      Workflow.resubmit_(ctx, inst.id, optionalText(p.note, 500));
+      host.resubmit_(ctx, inst);
+      return Workflow.get(ctx, { instanceId: inst.id });
+    });
+  },
+
   // ───────── صندوق الموافقات والإشعارات ─────────
   inbox_: function (ctx) {
     var u = ctx.user.id, out = [], users = null, from = Workflow.delegatorsOf_(u);
@@ -961,7 +1133,7 @@ var Workflow = {
         facts: [{ k: 'السلسلة', v: inst.templateName || '' }, { k: 'المرحلة', v: s.order + ' من ' + steps.length }].concat(s.dueAt ? [{ k: 'الموعد', v: dmy_(localDate_(new Date(s.dueAt).getTime())) }] : []).concat(ent.facts || []),
         approveLabel: s.kind === 'review' ? 'تمت المراجعة' : s.kind === 'execute' ? 'تم التنفيذ' : s.kind === 'sign' ? 'التوقيع من صفحة المستند' : 'اعتماد', rejectLabel: 'إعادة للتعديل',
         linkOnly: s.kind === 'sign',
-        link: host.link_(inst.entityId, u)
+        link: Workflow.linkOf_(host, inst, u)
       });
     });
     return out;
@@ -994,15 +1166,17 @@ var Workflow = {
     var host = Workflow.host_(inst.module), ent = host.entity_(inst.entityId);
     if (!ent) return out;
     var detail = ent.number + ' · ' + ent.title + (d.note ? ' — ' + d.note : '');
-    var to = function (ids, title) { [].concat(ids || []).forEach(function (uid) { if (uid) out.push({ to: uid, title: title, detail: detail, link: host.link_(inst.entityId, uid) }); }); };
-    if ((ev.action === 'wf.approve' || ev.action === 'wf.sign') && d.final) to(ent.createdBy, 'اعتُمد مستندك');
+    var to = function (ids, title) { [].concat(ids || []).forEach(function (uid) { if (uid) out.push({ to: uid, title: title, detail: detail, link: Workflow.linkOf_(host, inst, uid) }); }); };
+    // طلبات الوحدات (docs/09): «طلبك» بدل «مستندك»
+    var sys = !!host.system;
+    if ((ev.action === 'wf.approve' || ev.action === 'wf.sign') && d.final) to(ent.createdBy, sys ? 'اعتُمد طلبك' : 'اعتُمد مستندك');
     else if (ev.action === 'wf.sign') to(ent.createdBy, 'وقّع ' + a + ' مستندك');
-    else if (ev.action === 'wf.reject') to(ent.createdBy, 'رفض ' + a + ' مستندك');
-    else if (ev.action === 'wf.return') to(ent.createdBy, 'أعاد ' + a + ' مستندك للتعديل');
-    else if (ev.action === 'wf.ask') to(ent.createdBy, 'يطلب ' + a + ' استيضاحاً على مستندك');
+    else if (ev.action === 'wf.reject') to(ent.createdBy, sys ? 'رفض ' + a + ' طلبك' : 'رفض ' + a + ' مستندك');
+    else if (ev.action === 'wf.return') to(ent.createdBy, sys ? 'أعاد ' + a + ' طلبك للتعديل' : 'أعاد ' + a + ' مستندك للتعديل');
+    else if (ev.action === 'wf.ask') to(ent.createdBy, sys ? 'يطلب ' + a + ' استيضاحاً على طلبك' : 'يطلب ' + a + ' استيضاحاً على مستندك');
     else if (ev.action === 'wf.answer') to(d.to, 'ردّ ' + a + ' على الاستيضاح');
-    else if (ev.action === 'wf.inform') to(d.to, 'مستند للاطلاع');
-    else if (ev.action === 'wf.cancel') to(d.to, 'أُلغيت سلسلة مستند كان بانتظارك');
+    else if (ev.action === 'wf.inform') to(d.to, sys ? 'طلب للاطلاع' : 'مستند للاطلاع');
+    else if (ev.action === 'wf.cancel') to(d.to, sys ? 'أُلغيت سلسلة طلب كان بانتظارك' : 'أُلغيت سلسلة مستند كان بانتظارك');
     else if (ev.action === 'wf.overdue') to(d.to, 'تأخرت مرحلة بانتظارك: ' + d.step);
     else if (ev.action === 'wf.escalate' && d.level === 2) to(d.to, 'مرحلة متأخرة لدى أحد فريقك: ' + d.step);
     else if (ev.action === 'wf.escalate' && d.level === 3) to(d.to, 'انتقلت إليك مرحلة متأخرة: ' + d.step);
@@ -1023,6 +1197,10 @@ var Workflow = {
       'wf.act': { fn: Workflow.act },
       'wf.cancel': { fn: Workflow.cancel },
       'wf.reassign': { fn: Workflow.reassign },
+      'wf.get': { fn: Workflow.get },
+      'wf.resubmit': { fn: Workflow.resubmit },
+      'wf.bindings': { perm: 'super', fn: Workflow.bindings },
+      'wf.binding.save': { perm: 'super', fn: Workflow.bindingSave },
       'wf.delegation.mine': { fn: Workflow.delegationMine },
       'wf.delegation.save': { fn: Workflow.delegationSave },
       'wf.delegation.end': { fn: Workflow.delegationEnd },

@@ -24,7 +24,8 @@ var CUS_SCHEMA = {
     ['settlementMethod', 'text'], ['settlementVoucherId', 'text'], ['driveFolderId', 'text'], ['notes', 'text'],
     ['previousCustodyId', 'text'], ['isImported', 'bool'], ['createdBy', 'text'], ['createdAt', 'ts'],
     ['disburseStage', 'text'], ['openVoucherId', 'text'], ['carryMode', 'text'], ['receivedAt', 'ts'],
-    ['closeSignedFileId', 'text'], ['closeSignedAt', 'ts'], ['closeSignedBy', 'text'], ['closeMgrSignId', 'text'], ['closeSignedNote', 'text']
+    ['closeSignedFileId', 'text'], ['closeSignedAt', 'ts'], ['closeSignedBy', 'text'], ['closeMgrSignId', 'text'], ['closeSignedNote', 'text'],
+    ['closeWfInstanceId', 'text']
   ],
   Expenses: [
     ['id', 'text'], ['custodyId', 'text'], ['entryType', 'text'], ['date', 'date'], ['category', 'text'], ['project', 'text'],
@@ -42,7 +43,7 @@ var CUS_SCHEMA = {
     ['pdfFileId', 'text'], ['createdBy', 'text'], ['createdAt', 'ts'], ['status', 'text'], ['cancelReason', 'text'],
     ['cancelledBy', 'text'], ['cancelledAt', 'ts'], ['approvedBy', 'text'], ['approvedAt', 'ts'], ['signedFileId', 'text'],
     ['signedAt', 'ts'], ['signedBy', 'text'], ['signedNote', 'text'], ['requestedBy', 'text'], ['requestedAt', 'ts'],
-    ['rejectReason', 'text'], ['rejectedBy', 'text'], ['rejectedAt', 'ts'], ['mgrSignId', 'text']
+    ['rejectReason', 'text'], ['rejectedBy', 'text'], ['rejectedAt', 'ts'], ['mgrSignId', 'text'], ['wfInstanceId', 'text']
   ],
   SignLinks: [
     ['id', 'text'], ['kind', 'text'], ['targetId', 'text'], ['tokenHash', 'text'], ['managerName', 'text'], ['createdBy', 'text'],
@@ -52,7 +53,7 @@ var CUS_SCHEMA = {
   Signatures: [['id', 'text'], ['userId', 'text'], ['data', 'text'], ['updatedAt', 'ts']],
   Requests: [
     ['id', 'text'], ['employeeId', 'text'], ['amount', 'num'], ['reason', 'text'], ['status', 'text'], ['custodyId', 'text'],
-    ['handledBy', 'text'], ['handledAt', 'ts'], ['rejectReason', 'text'], ['createdAt', 'ts'], ['createdBy', 'text']
+    ['handledBy', 'text'], ['handledAt', 'ts'], ['rejectReason', 'text'], ['createdAt', 'ts'], ['createdBy', 'text'], ['wfInstanceId', 'text']
   ],
   Categories: [['id', 'text'], ['name', 'text'], ['active', 'bool'], ['sortOrder', 'num']],
   DocTypes: [['id', 'text'], ['name', 'text'], ['active', 'bool'], ['sortOrder', 'num']],
@@ -67,7 +68,7 @@ var CUS = {
   ENTRY: { expense: 'مصروف', receipt: 'مقبوض إضافي' },
   V_TYPES: { payment: 'صرف', receipt: 'قبض' },
   V_STATUS: { requested: 'بانتظار اعتماد المحاسب', signing: 'بانتظار اعتماد المدير', active: 'ساري', rejected: 'مرفوض', cancelled: 'ملغي' },
-  REQ_STATUS: { pending: 'بانتظار اعتماد المحاسب', accountant: 'بانتظار اعتماد محاسب الشركة', signing: 'بانتظار اعتماد المدير', approved: 'تمت الموافقة', rejected: 'مرفوض', cancelled: 'ملغي' },
+  REQ_STATUS: { pending: 'بانتظار اعتماد المحاسب', accountant: 'بانتظار اعتماد محاسب الشركة', signing: 'بانتظار اعتماد المدير', approved: 'تمت الموافقة', rejected: 'مرفوض', cancelled: 'ملغي', in_chain: 'قيد الإجراء في السلسلة', returned: 'معاد للتعديل' },
   SETTLEMENT: { carry: 'ترحيل', voucher: 'سند' },
   PAY: { cash: 'نقدي', cheque: 'شيك', transfer: 'تحويل' },
   PROJECT_TYPES: { project: 'مشروع', debt: 'مديونية شخصية' },
@@ -331,6 +332,10 @@ var Custody = {
         signStatement: staffOther && c.status === 'signing',
         delete: sup
       },
+      chains: {
+        statement: c.status === 'signing' || c.closeWfInstanceId ? Custody.chainState_('cus.close', c.id, c.closeWfInstanceId, c.status === 'signing') : null,
+        openVoucher: pv ? Custody.chainState_('cus.voucher', pv.id, pv.wfInstanceId, pv.status === 'signing' && !pv.signedAt) : null
+      },
       signLinks: {
         statement: Sign.info_('statement', c.id, m),
         openVoucher: c.openVoucherId ? Sign.info_('voucher', c.openVoucherId, m) : null
@@ -489,9 +494,11 @@ var Custody = {
       // i18n:on
       var pv = Vouchers.create_(ctx, {
         type: 'payment', date: openDate, custodyId: c.id, partyName: emp.fullName, amount: amount, reason: reason,
-        paymentMethod: method, chequeNo: chequeNo, requestedBy: request ? request.createdBy : '', requestedAt: request ? request.createdAt : ''
+        paymentMethod: method, chequeNo: chequeNo, requestedBy: request ? request.createdBy : '', requestedAt: request ? request.createdAt : '', deferChain: true
       });
       c = Db.update('custody', 'Custodies', c.id, { openVoucherId: pv.id });
+      // سلسلة سند الصرف بعد ربطه بالعهدة (شرط «صرف عهدة»)
+      if (pv.status === 'signing') Vouchers.startChain_(ctx, pv);
       if (request) Db.update('custody', 'Requests', request.id, { status: 'approved', custodyId: c.id, handledBy: ctx.user.id, handledAt: now });
       return c;
     });
@@ -674,7 +681,9 @@ var Custody = {
         status: 'signing', settlementMethod: method, settlementVoucherId: voucher ? voucher.id : '',
         reviewedBy: ctx.user.id, reviewDate: nowIso(), rejectReason: ''
       });
-      return { custody: u, voucher: voucher };
+      var wf = Workflow.startIfBound_(ctx, 'cus.close', c.id, function () {});
+      if (wf) u = Db.update('custody', 'Custodies', c.id, { closeWfInstanceId: wf.id });
+      return { custody: Db.get('custody', 'Custodies', c.id) || u, voucher: voucher };
     });
     Audit.log(ctx.user, 'custody', 'custody.approve', 'Custody', res.custody.id, { settlement: CUS.SETTLEMENT[method], remaining: kwd_(res.custody.remaining), voucher: res.voucher ? res.voucher.number : '' });
     var m = Custody.maps_();
@@ -696,6 +705,7 @@ var Custody = {
       var vc = v.custodyId ? Db.get('custody', 'Custodies', v.custodyId) : null;
       if (vc && Custody.isOwner_(ctx, vc)) throw appError('لا يمكنك تأكيد توقيع سند يخص عهدتك.', 'FORBIDDEN');
       if (v.signedAt) throw appError('السند موقّع من الإدارة مسبقاً.');
+      if (Workflow.liveOf_(v.wfInstanceId)) throw appError('السند في سلسلة اعتماد داخل النظام، والقرار من صفحة السلسلة.');
       Db.update('custody', 'Vouchers', v.id, { signedAt: now, signedBy: ctx.user.id, signedNote: note, status: 'active' });
       Custody.advanceOpen_(vc, v.id);
       Audit.log(ctx.user, 'custody', 'voucher.signed', 'Voucher', v.id, { number: v.number, note: note });
@@ -704,6 +714,7 @@ var Custody = {
     var c = Custody.getOrThrow_(p.id);
     if (Custody.isOwner_(ctx, c)) throw appError('لا يمكنك تأكيد كشف عهدتك.', 'FORBIDDEN');
     if (c.status !== 'signing') throw appError('العهدة لم يعتمد المحاسب إقفالها بعد.');
+    if (Workflow.liveOf_(c.closeWfInstanceId)) throw appError('الكشف في سلسلة اعتماد داخل النظام، والقرار من صفحة السلسلة.');
     Db.update('custody', 'Custodies', c.id, { status: 'closed', closeSignedAt: now, closeSignedBy: ctx.user.id, closeSignedNote: note });
     Audit.log(ctx.user, 'custody', 'statement.signed', 'Custody', c.id, { note: note });
     return true;
@@ -859,7 +870,8 @@ var Custody = {
       signs: {
         holder: { name: Custody.empName_(m, c.employeeId), image: requested && emp ? Custody.signatureOf_(emp.userId) : '' },
         reviewer: { name: Custody.userName_(m, c.reviewedBy), image: reviewed ? Custody.signatureOf_(c.reviewedBy) : '' },
-        manager: { name: link ? link.managerName : Custody.settings_().managerName, image: Custody.managerImage_(link), signedAt: c.closeSignedAt }
+        manager: c.closeWfInstanceId && c.closeSignedBy && c.closeSignedBy !== CUS.MANAGER ? Object.assign(Custody.chainSigner_(c.closeSignedBy, m), { signedAt: c.closeSignedAt })
+          : { name: link ? link.managerName : Custody.settings_().managerName, image: Custody.managerImage_(link), signedAt: c.closeSignedAt }
       }
     };
   },
@@ -1063,8 +1075,152 @@ var Custody = {
   },
 
   /** الإشعارات: الإجراءات التي تضع عنصراً في صندوق الموافقات، ومن يُحتمل أن يراه (المحاسبون) */
-  approvalActions_: ['custody.requestClose', 'request.create', 'voucher.request'],
+  approvalActions_: ['custody.requestClose', 'request.create', 'request.chainApproved', 'voucher.request'],
   approvers_: function () { return Notify.usersWithRole_('custody', ['accountant']); },
+
+  // ───────── السلسلة الإجرائية (docs/09) ─────────
+  /** حال سلسلة سجل للواجهة: ملخصها، وهل يُرسل إليها (مربوط وليس فيها قرار جارٍ) */
+  chainState_: function (type, id, wfId, waiting) {
+    var live = Workflow.liveOf_(wfId);
+    return { wf: wfId ? Workflow.summaryFor_(type, id) : null, canStart: !!waiting && !live && !!Workflow.templateFor_(type, id) };
+  },
+
+  /** من اعتمد في السلسلة: اسمه وتوقيعه المعتمد في النظام (أو توقيعه للمطبوعات) */
+  chainSigner_: function (userId, m) {
+    return { name: Custody.userName_(m, userId), image: Signature.approvedOf_(userId) || Custody.signatureOf_(userId) };
+  },
+
+  /** cus.chain.start (المحاسب): { kind: voucher|statement, id } — يرسل السند أو الكشف للسلسلة بدل رابط المدير */
+  chainStart: function (ctx, p) {
+    p = p || {};
+    var kind = Custody.enum_(p.kind, CUS.SIGN_KINDS, 'نوع المستند');
+    return withLock(function () {
+      var t = Sign.target_(kind, p.id), err = Sign.error_(t);
+      if (err) throw appError(err + '.');
+      var c = kind === 'voucher' ? (t.voucher.custodyId ? Db.get('custody', 'Custodies', t.voucher.custodyId) : null) : t.custody;
+      if (c && Custody.isOwner_(ctx, c)) throw appError('لا يمكنك إرسال ما يخص عهدتك.', 'FORBIDDEN');
+      var type = kind === 'voucher' ? 'cus.voucher' : 'cus.close', wfId = kind === 'voucher' ? t.voucher.wfInstanceId : t.custody.closeWfInstanceId;
+      if (Workflow.liveOf_(wfId)) throw appError('المستند في سلسلة اعتماد جارية.');
+      if (!Workflow.templateFor_(type, t.id)) throw appError('لم يُربط هذا النوع بسلسلة. يربطه مدير النظام من «النظام ← السلاسل الإجرائية».');
+      Custody.rows_('SignLinks').filter(function (l) { return l.kind === kind && l.targetId === t.id && l.status === 'open'; })
+        .forEach(function (l) { Db.update('custody', 'SignLinks', l.id, { status: 'revoked' }); });
+      var wf = Workflow.startIfBound_(ctx, type, t.id, function () {});
+      if (kind === 'voucher') Db.update('custody', 'Vouchers', t.id, { wfInstanceId: wf.id });
+      else Db.update('custody', 'Custodies', t.id, { closeWfInstanceId: wf.id });
+      return { instanceId: wf.id };
+    });
+  },
+
+  /** مضيف طلب العهدة: السلسلة قبل المحاسب، والاعتماد يضعه عند المحاسب ليفتح العهدة */
+  wfRequest_: function () {
+    return {
+      module: 'custody', managerRoles: ['accountant'], label: 'طلب عهدة', system: true, builtinLabel: 'المحاسب يفتح العهدة مباشرة',
+      entity_: function (id) {
+        var r = Db.get('custody', 'Requests', id);
+        if (!r) return null;
+        var emp = Staff.get_(r.employeeId);
+        return {
+          id: r.id, number: 'طلب عهدة · ' + kwd_(r.amount), title: emp ? emp.fullName : '', createdBy: r.createdBy || (emp && emp.userId) || '', version: 0, moduleLabel: 'طلب عهدة',
+          facts: [{ k: 'المبلغ', v: kwd_(r.amount) }].concat(r.reason ? [{ k: 'السبب', v: r.reason }] : []),
+          values: { $dept: emp ? emp.departmentId || '' : '', 'cus.request:amount': r.amount }
+        };
+      },
+      conditionFields_: function () {
+        return [
+          { key: '$dept', label: 'قسم المنشئ', kind: 'select', options: Staff.depts_().filter(function (d) { return d.active !== false; }).map(function (d) { return { id: d.id, label: d.name }; }) },
+          { key: 'cus.request:amount', label: 'طلب العهدة: المبلغ', kind: 'money', options: [] }
+        ];
+      },
+      onEvent_: function (ctx, event, inst) {
+        var r = Db.get('custody', 'Requests', inst.entityId);
+        if (!r) return;
+        var note = Workflow.lastNote_(inst.id), now = nowIso();
+        if (event === 'approved') {
+          Db.update('custody', 'Requests', r.id, { status: 'pending' });
+          Audit.log(ctx.user, 'custody', 'request.chainApproved', 'Request', r.id, { amount: kwd_(r.amount), template: inst.templateName });
+        } else if (event === 'rejected') Db.update('custody', 'Requests', r.id, { status: 'rejected', rejectReason: note || 'رُفض في السلسلة', handledBy: ctx.user.id, handledAt: now });
+        else if (event === 'returned') Db.update('custody', 'Requests', r.id, { status: 'returned', rejectReason: note });
+        else if (event === 'cancelled') Db.update('custody', 'Requests', r.id, { status: 'cancelled', handledBy: ctx.user.id, handledAt: now });
+      },
+      resubmit_: function (ctx, inst) { Db.update('custody', 'Requests', inst.entityId, { status: 'in_chain', rejectReason: '' }); },
+      canSee_: function (ctx, id) {
+        var r = Db.get('custody', 'Requests', id), me = Custody.me_(ctx);
+        return !!r && (Custody.isStaff_(ctx) || (!!me && (me.id === r.employeeId || Staff.manages_(me.id, r.employeeId))));
+      },
+      page_: function () { return '/custody/requests'; }
+    };
+  },
+
+  /** مضيف اعتماد السند: قرار الإدارة في السلسلة بدل رابط المدير، ومن اعتمد يوقّع السند بتوقيعه في النظام */
+  wfVoucher_: function () {
+    return {
+      module: 'custody', managerRoles: ['accountant'], label: 'اعتماد سند', system: true, builtinLabel: 'رابط توقيع المدير',
+      entity_: function (id) {
+        var v = Db.get('custody', 'Vouchers', id);
+        if (!v) return null;
+        var opening = Vouchers.isOpening_(v);
+        return {
+          id: v.id, number: 'سند ' + CUS.V_TYPES[v.type] + ' ' + (v.number || ''), title: v.partyName + ' · ' + kwd_(v.amount), createdBy: v.approvedBy || v.createdBy, version: 0, moduleLabel: 'اعتماد سند',
+          facts: [{ k: v.type === 'payment' ? 'المستلم' : 'الدافع', v: v.partyName }, { k: 'المبلغ', v: kwd_(v.amount) }, { k: 'البيان', v: v.reason }]
+            .concat(v.custodyId ? [{ k: 'العهدة', v: v.custodyId }] : []),
+          values: { 'cus.voucher:type': v.type, 'cus.voucher:amount': v.amount, 'cus.voucher:opening': opening ? 'yes' : 'no' }
+        };
+      },
+      conditionFields_: function () {
+        return [
+          { key: 'cus.voucher:type', label: 'السند: النوع', kind: 'select', options: Object.keys(CUS.V_TYPES).map(function (k) { return { id: k, label: CUS.V_TYPES[k] }; }) },
+          { key: 'cus.voucher:amount', label: 'السند: المبلغ', kind: 'money', options: [] },
+          { key: 'cus.voucher:opening', label: 'السند: صرف عهدة', kind: 'select', options: [{ id: 'yes', label: 'نعم' }, { id: 'no', label: 'لا' }] }
+        ];
+      },
+      onEvent_: function (ctx, event, inst) {
+        var v = Db.get('custody', 'Vouchers', inst.entityId);
+        if (!v || event !== 'approved' || v.status !== 'signing' || v.signedAt) return; // الرفض والإعادة: يبقى بانتظار الإدارة ويعيد المحاسب إرساله
+        var note = 'اعتُمد في السلسلة «' + inst.templateName + '»';
+        Db.update('custody', 'Vouchers', v.id, { signedAt: nowIso(), signedBy: ctx.user.id, signedNote: note, status: 'active' });
+        Custody.advanceOpen_(v.custodyId ? Db.get('custody', 'Custodies', v.custodyId) : null, v.id);
+        Audit.log(ctx.user, 'custody', 'voucher.signed', 'Voucher', v.id, { number: v.number, note: note });
+      },
+      resubmit_: function () {},
+      canSee_: function (ctx, id) { var v = Db.get('custody', 'Vouchers', id); return !!v && Vouchers.canSee_(ctx, v, Vouchers.mine_(ctx)); },
+      canCancel_: function (ctx) { return Custody.isStaff_(ctx); },
+      page_: function (id) { var v = Db.get('custody', 'Vouchers', id); return v && v.custodyId ? '/custody/' + v.custodyId : '/custody/vouchers'; }
+    };
+  },
+
+  /** مضيف إقفال العهدة: اعتماد الإدارة لكشف التسوية في السلسلة، فتُغلق نهائياً بتوقيع من اعتمد */
+  wfClose_: function () {
+    return {
+      module: 'custody', managerRoles: ['accountant'], label: 'إقفال عهدة', system: true, builtinLabel: 'رابط توقيع المدير على الكشف',
+      entity_: function (id) {
+        var c = Db.get('custody', 'Custodies', id);
+        if (!c) return null;
+        var emp = Staff.get_(c.employeeId);
+        return {
+          id: c.id, number: 'إقفال العهدة ' + c.id, title: (emp ? emp.fullName : '') + ' · ' + c.periodLabel, createdBy: c.reviewedBy, version: 0, moduleLabel: 'إقفال عهدة',
+          facts: [{ k: 'المصروف', v: kwd_(c.totalSpent) }, { k: 'المتبقي', v: kwd_(c.remaining) }, { k: 'التسوية', v: CUS.SETTLEMENT[c.settlementMethod] || '—' }],
+          values: { $dept: emp ? emp.departmentId || '' : '', 'cus.close:spent': c.totalSpent }
+        };
+      },
+      conditionFields_: function () {
+        return [
+          { key: '$dept', label: 'قسم المنشئ', kind: 'select', options: Staff.depts_().filter(function (d) { return d.active !== false; }).map(function (d) { return { id: d.id, label: d.name }; }) },
+          { key: 'cus.close:spent', label: 'الإقفال: المصروف', kind: 'money', options: [] }
+        ];
+      },
+      onEvent_: function (ctx, event, inst) {
+        var c = Db.get('custody', 'Custodies', inst.entityId);
+        if (!c || event !== 'approved' || c.status !== 'signing') return;
+        var note = 'اعتُمد في السلسلة «' + inst.templateName + '»';
+        Db.update('custody', 'Custodies', c.id, { status: 'closed', closeSignedAt: nowIso(), closeSignedBy: ctx.user.id, closeSignedNote: note });
+        Audit.log(ctx.user, 'custody', 'statement.signed', 'Custody', c.id, { note: note });
+      },
+      resubmit_: function () {},
+      canSee_: function (ctx, id) { try { Custody.visible_(ctx, id); return true; } catch (e) { return false; } },
+      canCancel_: function (ctx) { return Custody.isStaff_(ctx); },
+      page_: function (id) { return '/custody/' + id; }
+    };
+  },
 
   routes_: function () {
     var any = { module: 'custody' }, acc = { module: 'custody', roles: ['accountant'] }, staff = acc;
@@ -1081,6 +1237,7 @@ var Custody = {
       'cus.approve': { perm: acc, fn: Custody.approve },
       'cus.reject': { perm: acc, fn: Custody.reject },
       'cus.markSigned': { perm: acc, fn: Custody.markSigned },
+      'cus.chain.start': { perm: acc, fn: Custody.chainStart },
       'cus.delete': { perm: 'super', fn: Custody.remove },
       'cus.statement': { perm: any, fn: Custody.statement },
       'cus.expense.save': { perm: any, fn: Custody.expenseSave },
@@ -1119,6 +1276,9 @@ var Custody = {
 
 // ───────── طلبات العهد الجديدة ─────────
 var Requests = {
+  /** طلب لم يُعالَج بعد: عند المحاسب، أو في السلسلة */
+  OPEN: ['pending', 'in_chain', 'returned'],
+
   view_: function (r, m) {
     var active = Custody.activeOf_(r.employeeId);
     var c = r.status === 'approved' && r.custodyId ? Db.get('custody', 'Custodies', r.custodyId) : null;
@@ -1128,7 +1288,8 @@ var Requests = {
       id: r.id, employeeId: r.employeeId, employeeName: Custody.empName_(m, r.employeeId), amount: r.amount, reason: r.reason,
       status: status, statusLabel: CUS.REQ_STATUS[status] || status, custodyId: r.custodyId,
       handledByName: Custody.userName_(m, r.handledBy), handledAt: r.handledAt, rejectReason: r.rejectReason, createdAt: r.createdAt,
-      activeCustodyId: active ? active.id : ''
+      activeCustodyId: active ? active.id : '',
+      wfInstanceId: r.wfInstanceId || '', wf: r.wfInstanceId ? Workflow.summaryFor_('cus.request', r.id) : null
     };
   },
 
@@ -1140,8 +1301,12 @@ var Requests = {
     var r = withLock(function () {
       var active = Custody.activeOf_(me.id);
       if (active) throw appError('لديك عهدة ' + Custody.stageLabel_(active) + ' (' + active.id + ')، يجب إقفالها واعتمادها قبل طلب عهدة جديدة.');
-      if (Custody.rows_('Requests').some(function (x) { return x.employeeId === me.id && x.status === 'pending'; })) throw appError('لديك طلب عهدة جديدة بانتظار الموافقة.');
-      return Db.insert('custody', 'Requests', { employeeId: me.id, amount: amount, reason: reason, status: 'pending', createdAt: nowIso(), createdBy: ctx.user.id });
+      if (Custody.rows_('Requests').some(function (x) { return x.employeeId === me.id && Requests.OPEN.indexOf(x.status) >= 0; })) throw appError('لديك طلب عهدة جديدة بانتظار الموافقة.');
+      var ins = Db.insert('custody', 'Requests', { employeeId: me.id, amount: amount, reason: reason, status: 'pending', createdAt: nowIso(), createdBy: ctx.user.id });
+      // مربوط بسلسلة (docs/09): يمر بها قبل المحاسب
+      var wf = Workflow.startIfBound_(ctx, 'cus.request', ins.id, function () { Db.update('custody', 'Requests', ins.id, { status: 'in_chain' }); });
+      if (wf) Db.update('custody', 'Requests', ins.id, { wfInstanceId: wf.id });
+      return Db.get('custody', 'Requests', ins.id);
     });
     Audit.log(ctx.user, 'custody', 'request.create', 'Request', r.id, { amount: kwd_(amount) });
     return Requests.view_(r, Custody.maps_());
@@ -1172,6 +1337,10 @@ var Requests = {
     var r = Db.getOrThrow('custody', 'Requests', p && p.id, 'الطلب');
     var me = Custody.me_(ctx);
     if (!me || r.employeeId !== me.id) throw appError('إلغاء الطلب لصاحبه فقط.', 'FORBIDDEN');
+    if ((r.status === 'in_chain' || r.status === 'returned') && r.wfInstanceId) {
+      Workflow.cancelFor_(ctx, r.wfInstanceId, 'ألغاه مقدّم الطلب');
+      return Requests.view_(Db.get('custody', 'Requests', r.id), Custody.maps_());
+    }
     if (r.status !== 'pending') throw appError('لا يمكن إلغاء الطلب بعد معالجته.');
     var u = Db.update('custody', 'Requests', r.id, { status: 'cancelled', handledBy: ctx.user.id, handledAt: nowIso() });
     Audit.log(ctx.user, 'custody', 'request.cancel', 'Request', r.id, null);
@@ -1268,7 +1437,8 @@ var Vouchers = {
       signedByName: v.signedBy === CUS.MANAGER ? (link ? link.managerName : 'المدير') + ' (توقيع إلكتروني)' : Custody.userName_(m, v.signedBy),
       isOpening: isOpening, requestedBy: requestedBy || '', requestedByName: Custody.userName_(m, requestedBy), requestedAt: requestedAt || '',
       rejectReason: v.rejectReason, rejectedByName: Custody.userName_(m, v.rejectedBy), rejectedAt: v.rejectedAt,
-      signLink: v.status === 'signing' || v.status === 'active' ? Sign.info_('voucher', v.id, m) : null
+      signLink: v.status === 'signing' || v.status === 'active' ? Sign.info_('voucher', v.id, m) : null,
+      chain: v.status === 'signing' || v.wfInstanceId ? Custody.chainState_('cus.voucher', v.id, v.wfInstanceId, v.status === 'signing' && !v.signedAt) : null
     };
   },
 
@@ -1307,7 +1477,13 @@ var Vouchers = {
     var number = Custody.serial_(Vouchers.prefix_(d.type), Number(d.date.slice(0, 4)), 4, function (n) { return !!used[n]; });
     var v = Db.insert('custody', 'Vouchers', Object.assign(base, { number: number, status: 'signing', approvedBy: ctx.user.id, approvedAt: now }));
     Audit.log(ctx.user, 'custody', 'voucher.create', 'Voucher', v.id, { number: number, amount: kwd_(v.amount), party: v.partyName });
-    return v;
+    return d.deferChain ? v : Vouchers.startChain_(ctx, v);
+  },
+
+  /** سند صار «بانتظار اعتماد المدير»: يبدأ سلسلته إن رُبط النوع (وإلا رابط المدير كما هو) */
+  startChain_: function (ctx, v) {
+    var wf = Workflow.startIfBound_(ctx, 'cus.voucher', v.id, function () {});
+    return wf ? Db.update('custody', 'Vouchers', v.id, { wfInstanceId: wf.id }) : v;
   },
 
   createManual: function (ctx, p) {
@@ -1359,7 +1535,7 @@ var Vouchers = {
       Vouchers.assertHandler_(ctx, cur);
       var date = localDate_(), used = Vouchers.numbers_();
       var number = Custody.serial_(Vouchers.prefix_(cur.type), Number(date.slice(0, 4)), 4, function (n) { return !!used[n]; });
-      return Db.update('custody', 'Vouchers', cur.id, { number: number, date: date, status: 'signing', approvedBy: ctx.user.id, approvedAt: nowIso() });
+      return Vouchers.startChain_(ctx, Db.update('custody', 'Vouchers', cur.id, { number: number, date: date, status: 'signing', approvedBy: ctx.user.id, approvedAt: nowIso() }));
     });
     Audit.log(ctx.user, 'custody', 'voucher.approve', 'Voucher', v.id, { number: v.number, amount: kwd_(v.amount) });
     return Vouchers.view_(v, Custody.maps_());
@@ -1385,6 +1561,8 @@ var Vouchers = {
     if (v.status === 'cancelled') throw appError('السند ملغي مسبقاً.');
     if (v.status === 'rejected') throw appError('هذا الطلب مرفوض مسبقاً.');
     var reason = own && !String(p.reason || '').trim() ? 'ألغاه مقدّم الطلب' : requireText(p.reason, 'سبب الإلغاء', 300);
+    var liveWf = Workflow.liveOf_(v.wfInstanceId);
+    if (liveWf) Workflow.cancelFor_(ctx, liveWf.id, reason);
     var u = Db.update('custody', 'Vouchers', v.id, { status: 'cancelled', cancelReason: reason, cancelledBy: ctx.user.id, cancelledAt: nowIso() });
     Audit.log(ctx.user, 'custody', 'voucher.cancel', 'Voucher', v.id, { number: v.number, reason: reason });
     return Vouchers.view_(u, Custody.maps_());
@@ -1427,7 +1605,8 @@ var Vouchers = {
     boxes.push({ label: v.type === 'payment' ? 'المستلم' : 'الدافع', name: v.partyName, image: receiver });
     boxes.push({ label: 'المحاسب', name: view.approvedByName, image: view.approved ? Custody.signatureOf_(view.approvedBy) : '' });
     var link = v.mgrSignId ? m.links[v.mgrSignId] : null;
-    boxes.push({ label: 'المدير', name: link ? link.managerName : Custody.settings_().managerName, image: Custody.managerImage_(link) });
+    boxes.push(v.wfInstanceId && v.signedBy && v.signedBy !== CUS.MANAGER ? Object.assign({ label: 'المدير' }, Custody.chainSigner_(v.signedBy, m))
+      : { label: 'المدير', name: link ? link.managerName : Custody.settings_().managerName, image: Custody.managerImage_(link) });
     return { company: Settings.company_(), voucher: view, signs: boxes };
   }
 };
@@ -1477,6 +1656,7 @@ var Sign = {
     var t = Sign.target_(kind, p.id);
     var err = Sign.error_(t);
     if (err) throw appError(err + '، لا يُرسل للتوقيع.');
+    if (Workflow.liveOf_(kind === 'voucher' ? t.voucher.wfInstanceId : t.custody.closeWfInstanceId)) throw appError('المستند في سلسلة اعتماد داخل النظام، والقرار من صفحة السلسلة.');
     var cfg = Custody.settings_();
     var managerName = cfg.managerName || 'المدير';
     var token = randomToken_();

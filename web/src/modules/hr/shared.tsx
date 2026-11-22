@@ -1,4 +1,5 @@
 import { tr } from '../../lib/i18n';
+import { RequestSteps } from '../../ui/Timeline';
 import { useEffect, useState } from 'react';
 import type { Balance, HrMe, LeaveStatus, LeaveView, OtStatus, OtView } from '../../lib/types';
 import { daysWord, dmy, duration, kwDate } from '../../lib/format';
@@ -10,8 +11,8 @@ import { Select, TextInput, Textarea } from '../../ui/Field';
 import { Dialog } from '../../ui/Overlay';
 
 type Tone = 'ok' | 'warn' | 'bad' | 'info' | 'neutral';
-export const LEAVE_TONE: Record<LeaveStatus, Tone> = { pending_manager: 'warn', pending_hr: 'warn', approved: 'ok', rejected: 'bad', cancelled: 'neutral' };
-export const OT_TONE: Record<OtStatus, Tone> = { pending: 'warn', approved: 'ok', rejected: 'bad', cancelled: 'neutral' };
+export const LEAVE_TONE: Record<LeaveStatus, Tone> = { pending_manager: 'warn', pending_hr: 'warn', approved: 'ok', rejected: 'bad', cancelled: 'neutral', in_chain: 'info', returned: 'warn' };
+export const OT_TONE: Record<OtStatus, Tone> = { pending: 'warn', approved: 'ok', rejected: 'bad', cancelled: 'neutral', in_chain: 'info', returned: 'warn' };
 
 export function useHrMe() {
   return useApi<HrMe>('hr.me', {}, { staleTime: 30_000 });
@@ -46,7 +47,7 @@ export function LeaveRow({ l, showName, actions }: { l: LeaveView; showName?: bo
     <ListRow
       title={<>{showName ? `${l.name} · ` : ''}{l.typeName} <span className="font-normal text-muted">· {daysWord(l.days)}</span></>}
       sub={<span className="num">{dmy(l.from)}{l.to !== l.from ? ` ← ${dmy(l.to)}` : ''}{l.reason ? ` · ${l.reason}` : ''}</span>}
-      note={l.managerNote || l.decisionNote ? (l.decisionNote ? `${l.decidedBy}: ${l.decisionNote}` : `${l.managerName}: ${l.managerNote}`) : undefined}
+      note={<><RequestSteps wf={l.wf} steps={l.steps} /></>}
       badge={<Badge tone={LEAVE_TONE[l.status]}>{l.statusLabel}</Badge>} actions={actions} />
   );
 }
@@ -56,7 +57,7 @@ export function OtRow({ o, showName, actions }: { o: OtView; showName?: boolean;
     <ListRow
       title={<>{showName ? `${o.name} · ` : ''}{duration(o.minutes)} <span className="font-normal text-muted">· {dmy(o.date)}</span></>}
       sub={<>{o.reason || '—'}{o.createdByName && o.createdByName !== o.name ? tr(" · سجّله {0}", o.createdByName) : ''}</>}
-      note={o.decisionNote ? `${o.decidedBy}: ${o.decisionNote}` : undefined}
+      note={<><RequestSteps wf={o.wf} steps={o.steps} /></>}
       badge={<Badge tone={OT_TONE[o.status]}>{o.statusLabel}</Badge>} actions={actions} />
   );
 }

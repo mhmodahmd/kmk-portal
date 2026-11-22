@@ -85,7 +85,7 @@ export interface CorReport {
 export type ChainStatus = 'running' | 'returned' | 'approved' | 'rejected' | 'cancelled';
 export type StepStatus = 'pending' | 'current' | 'done' | 'rejected' | 'returned' | 'skipped' | 'cancelled';
 export type StepKind = 'review' | 'approve' | 'sign' | 'execute' | 'inform';
-export type AssigneeType = 'user' | 'role' | 'direct_manager' | 'dept_manager' | 'creator_dept_manager';
+export type AssigneeType = 'user' | 'role' | 'direct_manager' | 'dept_manager' | 'creator_dept_manager' | 'company_manager' | 'party';
 
 export interface ChainSummary {
   instanceId: string; status: ChainStatus; statusLabel: string; templateName: string; stepName: string; assigneeNames: string[];
@@ -105,7 +105,7 @@ export interface ChainView {
 }
 export interface WfCondition { field: string; op: CondOp; value: string | number }
 export type CondOp = 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte';
-export interface WfTemplateStep { order: number; name: string; kind: StepKind; kindLabel: string; assignee: { type: AssigneeType; id?: string; role?: string; module?: string }; assigneeLabel: string; onReject: 'end' | 'creator'; condition: WfCondition | null; conditionLabel: string;
+export interface WfTemplateStep { order: number; name: string; kind: StepKind; kindLabel: string; assignee: { type: AssigneeType; id?: string; role?: string; module?: string; key?: string }; assigneeLabel: string; onReject: 'end' | 'creator'; condition: WfCondition | null; conditionLabel: string;
   group: number; mode: StepMode; count: number; slaHours: number; workingDays: boolean; escalation: { notifyManager: boolean; reassignTo: string } | null }
 export interface CondField { key: string; label: string; kind: 'select' | 'money' | 'number' | 'text'; typeId?: string; options: { id: string; label: string }[] }
 export interface WfRule {
@@ -118,4 +118,4 @@ export interface WfSimulation {
   steps: { order: number; name: string; kind: StepKind; kindLabel: string; skipped: boolean; condition: string; assignees: string[]; fallback: boolean }[];
 }
 export interface WfTemplate { id: string; name: string; description: string; module: string; version: number; status: 'published' | 'retired'; statusLabel: string; updatedAt: string; running: number; steps: WfTemplateStep[] }
-export interface WfLookups { kinds: Opt[]; assignees: Opt[]; onReject: Opt[]; ops: Opt[]; modes: Opt[]; conditionFields: CondField[]; roles: Opt[]; departments: { id: string; name: string }[]; people: { id: string; name: string }[] }
+export interface WfLookups { kinds: Opt[]; assignees: Opt[]; onReject: Opt[]; ops: Opt[]; modes: Opt[]; conditionFields: CondField[]; roles: Opt[]; departments: { id: string; name: string }[]; people: { id: string; name: string }[]; companyManager?: string; parties?: { id: string; label: string }[] }

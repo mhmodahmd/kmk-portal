@@ -15,6 +15,7 @@ import { Icon } from '../../ui/Icon';
 import { cx } from '../../ui/cx';
 import { ACCEPT, filePayload, openFile } from '../custody/files';
 import { PriorityMark, StatusBadge, TASK_KEYS, TaskDialog, TaskRow, useTaskLookups, useToggleDone } from './shared';
+import { RequestSteps } from '../../ui/Timeline';
 import type { TaskDetail, TaskStatus } from './types';
 
 const NEXT: Record<TaskStatus, { to: TaskStatus; label: string; primary?: boolean }[]> = {
@@ -57,7 +58,9 @@ export default function TaskDetailPage() {
   const { task: t, checklist, comments, files, subtasks, can } = q.data;
   const L = lk.data;
   // الجديدة وقيد العمل: المسؤول ومن يديرها · المراجعة والمنجزة والملغاة: من يديرها فقط
-  const actions = (['todo', 'doing'].includes(t.status) ? can.work : can.manage) ? NEXT[t.status] : [];
+  // في سلسلة جارية: القرار من صفحة السلسلة (docs/09)
+  const inChain = t.status === 'review' && !!t.wf && t.wf.status === 'running';
+  const actions = inChain ? [] : (['todo', 'doing'].includes(t.status) ? can.work : can.manage) ? NEXT[t.status] : [];
 
   const attach = async (file?: File) => {
     if (!file) return;
@@ -91,7 +94,9 @@ export default function TaskDetailPage() {
             {can.manage && t.status !== 'cancelled' && t.status !== 'done' && <Button variant="ghost" onClick={() => setCancel(true)}>{tr("إلغاء المهمة")}</Button>}
           </div>
         </div>
-        {t.status === 'review' && t.mine && !can.manage && <div className="rounded-lg bg-warn-bg px-3 py-2.5 text-warn">{tr("أرسلتها للمراجعة. تُعتمد من {0}.", t.createdByName)}</div>}
+        {t.status === 'review' && t.mine && !can.manage && !t.wf && <div className="rounded-lg bg-warn-bg px-3 py-2.5 text-warn">{tr("أرسلتها للمراجعة. تُعتمد من {0}.", t.createdByName)}</div>}
+        {t.wf && t.wf.status === 'returned' && t.mine && <div className="rounded-lg bg-warn-bg px-3 py-2.5 text-warn">{tr("أُعيدت من سلسلة المراجعة. أكمل العمل ثم «إنجاز» لإعادة إرسالها.")}</div>}
+        {(t.wf || t.steps.length > 0) && <RequestSteps wf={t.wf} steps={t.steps} />}
         {t.description ? <p className="m-0 whitespace-pre-wrap leading-relaxed">{t.description}</p> : null}
         <Facts cols={3} items={[
           { k: tr("المسؤول"), v: t.assigneeName },

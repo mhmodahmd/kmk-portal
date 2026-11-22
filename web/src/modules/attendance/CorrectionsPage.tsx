@@ -1,4 +1,5 @@
 import { tr } from '../../lib/i18n';
+import { RequestSteps } from '../../ui/Timeline';
 import { useState } from 'react';
 import type { Correction } from '../../lib/types';
 import { dmy, relativeTime } from '../../lib/format';
@@ -33,9 +34,9 @@ export default function CorrectionsPage() {
           <ListRow key={c.id}
             title={<>{c.kindLabel} · <span className="font-normal text-muted">{c.dayName} {dmy(c.date)}</span></>}
             sub={<>{times(c)}{c.reason ? ' · ' + c.reason : ''}</>}
-            note={c.decisionNote ? <>{tr("ملاحظة")} {c.decidedBy}: {c.decisionNote}</> : undefined}
+            note={<RequestSteps wf={c.wf} steps={c.steps} />}
             badge={<Badge tone={CORR_TONE[c.status]}>{c.statusLabel}</Badge>}
-            actions={c.status === 'pending' && <Button size="sm" variant="ghost" loading={cancel.isPending} onClick={() => cancel.mutate({ id: c.id })}>{tr("إلغاء الطلب")}</Button>} />
+            actions={(c.status === 'pending' || c.status === 'in_chain' || c.status === 'returned') && <Button size="sm" variant="ghost" loading={cancel.isPending} onClick={() => cancel.mutate({ id: c.id })}>{tr("إلغاء الطلب")}</Button>} />
         ))}
       </Card>
       <CorrectionDialog open={creating} onClose={() => setCreating(false)} />
@@ -57,6 +58,7 @@ function TeamCorrections() {
         <ListRow key={c.id} leading={<Avatar name={c.name} size={34} />}
           title={<>{c.name} · <span className="font-normal">{c.kindLabel}</span></>}
           sub={<>{c.dayName} {dmy(c.date)} · {times(c)} · {relativeTime(c.createdAt)}</>}
+          note={<RequestSteps wf={c.wf} steps={c.steps} />}
           badge={<Badge tone={CORR_TONE[c.status]}>{c.statusLabel}</Badge>}
           actions={c.status === 'pending' && <Button size="sm" variant="primary" onClick={() => setSel(c)}>{tr("اعتماد أو رفض")}</Button>} />
       ))}

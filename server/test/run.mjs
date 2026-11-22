@@ -19,6 +19,7 @@ import './workflow3.test.mjs';
 import './signature.test.mjs';
 import './workflow5.test.mjs';
 import './archive.test.mjs';
+import './workflow-everywhere.test.mjs';
 import './platforms.test.mjs';
 import './subscribers.test.mjs';
 import './dashboards.test.mjs';

@@ -19,7 +19,7 @@ var TSK_SCHEMA = {
     ['assigneeId', 'text'], ['watchers', 'json'], ['dueDate', 'date'], ['startDate', 'date'], ['completedAt', 'ts'],
     ['projectId', 'text'], ['linkedType', 'text'], ['linkedId', 'text'], ['parentId', 'text'], ['recurrence', 'json'],
     ['nextTaskId', 'text'], ['sortOrder', 'num'], ['reviewAt', 'ts'], ['createdBy', 'text'], ['createdAt', 'ts'], ['updatedBy', 'text'], ['updatedAt', 'ts'],
-    ['private', 'bool']
+    ['private', 'bool'], ['wfInstanceId', 'text']
   ],
   TaskChecklist: [['id', 'text'], ['taskId', 'text'], ['text', 'text'], ['done', 'bool'], ['sortOrder', 'num'], ['doneBy', 'text'], ['doneAt', 'ts']],
   TaskComments: [['id', 'text'], ['taskId', 'text'], ['kind', 'text'], ['body', 'text'], ['mentions', 'json'], ['createdBy', 'text'], ['createdAt', 'ts']],
@@ -155,6 +155,7 @@ var Tasks = {
       sortOrder: t.sortOrder || 0, createdBy: t.createdBy, createdByName: Tasks.userName_(m, t.createdBy), createdAt: t.createdAt, updatedAt: t.updatedAt,
       checklistDone: ch.done, checklistTotal: ch.total, commentsCount: m.comments[t.id] || 0, filesCount: m.files[t.id] || 0, subtasksCount: m.subs[t.id] || 0,
       mine: !!ctx && t.assigneeId === ctx.user.id,
+      wfInstanceId: t.wfInstanceId || '', wf: t.wfInstanceId && t.wfInstanceId !== 'pending' ? Workflow.summaryFor_('tsk.review', t.id) : null, steps: Tasks.builtinSteps_(t, m),
       canWork: !!ctx && Tasks.canWork_(ctx, t), canManage: !!ctx && Tasks.canManage_(ctx, t)
     };
   },
@@ -380,7 +381,36 @@ var Tasks = {
       if (t.status === 'done' && to !== 'done' && !manage) throw appError('المهمة منجزة ومعتمدة. يعيد فتحها من أسندها.', 'FORBIDDEN');
       var review = false;
       if (to === 'done' && !manage) { to = 'review'; review = true; }
+      // في سلسلة (docs/09): القرار من السلسلة. المعادة يعيد مسؤولها إرسالها بنقلها «منجزة»، ويلغيها من يدير المهمة
+      var live = to !== t.status ? Workflow.liveOf_(t.wfInstanceId) : null;
+      if (live) {
+        if (to === 'cancelled') { Workflow.cancelFor_(ctx, live.id, optionalText(p.note, 500) || 'أُلغيت المهمة'); t = Db.get('tasks', 'Tasks', t.id); }
+        else if (live.status === 'running') throw appError('المهمة في سلسلة اعتماد، والقرار من صفحة السلسلة.');
+        else if (to === 'review' || to === 'done') {
+          if (t.assigneeId !== ctx.user.id) throw appError('يعيد إرسالها للسلسلة المسؤول عنها.');
+          Workflow.resubmitFor_(ctx, live.id, p.note);
+          Tasks.wfResubmit_(ctx, t.id);
+          var back = Tasks.view_(Db.get('tasks', 'Tasks', t.id), Tasks.maps_(), ctx);
+          back.review = true; back.nextNumber = '';
+          return back;
+        }
+      }
+      // بداية المراجعة: إن كان النوع مربوطاً بسلسلة تبدأ، والحالة «بانتظار مراجعة» حتى قرارها
+      if (review && !t.private) {
+        var started = Workflow.startIfBound_(ctx, 'tsk.review', t.id, function () {
+          Db.update('tasks', 'Tasks', t.id, { status: 'review', reviewAt: nowIso(), completedAt: '', wfInstanceId: 'pending', updatedBy: ctx.user.id, updatedAt: nowIso() });
+          Tasks.event_(ctx, t.id, 'أرسلها للمراجعة' + (p.note ? ': ' + optionalText(p.note, 500) : ''));
+          Audit.log(ctx.user, 'tasks', 'task.status', 'Task', t.id, { number: t.number, from: t.status, to: 'review', note: optionalText(p.note, 500) });
+        });
+        if (started) {
+          if (Db.get('tasks', 'Tasks', t.id).wfInstanceId === 'pending') Db.update('tasks', 'Tasks', t.id, { wfInstanceId: started.id });
+          var res = Tasks.view_(Db.get('tasks', 'Tasks', t.id), Tasks.maps_(), ctx);
+          res.review = true; res.nextNumber = '';
+          return res;
+        }
+      }
       var changes = { updatedBy: ctx.user.id, updatedAt: nowIso() };
+      if (review) changes.wfInstanceId = '';
       if (typeof p.sortOrder === 'number' && isFinite(p.sortOrder)) changes.sortOrder = p.sortOrder;
       if (to !== t.status) {
         changes.status = to;
@@ -591,9 +621,70 @@ var Tasks = {
     }];
   },
 
+  /** مراحل المراجعة المدمجة للخط العمودي: «من أسندها» حين تنتظر، ومكتملة بعد الاعتماد */
+  builtinSteps_: function (t, m) {
+    if (t.wfInstanceId || t.private || !t.reviewAt) return [];
+    if (t.status === 'review') return [{ name: 'مراجعة من أسندها', status: 'current', assignees: [Tasks.userName_(m, t.createdBy)] }];
+    if (t.status === 'done') return [{ name: 'مراجعة من أسندها', status: 'done', assignees: [], actorName: '', at: t.completedAt || '' }];
+    return [];
+  },
+
+  /** مضيف السلسلة لمراجعة إنجاز المهمة (docs/09): صاحب الطلب مسؤول المهمة، وطرفه «من أسندها» */
+  wfReview_: function () {
+    return {
+      module: 'tasks', managerRoles: ['manager'], label: 'مراجعة مهمة', system: true, builtinLabel: 'من أسند المهمة',
+      parties_: { assigner: 'من أسند المهمة' },
+      entity_: function (id) {
+        var t = Db.get('tasks', 'Tasks', id);
+        if (!t) return null;
+        var v = Tasks.view_(t, Tasks.maps_(), null), emp = Staff.byUser_(t.assigneeId);
+        return {
+          id: t.id, number: t.number, title: t.title, createdBy: t.assigneeId, parties: { assigner: t.createdBy }, version: 0, moduleLabel: 'مراجعة مهمة',
+          facts: [{ k: 'المسؤول', v: v.assigneeName }, { k: 'أسندها', v: v.createdByName }, { k: 'الموعد', v: t.dueDate ? dmy_(t.dueDate) : '—' }]
+            .concat(v.checklistTotal ? [{ k: 'القائمة الفرعية', v: v.checklistDone + '/' + v.checklistTotal }] : []).concat(v.projectName ? [{ k: 'المشروع', v: v.projectName }] : []),
+          values: { $dept: emp ? emp.departmentId || '' : '', 'tsk.review:priority': t.priority || 'normal' }
+        };
+      },
+      conditionFields_: function () {
+        return [
+          { key: '$dept', label: 'قسم المنشئ', kind: 'select', options: Staff.depts_().filter(function (d) { return d.active !== false; }).map(function (d) { return { id: d.id, label: d.name }; }) },
+          { key: 'tsk.review:priority', label: 'المهمة: الأولوية', kind: 'select', options: Object.keys(TSK.PRIORITY).map(function (k) { return { id: k, label: TSK.PRIORITY[k] }; }) }
+        ];
+      },
+      onEvent_: function (ctx, event, inst) { Tasks.wfApply_(ctx, event, inst); },
+      resubmit_: function (ctx, inst) { Tasks.wfResubmit_(ctx, inst.entityId); },
+      canSee_: function (ctx, id) { var t = Db.get('tasks', 'Tasks', id); return !!t && Tasks.canSee_(ctx, t); },
+      canCancel_: function (ctx, id) { var t = Db.get('tasks', 'Tasks', id); return !!t && t.assigneeId !== ctx.user.id && Tasks.canManage_(ctx, t); },
+      page_: function (id) { return '/tasks/' + id; }
+    };
+  },
+
+  /** أثر نتيجة السلسلة في المهمة: الاعتماد ينجزها، والإعادة والرفض والإلغاء تعيدها «قيد العمل» */
+  wfApply_: function (ctx, event, inst) {
+    var t = Db.get('tasks', 'Tasks', inst.entityId);
+    if (!t || t.status !== 'review') return;
+    var note = Workflow.lastNote_(inst.id), now = nowIso();
+    if (event === 'approved') {
+      Db.update('tasks', 'Tasks', t.id, { status: 'done', completedAt: now, updatedBy: ctx.user.id, updatedAt: now });
+      Tasks.event_(ctx, t.id, 'اعتُمد إنجازها في السلسلة «' + inst.templateName + '»' + (note ? ': ' + note : ''));
+      Audit.log(ctx.user, 'tasks', 'task.status', 'Task', t.id, { number: t.number, from: 'review', to: 'done', note: note, chain: true });
+      Tasks.spawnNext_(ctx, Db.get('tasks', 'Tasks', t.id));
+    } else if (event === 'returned' || event === 'rejected' || event === 'cancelled') {
+      Db.update('tasks', 'Tasks', t.id, { status: 'doing', updatedBy: ctx.user.id, updatedAt: now });
+      Tasks.event_(ctx, t.id, (event === 'cancelled' ? 'أُلغيت سلسلة مراجعتها' : 'أُعيدت للعمل في السلسلة') + (note ? ': ' + note : ''));
+      Audit.log(ctx.user, 'tasks', 'task.status', 'Task', t.id, { number: t.number, from: 'review', to: 'doing', note: note, chain: true });
+    }
+  },
+
+  /** المعادة في السلسلة أُرسلت ثانية: «بانتظار مراجعة» */
+  wfResubmit_: function (ctx, id) {
+    Db.update('tasks', 'Tasks', id, { status: 'review', reviewAt: nowIso(), updatedBy: ctx.user.id, updatedAt: nowIso() });
+    Tasks.event_(ctx, id, 'أعاد إرسالها للسلسلة');
+  },
+
   inbox_: function (ctx) {
     var u = ctx.user.id, m = null;
-    return Tasks.rows_('Tasks').filter(function (t) { return t.status === 'review' && t.assigneeId !== u && Tasks.canManage_(ctx, t); }).map(function (t) {
+    return Tasks.rows_('Tasks').filter(function (t) { return t.status === 'review' && !t.wfInstanceId && t.assigneeId !== u && Tasks.canManage_(ctx, t); }).map(function (t) {
       m = m || Tasks.maps_();
       var v = Tasks.view_(t, m, ctx);
       return {
@@ -609,6 +700,7 @@ var Tasks = {
     if (kind !== 'tsk.review') return null;
     var t = Tasks.visible_(ctx, p.id);
     if (t.status !== 'review') throw appError('لم تعد المهمة بانتظار المراجعة.');
+    if (t.wfInstanceId) throw appError('المهمة في سلسلة اعتماد، والقرار من صفحة السلسلة.');
     if (!Tasks.canManage_(ctx, t) || t.assigneeId === ctx.user.id) throw appError('لا يمكنك مراجعة هذه المهمة.', 'FORBIDDEN');
     if (!p.approve && !optionalText(p.note, 500)) throw appError('اكتب سبب الإعادة.');
     return Tasks.status(ctx, { id: t.id, status: p.approve ? 'done' : 'doing', note: p.note });
@@ -625,7 +717,7 @@ var Tasks = {
     } else if (ev.action === 'task.update') {
       if (d.assigneeChanged) out.push({ to: t.assigneeId, title: 'أسند إليك ' + a + ' مهمة', detail: detail, link: link });
       out.push({ to: d.newWatchers || [], title: 'أضافك ' + a + ' متابعاً لمهمة', detail: detail, link: link });
-    } else if (ev.action === 'task.status') {
+    } else if (ev.action === 'task.status' && !d.chain) { // قرار السلسلة يبلّغ به محركها
       if (d.from === 'review' && d.to === 'done') out.push({ to: t.assigneeId, title: 'اعتُمد إنجاز مهمتك', detail: detail, link: link });
       else if (d.from === 'review' && d.to === 'doing') out.push({ to: t.assigneeId, title: 'أُعيدت مهمتك للعمل', detail: detail + (d.note ? ' — ' + d.note : ''), link: link });
       else if (d.to === 'cancelled') out.push({ to: [t.assigneeId].concat(t.watchers || []), title: 'أُلغيت مهمة', detail: detail + (d.note ? ' — ' + d.note : ''), link: link });

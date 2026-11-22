@@ -18,22 +18,24 @@ var HR_SCHEMA = {
   LeaveRequests: [
     ['id', 'text'], ['employeeId', 'text'], ['typeId', 'text'], ['from', 'date'], ['to', 'date'], ['days', 'num'],
     ['reason', 'text'], ['status', 'text'], ['managerId', 'text'], ['managerAt', 'ts'], ['managerNote', 'text'],
-    ['decidedBy', 'text'], ['decidedAt', 'ts'], ['decisionNote', 'text'], ['createdAt', 'ts'], ['createdBy', 'text']
+    ['decidedBy', 'text'], ['decidedAt', 'ts'], ['decisionNote', 'text'], ['createdAt', 'ts'], ['createdBy', 'text'], ['wfInstanceId', 'text']
   ],
   OvertimeRequests: [
     ['id', 'text'], ['employeeId', 'text'], ['date', 'date'], ['minutes', 'num'], ['reason', 'text'], ['status', 'text'],
     ['createdBy', 'text'], ['createdByName', 'text'], ['decidedBy', 'text'], ['decidedAt', 'ts'], ['decisionNote', 'text'],
-    ['createdAt', 'ts']
+    ['createdAt', 'ts'], ['wfInstanceId', 'text']
   ]
 };
 
 var HR_DEFAULT_WORKDAYS = [6, 0, 1, 2, 3, 4]; // السبت إلى الخميس (0 = الأحد)
 var LEAVE_OPEN = ['pending_manager', 'pending_hr'];
+/** محجوزة من الرصيد وتمنع التداخل: المسار المدمج والسلسلة (docs/09) */
+var LEAVE_HOLD = LEAVE_OPEN.concat(['in_chain', 'returned']);
 var LEAVE_STATUS = {
-  pending_manager: 'بانتظار المدير المباشر', pending_hr: 'بانتظار الموارد البشرية',
+  pending_manager: 'بانتظار المدير المباشر', pending_hr: 'بانتظار الموارد البشرية', in_chain: 'قيد الإجراء في السلسلة', returned: 'معادة للتعديل',
   approved: 'معتمدة', rejected: 'مرفوضة', cancelled: 'ملغاة'
 };
-var OT_STATUS = { pending: 'بانتظار الموافقة', approved: 'معتمد', rejected: 'مرفوض', cancelled: 'ملغى' };
+var OT_STATUS = { pending: 'بانتظار الموافقة', approved: 'معتمد', rejected: 'مرفوض', cancelled: 'ملغى', in_chain: 'قيد الإجراء في السلسلة', returned: 'معاد للتعديل' };
 var OT_MAX_MIN = 720;
 
 var Hr = {
@@ -118,7 +120,7 @@ var Hr = {
     var adj = adjRow ? adjRow.adjustment : 0;
     var mine = reqs.filter(function (r) { return r.employeeId === empId && r.typeId === type.id && r.from.slice(0, 4) === String(year); });
     var used = mine.filter(function (r) { return r.status === 'approved'; }).reduce(function (a, r) { return a + r.days; }, 0);
-    var pending = mine.filter(function (r) { return LEAVE_OPEN.indexOf(r.status) >= 0; }).reduce(function (a, r) { return a + r.days; }, 0);
+    var pending = mine.filter(function (r) { return LEAVE_HOLD.indexOf(r.status) >= 0; }).reduce(function (a, r) { return a + r.days; }, 0);
     var unlimited = type.annualDays <= 0;
     return {
       typeId: type.id, name: type.name, paid: type.paid, active: type.active, unlimited: unlimited,
@@ -139,7 +141,103 @@ var Hr = {
       typeId: r.typeId, typeName: (types[r.typeId] || {}).name || '—', from: r.from, to: r.to, days: r.days,
       reason: r.reason, status: r.status, statusLabel: LEAVE_STATUS[r.status] || r.status,
       managerId: r.managerId, managerName: Staff.name_(maps, r.managerId), managerNote: r.managerNote,
-      decidedBy: r.decidedBy, decidedAt: r.decidedAt, decisionNote: r.decisionNote, createdAt: r.createdAt
+      decidedBy: r.decidedBy, decidedAt: r.decidedAt, decisionNote: r.decisionNote, createdAt: r.createdAt,
+      wfInstanceId: r.wfInstanceId || '', wf: r.wfInstanceId ? Workflow.summaryFor_('hr.leave', r.id) : null, steps: r.wfInstanceId ? [] : Hr.leaveSteps_(r, maps)
+    };
+  },
+
+  /** مراحل المسار المدمج للإجازة بشكل الخط العمودي: المدير المباشر ← الموارد البشرية */
+  leaveSteps_: function (r, maps) {
+    var name = function (id) { return Staff.name_(maps, id); };
+    if (r.status === 'approved' && !r.managerAt && r.decisionNote === 'سجّلتها الموارد البشرية') {
+      return [{ name: 'تسجيل الموارد البشرية', status: 'done', actorName: r.decidedBy, at: r.decidedAt, note: '', assignees: [] }];
+    }
+    var mgrDone = !!r.managerAt, closed = ['approved', 'rejected', 'cancelled'].indexOf(r.status) >= 0;
+    var mgr = { name: 'المدير المباشر', assignees: r.managerId ? [name(r.managerId)] : [], actorName: mgrDone ? name(r.managerId) : '', at: r.managerAt || '', note: r.managerNote || '' };
+    if (mgrDone) mgr.status = r.status === 'rejected' && !r.decidedBy ? 'rejected' : (r.status === 'rejected' && r.decidedAt === r.managerAt ? 'rejected' : 'done');
+    else mgr.status = r.status === 'pending_manager' ? 'current' : r.managerId ? (closed ? (r.status === 'cancelled' ? 'cancelled' : 'skipped') : 'pending') : 'skipped';
+    var hr = { name: 'الموارد البشرية', assignees: [], actorName: '', at: '', note: '' };
+    if (r.status === 'pending_hr') hr.status = 'current';
+    else if (r.status === 'approved') Object.assign(hr, { status: 'done', actorName: r.decidedBy, at: r.decidedAt, note: r.decisionNote || '' });
+    else if (r.status === 'rejected') Object.assign(hr, mgr.status === 'rejected' ? { status: 'cancelled' } : { status: 'rejected', actorName: r.decidedBy, at: r.decidedAt, note: r.decisionNote || '' });
+    else if (r.status === 'cancelled') hr.status = 'cancelled';
+    else hr.status = 'pending';
+    return [mgr, hr];
+  },
+
+  /** أثر نتيجة السلسلة على طلب الإجازة أو الإضافي */
+  wfApply_: function (table, ctx, event, inst, what) {
+    var r = Db.get('hr', table, inst.entityId);
+    if (!r) return;
+    var now = nowIso(), note = Workflow.lastNote_(inst.id), ch;
+    if (event === 'approved') ch = { status: 'approved', decidedBy: ctx.user.fullName, decidedAt: now, decisionNote: 'اعتُمد في السلسلة «' + inst.templateName + '»' + (note ? ': ' + note : '') };
+    else if (event === 'rejected') ch = { status: 'rejected', decidedBy: ctx.user.fullName, decidedAt: now, decisionNote: note || 'رُفض في السلسلة' };
+    else if (event === 'returned') ch = { status: 'returned', decisionNote: note };
+    else if (event === 'cancelled') ch = { status: 'cancelled', decidedBy: ctx.user.fullName, decidedAt: now, decisionNote: note || 'أُلغيت السلسلة' };
+    else return;
+    Db.update('hr', table, r.id, ch);
+    Audit.log(ctx.user, 'hr', what + '.chain', table === 'LeaveRequests' ? 'LeaveRequest' : 'Overtime', r.id, { event: event, template: inst.templateName });
+  },
+
+  canSeeRequest_: function (ctx, empId) {
+    if (Hr.isHr_(ctx)) return true;
+    var me = Staff.ofCtx_(ctx);
+    return !!me && (me.id === empId || Staff.manages_(me.id, empId));
+  },
+
+  deptOptions_: function () { return Staff.depts_().filter(function (d) { return d.active !== false; }).map(function (d) { return { id: d.id, label: d.name }; }); },
+
+  /** مضيف السلسلة لطلب الإجازة (docs/09) */
+  wfLeave_: function () {
+    return {
+      module: 'hr', managerRoles: ['hr'], label: 'إجازة', system: true, builtinLabel: 'المدير المباشر ← الموارد البشرية',
+      entity_: function (id) {
+        var r = Db.get('hr', 'LeaveRequests', id);
+        if (!r) return null;
+        var emp = Staff.get_(r.employeeId), t = indexBy_(Hr.types_())[r.typeId];
+        return {
+          id: r.id, number: (t ? t.name : 'إجازة') + ' · ' + r.days + (r.days > 2 && r.days < 11 ? ' أيام' : ' يوم'), title: (emp ? emp.fullName : '') + ' · ' + dmy_(r.from) + ' – ' + dmy_(r.to),
+          createdBy: r.createdBy || (emp && emp.userId) || '', version: 0, moduleLabel: 'إجازة',
+          facts: [{ k: 'من', v: dmy_(r.from) }, { k: 'إلى', v: dmy_(r.to) }, { k: 'أيام العمل', v: String(r.days) }].concat(r.reason ? [{ k: 'السبب', v: r.reason }] : []),
+          values: { $dept: emp ? emp.departmentId || '' : '', 'hr.leave:type': r.typeId, 'hr.leave:days': r.days }
+        };
+      },
+      conditionFields_: function () {
+        return [
+          { key: '$dept', label: 'قسم المنشئ', kind: 'select', options: Hr.deptOptions_() },
+          { key: 'hr.leave:type', label: 'الإجازة: النوع', kind: 'select', options: Hr.types_().map(function (t) { return { id: t.id, label: t.name }; }) },
+          { key: 'hr.leave:days', label: 'الإجازة: عدد الأيام', kind: 'number', options: [] }
+        ];
+      },
+      onEvent_: function (ctx, event, inst) { Hr.wfApply_('LeaveRequests', ctx, event, inst, 'leave'); },
+      resubmit_: function (ctx, inst) { Db.update('hr', 'LeaveRequests', inst.entityId, { status: 'in_chain', decisionNote: '' }); },
+      canSee_: function (ctx, id) { var r = Db.get('hr', 'LeaveRequests', id); return !!r && Hr.canSeeRequest_(ctx, r.employeeId); },
+      page_: function (id, ctx) { return Hr.isHr_(ctx) ? '/hr/requests' : '/hr/leave'; }
+    };
+  },
+
+  /** مضيف السلسلة لطلب العمل الإضافي (docs/09) */
+  wfOvertime_: function () {
+    return {
+      module: 'hr', managerRoles: ['hr'], label: 'عمل إضافي', system: true, builtinLabel: 'المدير المباشر أو الموارد البشرية',
+      entity_: function (id) {
+        var o = Db.get('hr', 'OvertimeRequests', id);
+        if (!o) return null;
+        var emp = Staff.get_(o.employeeId);
+        return {
+          id: o.id, number: 'عمل إضافي · ' + o.minutes + ' دقيقة', title: (emp ? emp.fullName : '') + ' · ' + dmy_(o.date),
+          createdBy: o.createdBy || (emp && emp.userId) || '', version: 0, moduleLabel: 'عمل إضافي',
+          facts: [{ k: 'اليوم', v: dmy_(o.date) }, { k: 'الدقائق', v: String(o.minutes) }].concat(o.reason ? [{ k: 'السبب', v: o.reason }] : []),
+          values: { $dept: emp ? emp.departmentId || '' : '', 'hr.overtime:minutes': o.minutes }
+        };
+      },
+      conditionFields_: function () {
+        return [{ key: '$dept', label: 'قسم المنشئ', kind: 'select', options: Hr.deptOptions_() }, { key: 'hr.overtime:minutes', label: 'العمل الإضافي: الدقائق', kind: 'number', options: [] }];
+      },
+      onEvent_: function (ctx, event, inst) { Hr.wfApply_('OvertimeRequests', ctx, event, inst, 'ot'); },
+      resubmit_: function (ctx, inst) { Db.update('hr', 'OvertimeRequests', inst.entityId, { status: 'in_chain', decisionNote: '' }); },
+      canSee_: function (ctx, id) { var o = Db.get('hr', 'OvertimeRequests', id); return !!o && Hr.canSeeRequest_(ctx, o.employeeId); },
+      page_: function (id, ctx) { return Hr.isHr_(ctx) ? '/hr/requests' : '/hr/overtime'; }
     };
   },
 
@@ -172,7 +270,7 @@ var Hr = {
       if (!dates.length) throw appError('الفترة المحددة كلها عطلات، لا أيام عمل تُحتسب فيها.');
       var reqs = Db.view('hr', 'LeaveRequests');
       var clash = reqs.filter(function (r) {
-        return r.employeeId === emp.id && (r.status === 'approved' || LEAVE_OPEN.indexOf(r.status) >= 0) && r.from <= to && from <= r.to;
+        return r.employeeId === emp.id && (r.status === 'approved' || LEAVE_HOLD.indexOf(r.status) >= 0) && r.from <= to && from <= r.to;
       })[0];
       if (clash) throw appError('يوجد طلب إجازة آخر يتداخل مع هذه الفترة (' + clash.from + ' إلى ' + clash.to + ').');
       var bal = Hr.balanceOf_(emp.id, t, from.slice(0, 4), reqs, Db.view('hr', 'LeaveBalances'));
@@ -190,7 +288,12 @@ var Hr = {
       });
       Audit.log(ctx.user, 'hr', direct ? 'leave.create' : 'leave.request', 'LeaveRequest', rec.id,
         { employee: emp.fullName, type: t.name, from: from, to: to, days: dates.length });
-      return rec;
+      // السلسلة الإجرائية إن كانت الإجازة مربوطة بها (docs/09)
+      if (!direct) {
+        var inst = Workflow.startIfBound_(ctx, 'hr.leave', rec.id, function () { Db.update('hr', 'LeaveRequests', rec.id, { status: 'in_chain', managerId: '' }); });
+        if (inst) rec = Db.update('hr', 'LeaveRequests', rec.id, { wfInstanceId: inst.id });
+      }
+      return Db.get('hr', 'LeaveRequests', rec.id);
     });
   },
 
@@ -238,9 +341,17 @@ var Hr = {
       return {
         id: o.id, employeeId: o.employeeId, name: Staff.name_(maps, o.employeeId), date: o.date, minutes: o.minutes,
         reason: o.reason, status: o.status, statusLabel: OT_STATUS[o.status] || o.status, createdByName: o.createdByName,
-        decidedBy: o.decidedBy, decidedAt: o.decidedAt, decisionNote: o.decisionNote, createdAt: o.createdAt
+        decidedBy: o.decidedBy, decidedAt: o.decidedAt, decisionNote: o.decisionNote, createdAt: o.createdAt,
+        wfInstanceId: o.wfInstanceId || '', wf: o.wfInstanceId ? Workflow.summaryFor_('hr.overtime', o.id) : null,
+        steps: o.wfInstanceId ? [] : [Hr.singleStep_('المدير المباشر أو الموارد البشرية', o)]
       };
     });
+  },
+
+  /** مرحلة المسار المدمج الواحدة (الإضافي، تصحيح البصمة) بشكل الخط العمودي */
+  singleStep_: function (name, x) {
+    var st = { pending: 'current', approved: 'done', rejected: 'rejected', cancelled: 'cancelled' }[x.status] || 'pending';
+    return { name: name, status: st, assignees: [], actorName: st === 'current' ? '' : x.decidedBy || '', at: x.decidedAt || '', note: x.decisionNote || '' };
   },
 
   canManageOt_: function (ctx, empId) {
@@ -256,7 +367,7 @@ var Hr = {
       var mins = intIn_(p.minutes, 1, OT_MAX_MIN, 'عدد دقائق الإضافي');
       if (!direct && !Attendance.hasRecordOn_(emp.id, date)) throw appError('لا يوجد تسجيل حضور في هذا اليوم.');
       var dup = Db.view('hr', 'OvertimeRequests').some(function (o) {
-        return o.employeeId === emp.id && o.date === date && (o.status === 'pending' || o.status === 'approved');
+        return o.employeeId === emp.id && o.date === date && ['pending', 'approved', 'in_chain', 'returned'].indexOf(o.status) >= 0;
       });
       if (dup) throw appError('يوجد طلب إضافي لهذا اليوم مسبقاً.');
       var now = nowIso();
@@ -267,7 +378,11 @@ var Hr = {
         decisionNote: direct ? 'سجّله المدير مباشرة' : '', createdAt: now
       });
       Audit.log(ctx.user, 'hr', direct ? 'ot.add' : 'ot.request', 'Overtime', rec.id, { employee: emp.fullName, date: date, minutes: mins });
-      return rec;
+      if (!direct) {
+        var inst = Workflow.startIfBound_(ctx, 'hr.overtime', rec.id, function () { Db.update('hr', 'OvertimeRequests', rec.id, { status: 'in_chain' }); });
+        if (inst) Db.update('hr', 'OvertimeRequests', rec.id, { wfInstanceId: inst.id });
+      }
+      return Db.get('hr', 'OvertimeRequests', rec.id);
     });
   },
 
@@ -374,6 +489,11 @@ var Hr = {
       var r = Db.getOrThrow('hr', 'LeaveRequests', p.id, 'طلب الإجازة');
       var me = Staff.ofCtx_(ctx);
       if (!me || r.employeeId !== me.id) throw appError('ليست لديك صلاحية لهذا الإجراء.', 'FORBIDDEN');
+      if ((r.status === 'in_chain' || r.status === 'returned') && r.wfInstanceId) {
+        Workflow.cancelFor_(ctx, r.wfInstanceId, 'ألغاه الموظف');
+        Audit.log(ctx.user, 'hr', 'leave.cancel', 'LeaveRequest', r.id, null);
+        return true;
+      }
       if (LEAVE_OPEN.indexOf(r.status) < 0) throw appError('لا يمكن إلغاء الطلب بعد البت فيه. تواصل مع الموارد البشرية.');
       Db.update('hr', 'LeaveRequests', r.id, { status: 'cancelled', decidedBy: ctx.user.fullName, decidedAt: nowIso(), decisionNote: 'ألغاه الموظف' });
       Audit.log(ctx.user, 'hr', 'leave.cancel', 'LeaveRequest', r.id, null);
@@ -393,7 +513,9 @@ var Hr = {
       var o = Db.getOrThrow('hr', 'OvertimeRequests', p.id, 'طلب الإضافي');
       var me = Staff.ofCtx_(ctx);
       var own = me && o.employeeId === me.id;
-      if (o.status === 'pending' && own) {
+      if ((o.status === 'in_chain' || o.status === 'returned') && own && o.wfInstanceId) {
+        Workflow.cancelFor_(ctx, o.wfInstanceId, 'ألغاه الموظف');
+      } else if (o.status === 'pending' && own) {
         Db.update('hr', 'OvertimeRequests', o.id, { status: 'cancelled', decidedBy: ctx.user.fullName, decidedAt: nowIso(), decisionNote: 'ألغاه الموظف' });
       } else if (o.status === 'approved' && Hr.canManageOt_(ctx, o.employeeId) && !own) {
         Db.update('hr', 'OvertimeRequests', o.id, { status: 'cancelled', decidedBy: ctx.user.fullName, decidedAt: nowIso(), decisionNote: optionalText(p.note, 300) || 'ألغاه المدير' });

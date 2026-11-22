@@ -10,14 +10,15 @@ import { cx } from '../../ui/cx';
 import { SignaturesAdminCard } from '../correspondence/Sign';
 import { Facts } from '../../ui/Controls';
 import { Button } from '../../ui/Button';
-import { Form, TextInput } from '../../ui/Field';
+import { Form, Select, TextInput } from '../../ui/Field';
 import { useToast } from '../../ui/Overlay';
 
 export default function CompanyPage() {
   const qc = useQueryClient();
   const toast = useToast();
   const q = useQuery({ queryKey: ['settings.get'], queryFn: () => api<{ company: CompanySettings }>('settings.get') });
-  const [f, setF] = useState<CompanySettings>({ name: '', address: '', phone: '' });
+  const [f, setF] = useState<CompanySettings>({ name: '', address: '', phone: '', managerUserId: '' });
+  const people = useApi<{ users: { id: string; fullName: string; active: boolean }[] }>('users.list', {}, { staleTime: 60_000 });
   const [error, setError] = useState('');
   useEffect(() => { if (q.data) setF(q.data.company); }, [q.data]);
   const save = useMutation({
@@ -36,6 +37,9 @@ export default function CompanyPage() {
             <TextInput label={tr("اسم الشركة")} required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
             <TextInput label={tr("العنوان")} value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} />
             <TextInput label={tr("الهاتف")} ltr inputMode="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />
+            <Select label={tr("مدير الشركة")} value={f.managerUserId || ''} onChange={(e) => setF({ ...f, managerUserId: e.target.value })}
+              options={[{ value: '', label: tr("غير محدد") }, ...(people.data?.users || []).filter((u) => u.active).map((u) => ({ value: u.id, label: u.fullName }))]}
+              hint={tr("يُستخدم مسؤولاً في السلاسل الإجرائية، مثل: إجازة ← المدير المباشر ← مدير الشركة")} />
             {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
             <Button type="submit" variant="primary" loading={save.isPending} className="self-start">{tr("حفظ")}</Button>
           </Form>

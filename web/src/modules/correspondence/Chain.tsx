@@ -13,11 +13,12 @@ import { Dialog } from '../../ui/Overlay';
 import { Icon } from '../../ui/Icon';
 import { cx } from '../../ui/cx';
 import { COR_KEYS } from './shared';
-import type { AssigneeType, ChainStep, ChainSummary, ChainView, CondField, CondOp, LetterDetail, StepKind, StepMode, StepStatus, WfLookups, WfRule, WfSimulation, WfTemplate, WfVersion } from './types';
+import type { AssigneeType, ChainSummary, ChainView, CondField, CondOp, LetterDetail, StepKind, StepMode, StepStatus, WfLookups, WfRule, WfSimulation, WfTemplate, WfVersion } from './types';
 import { useCorLookups } from './shared';
+import { Timeline } from '../../ui/Timeline';
 import { SignDialog } from './Sign';
 
-const KEYS = [...COR_KEYS, 'notify.list'];
+const KEYS = [...COR_KEYS, 'notify.list', 'wf.get', 'hr.me', 'hr.team', 'hr.leave.list', 'hr.ot.list', 'att.correction.mine', 'att.correction.list', 'att.today', 'tsk.get', 'tsk.list', 'tsk.dashboard', 'cus.get', 'cus.list', 'cus.home', 'cus.voucher.list', 'cus.request.list'];
 
 const DOT: Record<StepStatus, string> = {
   pending: 'bg-chip border border-line', current: 'bg-accent', done: 'bg-ok', rejected: 'bg-bad', returned: 'bg-warn', skipped: 'bg-chip', cancelled: 'bg-chip'
@@ -37,35 +38,15 @@ export function ChainDots({ wf }: { wf: ChainSummary | null }) {
   );
 }
 
-const STEP_TONE: Record<StepStatus, 'neutral' | 'info' | 'warn' | 'ok' | 'bad'> = { pending: 'neutral', current: 'info', done: 'ok', rejected: 'bad', returned: 'warn', skipped: 'neutral', cancelled: 'neutral' };
 const CHAIN_TONE = { running: 'info', returned: 'warn', approved: 'ok', rejected: 'bad', cancelled: 'neutral' } as const;
-
-function StepNode({ s, last }: { s: ChainStep; last: boolean }) {
-  return (
-    <li className="relative flex min-w-0 flex-1 gap-3 sm:flex-col sm:items-center sm:gap-2 sm:text-center">
-      {!last && <span aria-hidden="true" className={cx('absolute start-[11px] top-7 bottom-[-12px] w-0.5 sm:start-[calc(50%+16px)] sm:end-[calc(-50%+16px)] sm:top-[11px] sm:bottom-auto sm:h-0.5 sm:w-auto', s.status === 'done' ? 'bg-ok' : 'bg-line')} />}
-      <span className={cx('relative z-[1] flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-bg', DOT[s.status], s.status === 'pending' && 'text-muted')}>
-        {s.status === 'done' ? <Icon name="check" size={14} /> : s.status === 'rejected' ? <Icon name="x" size={14} /> : <span className="num">{s.order}</span>}
-      </span>
-      <span className="flex min-w-0 flex-col gap-0.5 pb-3 sm:pb-0">
-        <span className="font-semibold leading-tight">{s.name}</span>
-        <span className="text-[12px] text-muted">{s.kindLabel}{s.assignees.length ? ' · ' + s.assignees.map((a) => a.name + (a.done ? ' ✓' : '')).join('، ') : ''}</span>
-        {(s.parallel || s.need > 1) && <span className="text-[11px] text-muted">{[s.parallel ? tr("بالتوازي") : '', s.need > 1 ? tr("{0} من {1} موافقات", s.approvals, s.need) : ''].filter(Boolean).join(' · ')}</span>}
-        {s.status === 'current' && s.dueAt && <span className={cx('num text-[11px]', s.overdue ? 'font-semibold text-bad' : 'text-muted')}>{s.overdue ? tr("متأخرة منذ {0}", relativeTime(s.dueAt)) : tr("الموعد {0}", formatDateTime(s.dueAt))}</span>}
-        <span className="flex flex-wrap items-center gap-1 sm:justify-center">
-          <Badge tone={STEP_TONE[s.status]}>{s.asking ? tr("بانتظار إيضاح") : s.statusLabel}</Badge>
-          {s.fallback && <span className="text-[11px] text-muted" title={tr("لم يُحدَّد مسؤول بالقاعدة، فأُسندت إلى البديل")}>{tr("بديل")}</span>}
-        </span>
-        {s.endedAt && <span className="num text-[11px] text-muted" title={formatDateTime(s.endedAt)}>{s.actedByName ? s.actedByName + ' · ' : ''}{relativeTime(s.endedAt)}</span>}
-      </span>
-    </li>
-  );
-}
 
 type ActKind = 'approve' | 'reject' | 'return' | 'ask' | 'answer' | 'forward' | 'cancel' | 'reassign';
 
 /** بطاقة السلسلة تحت المستند: المراحل، والسجل، وأزرار القرار لصاحب المرحلة الحالية */
-export function ChainCard({ d }: { d: LetterDetail }) {
+/** ما تحتاجه بطاقة السلسلة: المستند يمرّر LetterDetail، وطلبات الوحدات تمرّر السلسلة وحدها */
+type ChainHost = { workflow: ChainView | null; submit: LetterDetail['submit']; signatures: LetterDetail['signatures']; letter: { id: string } };
+
+export function ChainCard({ d }: { d: ChainHost }) {
   const wf = d.workflow;
   const [act, setAct] = useState<ActKind | null>(null);
   const [showLog, setShowLog] = useState(false);
@@ -82,9 +63,13 @@ export function ChainCard({ d }: { d: LetterDetail }) {
         </span>
         <Badge tone={CHAIN_TONE[wf.status]}>{wf.statusLabel}</Badge>
       </div>
-      <ol className="m-0 flex list-none flex-col gap-0 px-5 py-4 sm:flex-row sm:gap-2">
-        {wf.steps.map((s, i) => <StepNode key={s.id} s={s} last={i === wf.steps.length - 1} />)}
-      </ol>
+      <div className="px-5 py-4">
+        <Timeline start={{ by: wf.startedByName, at: wf.startedAt }} steps={wf.steps.map((s) => ({
+          key: s.id, name: s.name, status: s.status, kindLabel: s.kindLabel, assignees: s.assignees.map((a) => a.name + (a.done ? ' ✓' : '')),
+          actorName: s.actedByName, at: s.endedAt, note: s.note, dueAt: s.dueAt, overdue: s.overdue, parallel: s.parallel, fallback: s.fallback, asking: s.asking,
+          progress: s.need > 1 ? tr("{0} من {1} موافقات", s.approvals, s.need) : ''
+        }))} />
+      </div>
       {cur?.asking && <div className="mx-5 mb-3 rounded-lg bg-warn-bg px-3 py-2.5 text-[13px] text-warn">{tr("المرحلة بانتظار إيضاح من منشئ المستند.")}</div>}
       {cur?.onBehalfOfName && wf.can.act && <div className="mx-5 mb-3 rounded-lg bg-accent-soft px-3 py-2.5 text-[13px]">{tr("تقرر في هذه المرحلة نيابةً عن {0} بالتفويض.", cur.onBehalfOfName)}</div>}
       {d.submit?.resubmit && <div className="mx-5 mb-3"><SubmitCard d={d} inline /></div>}
@@ -179,7 +164,7 @@ function ActDialog({ kind, wf, approveLabel, onClose }: { kind: ActKind; wf: Cha
 }
 
 /** الإرسال للسلسلة (أو إعادة الإرسال بعد التعديل) */
-function SubmitCard({ d, inline }: { d: LetterDetail; inline?: boolean }) {
+function SubmitCard({ d, inline }: { d: ChainHost; inline?: boolean }) {
   const s = d.submit!;
   const [open, setOpen] = useState(false);
   const [tpl, setTpl] = useState(s.defaultTemplateId || s.templates[0]?.id || '');
@@ -224,8 +209,8 @@ function SubmitCard({ d, inline }: { d: LetterDetail; inline?: boolean }) {
 // ───────── الإعدادات: السلاسل الإجرائية ─────────
 const TPL_KEYS = ['wf.templates', 'cor.types', 'cor.get'];
 
-export function TemplatesCard() {
-  const q = useApi<WfTemplate[]>('wf.templates', { module: 'correspondence' });
+export function TemplatesCard({ module = 'correspondence' }: { module?: string }) {
+  const q = useApi<WfTemplate[]>('wf.templates', { module });
   const [editing, setEditing] = useState<{ item: WfTemplate | null } | null>(null);
   const [versions, setVersions] = useState<WfTemplate | null>(null);
   const [simulating, setSimulating] = useState(false);
@@ -234,10 +219,10 @@ export function TemplatesCard() {
   return (
     <Card padded={false}>
       <CardHeader title={tr("السلاسل الإجرائية")} action={<span className="flex gap-2">
-        <Button size="sm" variant="ghost" icon="sliders" disabled={!q.data.length} onClick={() => setSimulating(true)}>{tr("محاكاة")}</Button>
+        {module === 'correspondence' && <Button size="sm" variant="ghost" icon="sliders" disabled={!q.data.length} onClick={() => setSimulating(true)}>{tr("محاكاة")}</Button>}
         <Button size="sm" icon="plus" onClick={() => setEditing({ item: null })}>{tr("سلسلة جديدة")}</Button>
       </span>} />
-      {q.data.length === 0 ? <EmptyState title={tr("لا سلاسل بعد")} body={tr("السلسلة مراحل يمر بها المستند: مراجعة ثم اعتماد مثلاً. اربطها بنوع المستند لتكون الافتراضية له.")} /> : q.data.map((t) => (
+      {q.data.length === 0 ? <EmptyState title={tr("لا سلاسل بعد")} body={module === 'system' ? tr("السلسلة مراحل يمر بها الطلب: المدير المباشر ثم مدير الشركة مثلاً. اربطها بنوع الطلب من «ربط الطلبات».") : tr("السلسلة مراحل يمر بها المستند: مراجعة ثم اعتماد مثلاً. اربطها بنوع المستند لتكون الافتراضية له.")} /> : q.data.map((t) => (
         <div key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-5 py-2.5">
           <span className="flex min-w-0 flex-1 basis-60 flex-col">
             <span className={cx('font-semibold', t.status === 'retired' && 'text-muted line-through')}>{t.name}</span>
@@ -250,7 +235,7 @@ export function TemplatesCard() {
         </div>
       ))}
       <p className="m-0 border-t border-line px-5 py-3 text-[13px] text-muted">{tr("كل حفظ إصدار جديد. السلاسل الجارية تكمل على الإصدار الذي بدأت به.")}</p>
-      {editing && <TemplateDialog item={editing.item} onClose={() => setEditing(null)} />}
+      {editing && <TemplateDialog module={module} item={editing.item} onClose={() => setEditing(null)} />}
       {versions && <VersionsDialog t={versions} onClose={() => setVersions(null)} />}
       {simulating && <SimulateDialog templates={q.data} onClose={() => setSimulating(false)} />}
     </Card>
@@ -345,15 +330,15 @@ export function ChainSettingsCard() {
 }
 
 // ───────── قواعد التوجيه ─────────
-export function RulesCard() {
-  const q = useApi<WfRule[]>('wf.rules', { module: 'correspondence' });
+export function RulesCard({ module = 'correspondence', templatesModule, embedded }: { module?: string; templatesModule?: string; embedded?: boolean }) {
+  const q = useApi<WfRule[]>('wf.rules', { module });
   const [editing, setEditing] = useState<{ item: WfRule | null } | null>(null);
   const move = useAction<{ id: string; dir: 'up' | 'down' }>('wf.rule.move', { invalidate: ['wf.rules', 'cor.get'] });
   const remove = useAction<{ id: string }>('wf.rule.remove', { invalidate: ['wf.rules', 'cor.get'], success: tr("حُذفت القاعدة") });
   if (q.isError) return <ErrorBox message={(q.error as Error).message} onRetry={() => q.refetch()} />;
   if (!q.data) return <Loader />;
   return (
-    <Card padded={false}>
+    <Card padded={false} className={embedded ? '!border-0 !rounded-none' : undefined}>
       <CardHeader title={tr("قواعد التوجيه")} action={<Button size="sm" icon="plus" onClick={() => setEditing({ item: null })}>{tr("قاعدة جديدة")}</Button>} />
       {q.data.length === 0 ? <EmptyState title={tr("لا قواعد")} body={tr("القاعدة تختار السلسلة تلقائياً حسب النوع والقسم والسرية وقيمة حقل، مثل: مذكرة بمبلغ أكبر من 5,000 ← سلسلة المدير العام.")} /> : q.data.map((r, i, arr) => (
         <div key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-5 py-2.5">
@@ -370,21 +355,21 @@ export function RulesCard() {
         </div>
       ))}
       <p className="m-0 border-t border-line px-5 py-3 text-[13px] text-muted">{tr("تُفحص بالترتيب، وأول قاعدة تنطبق تحدد السلسلة. إن لم تنطبق قاعدة فالسلسلة الافتراضية للنوع، ويبقى للمرسل أن يغيّرها.")}</p>
-      {editing && <RuleDialog item={editing.item} onClose={() => setEditing(null)} />}
+      {editing && <RuleDialog module={module} templatesModule={templatesModule || module} item={editing.item} onClose={() => setEditing(null)} />}
     </Card>
   );
 }
 
-function RuleDialog({ item, onClose }: { item: WfRule | null; onClose: () => void }) {
-  const wl = useApi<WfLookups>('wf.lookups', { module: 'correspondence' }, { staleTime: 5 * 60_000 });
-  const tq = useApi<WfTemplate[]>('wf.templates', { module: 'correspondence' });
+function RuleDialog({ module, templatesModule, item, onClose }: { module: string; templatesModule: string; item: WfRule | null; onClose: () => void }) {
+  const wl = useApi<WfLookups>('wf.lookups', { module }, { staleTime: 5 * 60_000 });
+  const tq = useApi<WfTemplate[]>('wf.templates', { module: templatesModule });
   const [f, setF] = useState(() => ({ name: item?.name || '', typeId: item?.typeId || '', departmentId: item?.departmentId || '', confidentiality: item?.confidentiality || '', templateId: item?.templateId || '', active: item ? item.active : true }));
   const [cond, setCond] = useState<{ field: string; op: CondOp; value: string }>({ field: item?.field || '', op: item?.op || 'eq', value: item?.value == null ? '' : condInput(item, wl.data?.conditionFields) });
   const [error, setError] = useState('');
   const save = useAction('wf.rule.save', { invalidate: ['wf.rules', 'cor.get'], success: tr("حُفظت القاعدة"), silentError: true, onSuccess: onClose });
   const fields = wl.data?.conditionFields || [];
   const opts = (key: string) => (fields.find((x) => x.key === key)?.options || []).map((o) => ({ value: o.id, label: o.label }));
-  const submit = () => { setError(''); save.mutate({ id: item?.id, module: 'correspondence', ...f, field: cond.field, op: cond.op, value: cond.value }, { onError: (e) => setError(e.message) }); };
+  const submit = () => { setError(''); save.mutate({ id: item?.id, module, ...f, field: cond.field, op: cond.op, value: cond.value }, { onError: (e) => setError(e.message) }); };
   return (
     <Dialog open onClose={onClose} wide title={item ? tr("تعديل القاعدة") : tr("قاعدة توجيه جديدة")} onSubmit={submit}
       footer={<><Button type="submit" variant="primary" className="flex-1" loading={save.isPending}>{tr("حفظ")}</Button><Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button></>}>
@@ -393,9 +378,9 @@ function RuleDialog({ item, onClose }: { item: WfRule | null; onClose: () => voi
           <TextInput label={tr("اسم القاعدة (اختياري)")} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} maxLength={80} placeholder={tr("المبالغ الكبيرة، مذكرات التصميم…")} />
           <span className="text-[13px] font-semibold">{tr("تنطبق على")}</span>
           <div className="grid gap-3 sm:grid-cols-3">
-            <Select label={tr("نوع المستند")} value={f.typeId} onChange={(e) => setF({ ...f, typeId: e.target.value })} options={[{ value: '', label: tr("كل الأنواع") }, ...opts('$type')]} />
+            {opts('$type').length > 0 && <Select label={tr("نوع المستند")} value={f.typeId} onChange={(e) => setF({ ...f, typeId: e.target.value })} options={[{ value: '', label: tr("كل الأنواع") }, ...opts('$type')]} />}
             <Select label={tr("قسم المنشئ")} value={f.departmentId} onChange={(e) => setF({ ...f, departmentId: e.target.value })} options={[{ value: '', label: tr("كل الأقسام") }, ...opts('$dept')]} />
-            <Select label={tr("درجة السرية")} value={f.confidentiality} onChange={(e) => setF({ ...f, confidentiality: e.target.value })} options={[{ value: '', label: tr("كل الدرجات") }, ...opts('$conf')]} />
+            {opts('$conf').length > 0 && <Select label={tr("درجة السرية")} value={f.confidentiality} onChange={(e) => setF({ ...f, confidentiality: e.target.value })} options={[{ value: '', label: tr("كل الدرجات") }, ...opts('$conf')]} />}
           </div>
           <ConditionEditor fields={fields.filter((x) => !x.key.startsWith('$') && (!f.typeId || x.typeId === f.typeId))} ops={wl.data.ops} value={cond} onChange={setCond} label={tr("وحقل (اختياري)")} />
           <Select label={tr("السلسلة")} required value={f.templateId} onChange={(e) => setF({ ...f, templateId: e.target.value })}
@@ -434,17 +419,21 @@ interface StepDraft {
   parallel?: boolean; mode?: StepMode; count?: number; slaHours?: number; workingDays?: boolean; notifyManager?: boolean; reassignTo?: string;
 }
 
-function TemplateDialog({ item, onClose }: { item: WfTemplate | null; onClose: () => void }) {
-  const lk = useApi<WfLookups>('wf.lookups', { module: 'correspondence' }, { staleTime: 5 * 60_000 });
+function TemplateDialog({ module, item, onClose }: { module: string; item: WfTemplate | null; onClose: () => void }) {
+  const lk = useApi<WfLookups>('wf.lookups', { module }, { staleTime: 5 * 60_000 });
+  const sys = module === 'system';
   const [name, setName] = useState(item?.name || '');
   const [description, setDescription] = useState(item?.description || '');
   const [status, setStatus] = useState(item?.status || 'published');
   const NONE = { field: '', op: 'eq' as CondOp, value: '' };
   const [steps, setSteps] = useState<StepDraft[]>(() => item ? item.steps.map((s, i, arr) => ({
-    name: s.name, kind: s.kind, type: s.assignee.type, id: s.assignee.id || '', role: s.assignee.role || '', onReject: s.onReject, cond: NONE, raw: s.condition,
+    name: s.name, kind: s.kind, type: s.assignee.type, id: s.assignee.id || s.assignee.key || '', role: sys && s.assignee.role ? (s.assignee.module || '') + '|' + s.assignee.role : s.assignee.role || '', onReject: s.onReject, cond: NONE, raw: s.condition,
     parallel: i > 0 && s.group === arr[i - 1].group, mode: s.mode, count: s.count, slaHours: s.slaHours, workingDays: s.workingDays,
     notifyManager: s.escalation ? s.escalation.notifyManager : true, reassignTo: s.escalation?.reassignTo || ''
-  } as StepDraft & { raw: WfTemplate['steps'][number]['condition'] })) : [
+  } as StepDraft & { raw: WfTemplate['steps'][number]['condition'] })) : sys ? [
+    { name: tr("المدير المباشر"), kind: 'approve', type: 'direct_manager', id: '', role: '', onReject: 'creator', cond: NONE },
+    { name: tr("مدير الشركة"), kind: 'approve', type: 'company_manager', id: '', role: '', onReject: 'end', cond: NONE }
+  ] : [
     { name: tr("مراجعة المدير المباشر"), kind: 'review', type: 'direct_manager', id: '', role: '', onReject: 'creator', cond: NONE },
     { name: tr("اعتماد مدير المستندات"), kind: 'approve', type: 'role', id: '', role: 'manager', onReject: 'end', cond: NONE }
   ]);
@@ -463,9 +452,9 @@ function TemplateDialog({ item, onClose }: { item: WfTemplate | null; onClose: (
   const submit = () => {
     setError('');
     save.mutate({
-      id: item?.id, module: 'correspondence', name, description, status,
+      id: item?.id, module, name, description, status,
       steps: steps.map((s, i) => ({
-        name: s.name, kind: s.kind, onReject: s.onReject, assignee: { type: s.type, id: s.id || undefined, role: s.role || undefined }, condition: s.cond.field ? s.cond : undefined,
+        name: s.name, kind: s.kind, onReject: s.onReject, assignee: { type: s.type, id: s.type !== 'party' && s.id ? s.id : undefined, key: s.type === 'party' ? s.id : undefined, role: s.role || undefined }, condition: s.cond.field ? s.cond : undefined,
         parallel: i > 0 && !!s.parallel, mode: s.mode || 'any', count: s.count || 2, slaHours: s.slaHours || 0, workingDays: s.workingDays !== false,
         escalation: { notifyManager: s.notifyManager !== false, reassignTo: s.reassignTo || '' }
       }))
@@ -498,9 +487,10 @@ function TemplateDialog({ item, onClose }: { item: WfTemplate | null; onClose: (
                 <div className="grid gap-2 sm:grid-cols-3">
                   <Select label={tr("النوع")} value={s.kind} onChange={(e) => set(i, { kind: e.target.value as StepKind })} options={L.kinds.map((k) => ({ value: k.id, label: k.label }))}
                     hint={s.kind === 'inform' ? tr("إحاطة فقط: لا تنتظر قراراً") : s.kind === 'approve' ? tr("لا يعتمدها منشئ المستند") : s.kind === 'sign' ? tr("يختم صاحبها توقيعه على الملف الرئيسي") : undefined} />
-                  <Select label={tr("المسؤول")} value={s.type} onChange={(e) => set(i, { type: e.target.value as AssigneeType, id: '', role: e.target.value === 'role' ? 'manager' : '' })} options={L.assignees.map((a) => ({ value: a.id, label: a.label }))} />
+                  <Select label={tr("المسؤول")} value={s.type} onChange={(e) => set(i, { type: e.target.value as AssigneeType, id: '', role: e.target.value === 'role' ? (sys ? L.roles[0]?.id || '' : 'manager') : '' })} options={L.assignees.filter((a) => a.id !== 'party' || (L.parties || []).length).map((a) => ({ value: a.id, label: a.label }))} />
                   {s.type === 'user' && <Select label={tr("المستخدم")} required value={s.id} onChange={(e) => set(i, { id: e.target.value })} options={[{ value: '', label: tr("اختر") }, ...L.people.map((p) => ({ value: p.id, label: p.name }))]} />}
                   {s.type === 'role' && <Select label={tr("الدور")} required value={s.role} onChange={(e) => set(i, { role: e.target.value })} options={L.roles.map((r) => ({ value: r.id, label: r.label }))} />}
+                  {s.type === 'party' && <Select label={tr("الطرف")} required value={s.id} onChange={(e) => set(i, { id: e.target.value })} options={[{ value: '', label: tr("اختر") }, ...(L.parties || []).map((p) => ({ value: p.id, label: p.label }))]} hint={tr("شخص من الطلب نفسه، مثل من أسند المهمة")} />}
                   {s.type === 'dept_manager' && <Select label={tr("القسم")} required value={s.id} onChange={(e) => set(i, { id: e.target.value })} options={[{ value: '', label: tr("اختر") }, ...L.departments.map((d) => ({ value: d.id, label: d.name }))]} />}
                 </div>
                 <ConditionEditor fields={L.conditionFields} ops={L.ops} value={s.cond} onChange={(v) => set(i, { cond: v })} label={tr("تظهر المرحلة إن (اختياري)")} />

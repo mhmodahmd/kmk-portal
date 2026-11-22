@@ -132,12 +132,27 @@ function ModuleProviders_() {
     { key: 'custody', prefix: 'cus.', summary: Custody.summary_, inbox: Custody.inbox_, decide: Custody.decide_, offboard: Custody.offboardBlock_, notify: Custody.notify_, approvalActions: Custody.approvalActions_, approvers: Custody.approvers_ },
     { key: 'tasks', prefix: 'tsk.', summary: Tasks.summary_, inbox: Tasks.inbox_, decide: Tasks.decide_, notify: Tasks.notify_, approvalActions: Tasks.approvalActions_, approvers: Tasks.approvers_ },
     { key: 'crm', prefix: 'crm.', summary: Crm.summary_, notify: Crm.notify_ },
-    { key: 'correspondence', prefix: 'cor.', summary: Correspondence.summary_, notify: Correspondence.notify_, workflowHost: { entity_: Correspondence.wfEntity_, onEvent_: Correspondence.onWorkflow_, link_: Correspondence.wfLink_, conditionFields_: Correspondence.conditionFields_, simEntity_: Correspondence.simEntity_, sign_: Correspondence.wfSign_ } },
+    { key: 'correspondence', prefix: 'cor.', summary: Correspondence.summary_, notify: Correspondence.notify_ },
     // السلسلة الإجرائية: مراحلها في صندوق كل مسؤول ولو لم يكن له دور في الوحدة المضيفة
     { key: 'workflow', prefix: 'wf.', always: true, inbox: Workflow.inbox_, decide: Workflow.decide_, notify: Workflow.notify_, approvers: Workflow.approvers_ },
     // يستقبل بيانات التواصل من استيراد المنصات في الذاكرة (المنصات لا تحفظها)
     { key: 'subscribers', prefix: 'sub.', platformContacts: Subscribers.onPlatformImport_ }
   ];
+}
+
+/**
+ * مضيفو السلسلة الإجرائية بمفتاح نوع الطلب (docs/09). system: يُربط بالسلاسل العامة من «النظام ← السلاسل الإجرائية».
+ * module: وحدة الطلب (للصلاحيات)، managerRoles: من يدير سلاسلها إن لم تكن عامة، builtinLabel: المسار المدمج.
+ */
+function WorkflowHosts_() {
+  return {
+    correspondence: { module: 'correspondence', label: 'المستندات', entity_: Correspondence.wfEntity_, onEvent_: Correspondence.onWorkflow_, link_: Correspondence.wfLink_,
+      conditionFields_: Correspondence.conditionFields_, simEntity_: Correspondence.simEntity_, sign_: Correspondence.wfSign_ },
+    'hr.leave': Hr.wfLeave_(),
+    'hr.overtime': Hr.wfOvertime_(),
+    'att.correction': Attendance.wfCorrection_(), 'tsk.review': Tasks.wfReview_(),
+    'cus.request': Custody.wfRequest_(), 'cus.voucher': Custody.wfVoucher_(), 'cus.close': Custody.wfClose_()
+  };
 }
 
 function doPost(e) {

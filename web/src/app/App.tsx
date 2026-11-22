@@ -16,6 +16,8 @@ const AuditPage = lazy(() => import('../modules/settings/AuditPage'));
 const CrmImportPage = lazy(() => import('../modules/settings/CrmImportPage'));
 const ProfilePage = lazy(() => import('../modules/profile/ProfilePage'));
 const VerifyPage = lazy(() => import('../modules/correspondence/Sign'));
+const ChainPage = lazy(() => import('../modules/chain/ChainPage'));
+const WorkflowPage = lazy(() => import('../modules/settings/WorkflowPage'));
 
 const AttendanceLayout = lazy(() => import('../modules/attendance/AttendanceLayout'));
 const PunchPage = lazy(() => import('../modules/attendance/PunchPage'));
@@ -147,6 +149,7 @@ export default function App() {
             <Route path="/inbox" element={<InboxPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/verify" element={<VerifyPage />} />
+            <Route path="/chain/:id" element={<ChainPage />} />
             {att && (
               <Route path="/attendance" element={<AttendanceLayout />}>
                 <Route index element={<PunchPage />} />
@@ -249,6 +252,7 @@ export default function App() {
             {!cor && <Route path="/correspondence/:id" element={<LetterDetailPage />} />}
             {admin && <Route path="/settings/users" element={<UsersPage />} />}
             {admin && <Route path="/settings/company" element={<CompanyPage />} />}
+            {admin && <Route path="/settings/workflow" element={<WorkflowPage />} />}
             {admin && <Route path="/settings/audit" element={<AuditPage />} />}
             {admin && <Route path="/settings/crm-import" element={<CrmImportPage />} />}
             {Object.keys(SOON).map((k) => <Route key={k} path={'/' + k} element={<Soon k={k} />} />)}

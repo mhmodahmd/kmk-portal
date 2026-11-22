@@ -1,3 +1,4 @@
+import type { ChainBrief } from '../../ui/Timeline';
 /** أنواع وحدة العهد والنثريات. المبالغ بالفلس (1 د.ك = 1000 فلس). */
 export type CustodyStatus = 'open' | 'pending' | 'signing' | 'closed';
 export type Stage = 'awaiting_signature' | 'disbursing' | 'received';
@@ -32,7 +33,7 @@ export interface VoucherView {
   status: 'requested' | 'signing' | 'active' | 'rejected' | 'cancelled'; statusLabel: string; cancelReason: string; createdByName: string; createdAt: string;
   approved: boolean; approvedByName: string; approvedAt: string; signed: boolean; signedAt: string; signedNote: string; mgrSigned: boolean; hasSignedFile: boolean;
   signedByName: string; isOpening: boolean; requestedBy: string; requestedByName: string; requestedAt: string;
-  rejectReason: string; rejectedByName: string; rejectedAt: string; signLink: SignLinkInfo | null;
+  rejectReason: string; rejectedByName: string; rejectedAt: string; signLink: SignLinkInfo | null; chain: ChainState | null;
   /** في القائمة: هل يعتمده المستخدم الحالي (محاسب الشركة، أو أي محاسب إن لم يُحدَّد) */
   canApprove?: boolean;
 }
@@ -42,11 +43,16 @@ export interface CustodyDetail {
   can: { edit: boolean; requestClose: boolean; review: boolean; note: boolean; correct: boolean; confirmReceipt: boolean; signOpen: boolean; approveOpen: boolean; signStatement: boolean; delete: boolean };
   openVoucherStatus: '' | VoucherView['status']; companyAccountantName: string;
   signLinks: { statement: SignLinkInfo | null; openVoucher: SignLinkInfo | null };
+  chains: { statement: ChainState | null; openVoucher: ChainState | null };
 }
 
+/** اعتماد الإدارة في السلسلة الإجرائية (docs/09): ملخصها، وهل يُرسل إليها */
+export interface ChainState { wf: ChainBrief | null; canStart: boolean }
+
 export interface CusRequest {
-  id: string; employeeId: string; employeeName: string; amount: number; reason: string; status: 'pending' | 'accountant' | 'signing' | 'approved' | 'rejected' | 'cancelled';
+  id: string; employeeId: string; employeeName: string; amount: number; reason: string; status: 'pending' | 'accountant' | 'signing' | 'approved' | 'rejected' | 'cancelled' | 'in_chain' | 'returned';
   statusLabel: string; custodyId: string; handledByName: string; handledAt: string; rejectReason: string; createdAt: string; activeCustodyId: string;
+  wfInstanceId: string; wf: ChainBrief | null;
 }
 
 export interface Lookups {

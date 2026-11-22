@@ -12,7 +12,8 @@ import { cx } from '../../ui/cx';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import { ACCEPT, filePayload } from './files';
-import type { CustodyStatus, CustodyView, Holder, Lookups, ExpenseView, SignLinkInfo, StageStep, VoucherView } from './types';
+import type { CustodyStatus, CustodyView, Holder, Lookups, ExpenseView, SignLinkInfo, StageStep, VoucherView, ChainState } from './types';
+import { RequestSteps } from '../../ui/Timeline';
 
 type Tone = 'ok' | 'warn' | 'bad' | 'info' | 'neutral';
 
@@ -299,8 +300,10 @@ export function VoucherFormDialog({ open, onClose, request }: { open: boolean; o
 }
 
 // ───────── توقيع الإدارة: رابط للمدير أو تأكيد التوقيع الورقي ─────────
-export function SignActions({ kind, id, info, onDone }: { kind: 'voucher' | 'statement'; id: string; info: SignLinkInfo | null; onDone?: () => void }) {
+export function SignActions({ kind, id, info, chain, onDone }: { kind: 'voucher' | 'statement'; id: string; info: SignLinkInfo | null; chain?: ChainState | null; onDone?: () => void }) {
   const toast = useToast();
+  const toChain = useAction<{ kind: string; id: string }, { instanceId: string }>('cus.chain.start', { invalidate: ['cus.get', 'cus.list', 'cus.home', 'cus.voucher.list'], success: tr("أُرسل للسلسلة الإجرائية"), silentError: true, onSuccess: () => onDone?.() });
+  const liveWf = chain?.wf && (chain.wf.status === 'running' || chain.wf.status === 'returned') ? chain.wf : null;
   const [link, setLink] = useState<{ url: string; text: string; wa: string } | null>(null);
   const [paper, setPaper] = useState(false);
   const [note, setNote] = useState('');
@@ -330,14 +333,22 @@ export function SignActions({ kind, id, info, onDone }: { kind: 'voucher' | 'sta
     finally { setUpBusy(false); }
   };
   const statusText: Record<SignLinkInfo['status'], string> = { open: tr("أُرسل رابط التوقيع للمدير"), expired: tr("انتهت صلاحية آخر رابط"), signed: tr("وقّع المدير"), rejected: tr("رفض المدير"), revoked: tr("أُبطل الرابط") };
+  if (liveWf) return (
+    <div className="flex flex-col gap-1">
+      <span className="text-[13px] text-muted">{tr("قرار الإدارة في السلسلة الإجرائية داخل النظام، ومن يعتمد يوقّع بتوقيعه المحفوظ.")}</span>
+      <RequestSteps wf={liveWf} />
+    </div>
+  );
   return (
     <div className="flex flex-col gap-2">
+      {chain?.wf && <span className="flex flex-wrap items-center gap-2 text-[13px] text-muted">{tr("آخر سلسلة: {0}", chain.wf.statusLabel)}<RequestSteps wf={chain.wf} /></span>}
       {info && (
         <span className="text-[13px] text-muted">
           {statusText[info.status]} · {formatDateTime(info.actedAt || info.createdAt)}{info.rejectReason ? ' — ' + info.rejectReason : ''}
         </span>
       )}
       <div className="flex flex-wrap gap-2">
+        {chain?.canStart && <Button size="sm" variant="primary" icon="history" loading={toChain.isPending} onClick={() => { setError(''); toChain.mutate({ kind, id }, { onError: (e) => setError(e.message) }); }}>{tr("إرسال للسلسلة الإجرائية")}</Button>}
         <Button size="sm" icon="key" loading={create.isPending} onClick={() => { setError(''); create.mutate({ kind, id }, { onError: (e) => setError(e.message) }); }}>
           {info?.status === 'open' ? tr("رابط جديد للمدير") : tr("إنشاء رابط اعتماد المدير")}
         </Button>

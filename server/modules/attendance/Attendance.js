@@ -13,12 +13,12 @@ var ATT_SCHEMA = {
   Corrections: [
     ['id', 'text'], ['employeeId', 'text'], ['date', 'date'], ['kind', 'text'], ['attendanceId', 'text'],
     ['inTime', 'text'], ['outTime', 'text'], ['reason', 'text'], ['status', 'text'],
-    ['decidedBy', 'text'], ['decidedAt', 'ts'], ['decisionNote', 'text'], ['createdAt', 'ts']
+    ['decidedBy', 'text'], ['decidedAt', 'ts'], ['decisionNote', 'text'], ['createdAt', 'ts'], ['wfInstanceId', 'text'], ['createdBy', 'text']
   ]
 };
 
 var CORRECTION_KINDS = { missingOut: 'نسيت تسجيل الانصراف', missingIn: 'نسيت تسجيل الحضور', wrongTime: 'وقت مسجّل خطأ' };
-var CORRECTION_STATUS = { pending: 'بانتظار الموافقة', approved: 'معتمد', rejected: 'مرفوض', cancelled: 'ملغى' };
+var CORRECTION_STATUS = { pending: 'بانتظار الموافقة', approved: 'معتمد', rejected: 'مرفوض', cancelled: 'ملغى', in_chain: 'قيد الإجراء في السلسلة', returned: 'معاد للتعديل' };
 var DAY_STATUS = {
   in: 'داخل الدوام', present: 'حاضر', missing: 'لم يسجّل انصراف', holiday: 'عطلة رسمية', leave: 'إجازة',
   weekend: 'عطلة أسبوعية', absent: 'غائب', none: '', future: ''
@@ -497,7 +497,9 @@ var Attendance = {
       id: c.id, employeeId: c.employeeId, name: Staff.name_(maps, c.employeeId), date: c.date, dayName: DAYS_AR[dowOf_(c.date)],
       kind: c.kind, kindLabel: CORRECTION_KINDS[c.kind] || c.kind, inTime: c.inTime, outTime: c.outTime, reason: c.reason,
       status: c.status, statusLabel: CORRECTION_STATUS[c.status] || c.status, decidedBy: c.decidedBy, decidedAt: c.decidedAt,
-      decisionNote: c.decisionNote, createdAt: c.createdAt
+      decisionNote: c.decisionNote, createdAt: c.createdAt,
+      wfInstanceId: c.wfInstanceId || '', wf: c.wfInstanceId ? Workflow.summaryFor_('att.correction', c.id) : null,
+      steps: c.wfInstanceId ? [] : [Hr.singleStep_('المدير المباشر أو الموارد البشرية', c)]
     };
   },
 
@@ -513,7 +515,7 @@ var Attendance = {
       var reason = requireText(p.reason, 'السبب', 300);
       var recs = Attendance.recordsOf_(emp.id).filter(function (r) { return r.date === date; })
         .sort(function (a, b) { return a.inTs < b.inTs ? -1 : 1; });
-      var rec = { employeeId: emp.id, date: date, kind: kind, reason: reason, status: 'pending', createdAt: nowIso(), inTime: '', outTime: '', attendanceId: '' };
+      var rec = { employeeId: emp.id, date: date, kind: kind, reason: reason, status: 'pending', createdAt: nowIso(), createdBy: ctx.user.id, inTime: '', outTime: '', attendanceId: '' };
       if (kind === 'missingOut') {
         var openOne = recs.filter(function (r) { return !r.outTs; })[0];
         if (!openOne) throw appError('لا يوجد في هذا اليوم حضور بلا انصراف.');
@@ -533,11 +535,13 @@ var Attendance = {
         rec.outTime = p.outTime ? requireTime_(p.outTime, 'وقت الانصراف') : (target.outTs ? localHm_(target.outTs) : '');
         Attendance.span_(date, rec.inTime, rec.outTime);
       }
-      var dup = Db.view('attendance', 'Corrections').some(function (c) { return c.employeeId === emp.id && c.date === date && c.status === 'pending'; });
+      var dup = Db.view('attendance', 'Corrections').some(function (c) { return c.employeeId === emp.id && c.date === date && ['pending', 'in_chain', 'returned'].indexOf(c.status) >= 0; });
       if (dup) throw appError('لديك طلب تصحيح لهذا اليوم بانتظار الموافقة.');
       var saved = Db.insert('attendance', 'Corrections', rec);
       Audit.log(ctx.user, 'attendance', 'correction.request', 'Correction', saved.id, { date: date, kind: kind });
-      return Attendance.correctionView_(saved, Staff.maps_());
+      var inst = Workflow.startIfBound_(ctx, 'att.correction', saved.id, function () { Db.update('attendance', 'Corrections', saved.id, { status: 'in_chain' }); });
+      if (inst) Db.update('attendance', 'Corrections', saved.id, { wfInstanceId: inst.id });
+      return Attendance.correctionView_(Db.get('attendance', 'Corrections', saved.id), Staff.maps_());
     });
   },
 
@@ -553,6 +557,7 @@ var Attendance = {
     var c = Db.getOrThrow('attendance', 'Corrections', p.id, 'الطلب');
     var me = Staff.ofCtx_(ctx);
     if (!me || c.employeeId !== me.id) throw appError('ليست لديك صلاحية لهذا الإجراء.', 'FORBIDDEN');
+    if ((c.status === 'in_chain' || c.status === 'returned') && c.wfInstanceId) { Workflow.cancelFor_(ctx, c.wfInstanceId, 'ألغاه الموظف'); return true; }
     if (c.status !== 'pending') throw appError('لا يمكن إلغاء الطلب بعد البت فيه.');
     Db.update('attendance', 'Corrections', c.id, { status: 'cancelled', decidedBy: ctx.user.fullName, decidedAt: nowIso(), decisionNote: 'ألغاه الموظف' });
     return true;
@@ -583,25 +588,84 @@ var Attendance = {
       var approve = bool_(p.approve), note = optionalText(p.note, 300);
       if (!approve && !note) throw appError('اكتب سبب الرفض.');
       var now = nowIso();
-      if (approve) {
+      if (approve) Attendance.applyCorrection_(c, ctx.user.fullName);
+      var next = Db.update('attendance', 'Corrections', c.id, { status: approve ? 'approved' : 'rejected', decidedBy: ctx.user.fullName, decidedAt: now, decisionNote: note });
+      Audit.log(ctx.user, 'attendance', 'correction.' + (approve ? 'approve' : 'reject'), 'Correction', c.id, { date: c.date, kind: c.kind, note: note });
+      return next;
+    });
+  },
+
+  /** أثر اعتماد التصحيح على سجل اليوم (يرمي إن تداخل أو اختفى التسجيل الأصلي) */
+  applyCorrection_: function (c, actorName) {
+    var now = nowIso();
+    {
+      {
         var tag = 'تصحيح: ' + c.reason;
         if (c.kind === 'missingIn') {
           var span = Attendance.span_(c.date, c.inTime, c.outTime);
           if (Attendance.overlaps_(c.employeeId, span, '')) throw appError('الوقت يتداخل مع تسجيل موجود الآن.');
-          Db.insert('attendance', 'Attendance', { employeeId: c.employeeId, date: c.date, inTs: span.inTs, outTs: span.outTs, source: 'correction', note: tag, editedBy: ctx.user.fullName, createdAt: now, updatedAt: now });
+          Db.insert('attendance', 'Attendance', { employeeId: c.employeeId, date: c.date, inTs: span.inTs, outTs: span.outTs, source: 'correction', note: tag, editedBy: actorName, createdAt: now, updatedAt: now });
         } else {
           var r = Db.get('attendance', 'Attendance', c.attendanceId);
           if (!r) throw appError('التسجيل الأصلي لم يعد موجوداً. ارفض الطلب واطلب من الموظف طلباً جديداً.');
           var inTime = c.kind === 'missingOut' ? localHm_(r.inTs) : c.inTime;
           var span2 = Attendance.span_(r.date, inTime, c.outTime);
           if (Attendance.overlaps_(c.employeeId, span2, r.id)) throw appError('الوقت يتداخل مع تسجيل آخر.');
-          Db.update('attendance', 'Attendance', r.id, { inTs: span2.inTs, outTs: span2.outTs, note: tag, editedBy: ctx.user.fullName, updatedAt: now });
+          Db.update('attendance', 'Attendance', r.id, { inTs: span2.inTs, outTs: span2.outTs, note: tag, editedBy: actorName, updatedAt: now });
         }
       }
-      var next = Db.update('attendance', 'Corrections', c.id, { status: approve ? 'approved' : 'rejected', decidedBy: ctx.user.fullName, decidedAt: now, decisionNote: note });
-      Audit.log(ctx.user, 'attendance', 'correction.' + (approve ? 'approve' : 'reject'), 'Correction', c.id, { date: c.date, kind: c.kind, note: note });
-      return next;
-    });
+    }
+  },
+
+  /** مضيف السلسلة لطلب تصحيح البصمة (docs/09) */
+  wfCorrection_: function () {
+    return {
+      module: 'attendance', managerRoles: ['hr'], label: 'تصحيح بصمة', system: true, builtinLabel: 'المدير المباشر أو الموارد البشرية',
+      entity_: function (id) {
+        var c = Db.get('attendance', 'Corrections', id);
+        if (!c) return null;
+        var emp = Staff.get_(c.employeeId);
+        return {
+          id: c.id, number: 'تصحيح بصمة · ' + (CORRECTION_KINDS[c.kind] || c.kind), title: (emp ? emp.fullName : '') + ' · ' + dmy_(c.date),
+          createdBy: c.createdBy || (emp && emp.userId) || '', version: 0, moduleLabel: 'تصحيح بصمة',
+          facts: [{ k: 'اليوم', v: dmy_(c.date) }].concat(c.inTime ? [{ k: 'الحضور', v: c.inTime }] : [], c.outTime ? [{ k: 'الانصراف', v: c.outTime }] : [], [{ k: 'السبب', v: c.reason }]),
+          values: { $dept: emp ? emp.departmentId || '' : '', 'att.correction:kind': c.kind }
+        };
+      },
+      conditionFields_: function () {
+        return [
+          { key: '$dept', label: 'قسم المنشئ', kind: 'select', options: Hr.deptOptions_() },
+          { key: 'att.correction:kind', label: 'تصحيح البصمة: النوع', kind: 'select', options: Object.keys(CORRECTION_KINDS).map(function (k) { return { id: k, label: CORRECTION_KINDS[k] }; }) }
+        ];
+      },
+      onEvent_: function (ctx, event, inst) {
+        var c = Db.get('attendance', 'Corrections', inst.entityId);
+        if (!c) return;
+        var now = nowIso(), note = Workflow.lastNote_(inst.id), ch;
+        if (event === 'approved') {
+          try {
+            Attendance.applyCorrection_(c, ctx.user.fullName);
+            ch = { status: 'approved', decidedBy: ctx.user.fullName, decidedAt: now, decisionNote: 'اعتُمد في السلسلة «' + inst.templateName + '»' + (note ? ': ' + note : '') };
+          } catch (e) {
+            // اعتُمد في السلسلة لكن تعذّر تطبيقه على سجل اليوم (تداخل أو حُذف التسجيل): لا يُطبَّق، ويُذكر السبب
+            ch = { status: 'rejected', decidedBy: ctx.user.fullName, decidedAt: now, decisionNote: 'تعذّر تطبيق التصحيح: ' + (e && e.message ? e.message : e) };
+          }
+        } else if (event === 'rejected') ch = { status: 'rejected', decidedBy: ctx.user.fullName, decidedAt: now, decisionNote: note || 'رُفض في السلسلة' };
+        else if (event === 'returned') ch = { status: 'returned', decisionNote: note };
+        else if (event === 'cancelled') ch = { status: 'cancelled', decidedBy: ctx.user.fullName, decidedAt: now, decisionNote: note || 'أُلغيت السلسلة' };
+        else return;
+        Db.update('attendance', 'Corrections', c.id, ch);
+        Audit.log(ctx.user, 'attendance', 'correction.chain', 'Correction', c.id, { event: event, status: ch.status });
+      },
+      resubmit_: function (ctx, inst) { Db.update('attendance', 'Corrections', inst.entityId, { status: 'in_chain', decisionNote: '' }); },
+      canSee_: function (ctx, id) {
+        var c = Db.get('attendance', 'Corrections', id);
+        if (!c) return false;
+        var me = Staff.ofCtx_(ctx);
+        return Attendance.isHr_(ctx) || (!!me && (me.id === c.employeeId || Staff.manages_(me.id, c.employeeId)));
+      },
+      page_: function (id, ctx) { return Attendance.isHr_(ctx) ? '/attendance/corrections' : '/attendance/me'; }
+    };
   },
 
   // ───────── الإعدادات ─────────

@@ -73,7 +73,7 @@ export function MyLeavePage() {
       <Card padded={false}>
         <CardHeader title={tr("طلباتي {0}", q.data.year)} action={<Button size="sm" variant="primary" icon="plus" onClick={() => setOpen(true)}>{tr("طلب إجازة")}</Button>} />
         {!q.data.leaves.length ? <EmptyState title={tr("لا طلبات إجازة بعد")} /> : q.data.leaves.map((l) => (
-          <LeaveRow key={l.id} l={l} actions={(l.status === 'pending_manager' || l.status === 'pending_hr') && (
+          <LeaveRow key={l.id} l={l} actions={(l.status === 'pending_manager' || l.status === 'pending_hr' || l.status === 'in_chain' || l.status === 'returned') && (
             <Button size="sm" variant="ghost" loading={cancel.isPending} onClick={() => cancel.mutate({ id: l.id })}>{tr("إلغاء الطلب")}</Button>
           )} />
         ))}
@@ -96,7 +96,7 @@ export function MyOvertimePage() {
       <CardHeader title={tr("طلبات العمل الإضافي")} action={<Button size="sm" variant="primary" icon="plus" onClick={() => setOpen(true)}>{tr("طلب إضافي")}</Button>} />
       <p className="m-0 px-5 pb-3 text-[13px] text-muted">{tr("الإضافي لا يُحتسب تلقائياً من البصمة: يُطلب هنا ويعتمده المدير المباشر.")}</p>
       {!q.data.overtime.length ? <EmptyState title={tr("لا طلبات بعد")} /> : q.data.overtime.map((o) => (
-        <OtRow key={o.id} o={o} actions={o.status === 'pending' && <Button size="sm" variant="ghost" loading={cancel.isPending} onClick={() => cancel.mutate({ id: o.id })}>{tr("إلغاء الطلب")}</Button>} />
+        <OtRow key={o.id} o={o} actions={(o.status === 'pending' || o.status === 'in_chain' || o.status === 'returned') && <Button size="sm" variant="ghost" loading={cancel.isPending} onClick={() => cancel.mutate({ id: o.id })}>{tr("إلغاء الطلب")}</Button>} />
       ))}
       <OtDialog open={open} onClose={() => setOpen(false)} />
     </Card>

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { tr } from '../../lib/i18n';
 import { useAuth } from '../../app/auth';
 import { useAction, useApi } from '../../lib/useApi';
@@ -11,7 +11,7 @@ import { Icon } from '../../ui/Icon';
 import { cx } from '../../ui/cx';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api';
-import { filePayload } from './files';
+import { ACCEPT, filePayload } from './files';
 import type { CustodyStatus, CustodyView, Holder, Lookups, ExpenseView, SignLinkInfo, StageStep, VoucherView } from './types';
 
 type Tone = 'ok' | 'warn' | 'bad' | 'info' | 'neutral';
@@ -108,23 +108,49 @@ export function ExpenseDialog({ open, onClose, custodyId, expense }: { open: boo
   const blank = (): ExpenseForm => ({ entryType: 'expense', date: lk.data?.today || '', amount: '', description: '', category: '', project: '', docType: '', noAttachmentReason: '', vendor: '', invoiceNo: '' });
   const [f, setF] = useState<ExpenseForm>(blank);
   const [error, setError] = useState('');
+  // المرفقات المختارة في النافذة تُرفع بعد حفظ البند مباشرة
+  const [pending, setPending] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const pick = useRef<HTMLInputElement>(null);
+  const qc = useQueryClient();
+  const toast = useToast();
   useEffect(() => {
     if (!open) return;
-    setError('');
+    setError(''); setPending([]);
     setF(expense ? {
       entryType: expense.entryType, date: expense.date, amount: toInput(expense.amount), description: expense.description, category: expense.category,
       project: expense.project, docType: expense.docType, noAttachmentReason: expense.noAttachmentReason, vendor: expense.vendor, invoiceNo: expense.invoiceNo
     } : blank());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, expense]);
-  const save = useAction('cus.expense.save', { invalidate: ['cus.get', 'cus.home', 'cus.list'], success: tr("حُفظ البند"), silentError: true, onSuccess: onClose });
+  const save = useAction<Record<string, unknown>, { expenseId?: string }>('cus.expense.save', {
+    invalidate: ['cus.get', 'cus.home', 'cus.list'], success: tr("حُفظ البند"), silentError: true,
+    onSuccess: async (r) => {
+      const id = r.expenseId || expense?.id;
+      if (id && pending.length) {
+        setUploading(true);
+        let done = 0, failed = '';
+        for (const file of pending) {
+          try { await api('cus.attachment.upload', { expenseId: id, ...(await filePayload(file)) }); done++; }
+          catch (e) { failed = failed || (e instanceof Error ? e.message : tr("تعذّر رفع الملف.")); }
+        }
+        setUploading(false);
+        if (done) toast(done === 1 ? tr("أُرفق الملف") : tr("أُرفقت {0} ملفات", done));
+        if (failed) toast(failed, 'bad');
+        await qc.invalidateQueries({ queryKey: ['cus.get'] });
+      }
+      onClose();
+    }
+  });
+  // FileList يفرغها المتصفح عند مسح قيمة الحقل: تُنسخ فوراً قبل تحديث الحالة
+  const addFiles = (list: FileList | null) => { const picked = Array.from(list || []); setPending((x) => [...x, ...picked].slice(0, 10)); };
   const set = (k: keyof ExpenseForm) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const isExp = f.entryType === 'expense';
   const L = lk.data;
   return (
     <Dialog open={open} onClose={onClose} title={expense ? tr("تعديل بند") : tr("إضافة بند")}
-      onSubmit={() => { setError(''); save.mutate({ ...f, id: expense?.id, custodyId }, { onError: (e) => setError(e.message) }); }} footer={<><Button type="submit" variant="primary" className="flex-1" loading={save.isPending}
-       >{tr("حفظ")}</Button>
+      onSubmit={() => { setError(''); save.mutate({ ...f, id: expense?.id, custodyId }, { onError: (e) => setError(e.message) }); }} footer={<><Button type="submit" variant="primary" className="flex-1" loading={save.isPending || uploading}
+       >{uploading ? tr("جارٍ رفع المرفقات") : tr("حفظ")}</Button>
         <Button variant="ghost" onClick={onClose}>{tr("تراجع")}</Button></>}>
       <div className="flex flex-col gap-3">
         <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={tr("نوع الحركة")}>
@@ -151,9 +177,29 @@ export function ExpenseDialog({ open, onClose, custodyId, expense }: { open: boo
               <TextInput label={tr("المورد (اختياري)")} value={f.vendor} onChange={set('vendor')} />
               <TextInput label={tr("رقم الفاتورة (اختياري)")} value={f.invoiceNo} onChange={set('invoiceNo')} />
             </div>
-            <TextInput label={tr("سبب عدم وجود مرفق")} value={f.noAttachmentReason} onChange={set('noAttachmentReason')}
-              hint={L?.drive ? tr("اتركه فارغاً إن أرفقت صورة الفاتورة") : tr("إلى أن يُفعَّل رفع المرفقات: اذكر أين الفاتورة (مثل: الأصل الورقي لدى المحاسب)")} />
+            {!pending.length && <TextInput label={tr("سبب عدم وجود مرفق")} value={f.noAttachmentReason} onChange={set('noAttachmentReason')}
+              hint={L?.drive ? tr("اتركه فارغاً إن أرفقت صورة الفاتورة") : tr("إلى أن يُفعَّل رفع المرفقات: اذكر أين الفاتورة (مثل: الأصل الورقي لدى المحاسب)")} />}
           </>
+        )}
+        {L?.drive && (
+          <div className="flex flex-col gap-2 rounded-lg border border-dashed border-line p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[13px] font-medium">{pending.length ? tr("المرفقات · {0}", pending.length) : expense ? tr("مرفقات إضافية (اختياري)") : tr("المرفقات (اختياري)")}</span>
+              <Button size="sm" variant="ghost" icon="plus" onClick={() => pick.current?.click()}>{tr("إضافة مرفقات")}</Button>
+              <input ref={pick} type="file" accept={ACCEPT} multiple className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }} />
+            </div>
+            {pending.length ? (
+              <ul className="m-0 flex list-none flex-col gap-1 p-0">
+                {pending.map((file, i) => (
+                  <li key={file.name + i} className="flex items-center gap-2 text-[13px]">
+                    <Icon name="file" size={14} className="shrink-0 text-muted" /><span className="min-w-0 flex-1 truncate">{file.name}</span>
+                    <span className="num text-[12px] text-muted">{Math.max(1, Math.round(file.size / 1024))} KB</span>
+                    <button type="button" aria-label={tr("إزالة")} className="text-muted hover:text-bad cursor-pointer" onClick={() => setPending((x) => x.filter((_, j) => j !== i))}><Icon name="x" size={14} /></button>
+                  </li>
+                ))}
+              </ul>
+            ) : <span className="text-[12px] text-muted">{tr("صورة الفاتورة أو ملف PDF حتى 10 ميجابايت لكل ملف، وتُرفع بعد الحفظ.")}</span>}
+          </div>
         )}
         {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2.5 text-bad">{error}</div>}
       </div>

@@ -557,7 +557,8 @@ var Custody = {
     }
     var u = Custody.recalc_(c.id);
     Audit.log(ctx.user, 'custody', cur ? 'expense.update' : 'expense.add', 'Expense', e.id, { custody: c.id, description: e.description, amount: kwd_(e.amount) });
-    return { custody: Custody.view_(u, Custody.maps_()) };
+    // expenseId: لترفع النافذة المرفقات المختارة بعد الحفظ مباشرة
+    return { custody: Custody.view_(u, Custody.maps_()), expenseId: e.id };
   },
 
   expenseDelete: function (ctx, p) {

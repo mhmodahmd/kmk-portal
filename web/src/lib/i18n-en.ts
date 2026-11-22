@@ -2212,6 +2212,8 @@ const EN: Record<string, string> = {
   'انتهت مدة المرحلة وتأخرت يومين': 'the step time limit passed and it is two days late',
   ' · متأخرة': ' · late',
   'التوقيع من صفحة المستند': 'Sign from the document page',
+  'مرفقات إضافية (اختياري)': 'More attachments (optional)',
+  'صورة الفاتورة أو ملف PDF حتى 10 ميجابايت لكل ملف، وتُرفع بعد الحفظ.': 'Invoice photo or PDF up to 10 MB each, uploaded after saving.',
   // الخادم: المراسلات
   'موظف مراسلات': 'Correspondence clerk', 'مدير المراسلات': 'Correspondence manager', 'بريد عادي': 'Post', 'باليد': 'By hand', 'بريد إلكتروني': 'Email', 'فاكس': 'Fax',
   'استلام': 'Receipt', 'رد': 'Reply', 'مرفق': 'Attachment', 'تعاقدي': 'Contractual', 'مالي': 'Financial', 'إداري': 'Administrative', 'شكوى': 'Complaint',

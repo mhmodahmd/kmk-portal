@@ -236,7 +236,8 @@ export function LetterDialog({ open, onClose, initial, onSaved }: { open: boolea
       onClose(); if (onSaved) onSaved(l); else if (!editing) nav('/correspondence/' + l.id);
     }
   });
-  const addFiles = (list: FileList | null) => setPending((p) => [...p, ...Array.from(list || [])].slice(0, 10));
+  // FileList يفرغها المتصفح عند مسح قيمة الحقل: تُنسخ فوراً قبل تحديث الحالة
+  const addFiles = (list: FileList | null) => { const picked = Array.from(list || []); setPending((p) => [...p, ...picked].slice(0, 10)); };
   const pickType = (id: string) => {
     const t = types.find((x) => x.id === id);
     setF((x) => ({ ...x, typeId: id, direction: t?.direction || x.direction, confidentiality: t?.confidentiality, channel: t?.direction === 'internal' ? '' : x.channel || 'mail', replyToId: undefined }));

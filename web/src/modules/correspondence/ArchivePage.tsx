@@ -120,7 +120,10 @@ function ImportCard() {
       setJobs((list) => list.map((j) => ({ ...j, meta: out[j.file.name.toLowerCase()] || j.meta })));
     } catch { setError(tr("تعذّرت قراءة ملف Excel.")); }
   };
-  const add = (list: FileList | null) => setJobs((cur) => [...cur, ...Array.from(list || []).map((f) => ({ file: f, meta: map[f.name.toLowerCase()] || {}, state: 'wait' as const }))]);
+  const add = (list: FileList | null) => {
+    const picked = Array.from(list || []); // تُنسخ قبل أن يفرغها مسح الحقل
+    setJobs((cur) => [...cur, ...picked.map((f) => ({ file: f, meta: map[f.name.toLowerCase()] || {}, state: 'wait' as const }))]);
+  };
   const run = async () => {
     setRunning(true);
     for (let i = 0; i < jobs.length; i++) {

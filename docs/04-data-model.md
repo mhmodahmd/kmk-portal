@@ -148,6 +148,16 @@
 | **Signatures** (في `KMK-Core` لتواقيع المستندات؛ توقيع العهد يبقى في `KMK-Custody` ويمكن نسخه) | userId, data (صورة PNG)، status (`pending`/`approved`), approvedBy, approvedAt, updatedAt · الختم الرسمي سجل بـ `role` بدل `userId` |
 | **SignatureLog** | module, entityId, entityVersion, userId, onBehalfOf, method (`passkey`/`password`), sourceSha256 (بصمة الملف قبل التوقيع), signedSha256, fileId, code (رمز التحقق المختوم), step, at |
 
+### 6هـ. السلسلة في كل النظام (معتمد · 2026-11-22 · التفاصيل في [09](09-workflow-everywhere.md))
+| الجدول | الأعمدة الرئيسية |
+|---|---|
+| **WfBindings** (في `KMK-Workflow`) | requestType (`hr.leave`، `hr.overtime`، `att.correction`، `tsk.review`، `cus.request`، `cus.voucher`، `cus.close`), module, templateId ('' = المسار المدمج), updatedBy, updatedAt |
+| **WfInstances** (عمود جديد) | requestType: نوع الطلب داخل الوحدة (الوحدة الواحدة لها أكثر من نوع) |
+| **WfRules** (عمود جديد) | requestType: القاعدة لنوع طلب |
+| **WfSteps.assignee** (توسيع) | `{type: 'role', module, role}` لأي وحدة، و`{type: 'company_manager'}` |
+| **Settings.company** (مفتاح جديد) | managerUserId: مدير الشركة |
+| **طلبات الوحدات** (أعمدة جديدة حيث يلزم) | wfInstanceId في LeaveRequests وOvertimeRequests وCorrections وTasks وCustodyRequests وVouchers وCustodies، وحالة «قيد الإجراء» `in_chain` بجانب حالاتها الحالية |
+
 ## 7. العملاء — `KMK-CRM` 🆕
 
 > **Projects** في وحدة العملاء: `billing` (`fixed` عقد ثابت / `open` اشتراك أو مفتوح)، وللاشتراك `billingCycle` (`monthly`/`quarterly`/`yearly`) و`cycleAmount` (فلس): الدورات تبدأ من `startDate`، والمستحق للدورة الحالية = قيمتها − المحصّل خلالها. أُضيف العمودان في 0.9.2 (الدفعة 2 من المراجعة) ويُنشئهما `Db.ensureSchema_` تلقائياً بلا حذف.
